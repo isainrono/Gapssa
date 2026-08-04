@@ -1,0 +1,37 @@
+{
+    "fields": {
+        "cTratamiento": {
+            "type": "link"
+        },
+        "cZonaAtencion": {
+            "type": "link"
+        }
+    },
+    "links": {
+        "cTratamiento": {
+            "type": "belongsTo",
+            "foreign": "meetings",
+            "entity": "CTratamiento",
+            "audited": false,
+            "isCustom": true
+        },
+        "cZonaAtencion": {
+            "type": "belongsTo",
+            "foreign": "meetings",
+            "entity": "CZonaAtencion",
+            "audited": false,
+            "isCustom": true
+        }
+    },
+    "collection": {
+        "orderBy": "dateStart",
+        "order": "desc",
+        "textFilterFields": [
+            "name"
+        ],
+        "fullTextSearch": false,
+        "countDisabled": false
+    },
+    "optimisticConcurrencyControl": false,
+    "transactionalSave": false
+}

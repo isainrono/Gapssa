@@ -1,0 +1,109 @@
+name: ${COMPOSE_PROJECT_NAME:-gapssa}
+
+services:
+  espocrm-db:
+    image: ${ESPOCRM_DB_IMAGE}
+    environment:
+      MARIADB_DATABASE: ${ESPOCRM_DB_NAME}
+      MARIADB_USER: ${ESPOCRM_DB_USER}
+      MARIADB_PASSWORD: ${ESPOCRM_DB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${ESPOCRM_DB_ROOT_PASSWORD}
+    volumes:
+      - espocrm-db:/var/lib/mysql
+    networks:
+      - private
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  espocrm:
+    image: ${ESPOCRM_IMAGE}
+    environment:
+      ESPOCRM_DATABASE_PLATFORM: Mysql
+      ESPOCRM_DATABASE_HOST: espocrm-db
+      ESPOCRM_DATABASE_NAME: ${ESPOCRM_DB_NAME}
+      ESPOCRM_DATABASE_USER: ${ESPOCRM_DB_USER}
+      ESPOCRM_DATABASE_PASSWORD: ${ESPOCRM_DB_PASSWORD}
+      ESPOCRM_ADMIN_USERNAME: ${ESPOCRM_ADMIN_USERNAME}
+      ESPOCRM_ADMIN_PASSWORD: ${ESPOCRM_ADMIN_PASSWORD}
+      ESPOCRM_SITE_URL: ${ESPOCRM_SITE_URL}
+      ESPOCRM_LANGUAGE: es_ES
+      ESPOCRM_TIME_ZONE: Europe/Madrid
+      ESPOCRM_DATE_FORMAT: DD/MM/YYYY
+      ESPOCRM_TIME_FORMAT: HH:mm
+      ESPOCRM_WEEK_START: 1
+      ESPOCRM_DEFAULT_CURRENCY: EUR
+    volumes:
+      - espocrm-data:/var/www/html/data
+      - espocrm-custom:/var/www/html/custom
+      - espocrm-client-custom:/var/www/html/client/custom
+    networks:
+      - public
+      - private
+    ports:
+      - "${ESPOCRM_HTTP_PORT}:80"
+    restart: unless-stopped
+    depends_on:
+      espocrm-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bin/command", "app-check"]
+      interval: 30s
+      timeout: 15s
+      retries: 10
+      start_period: 60s
+
+  espocrm-daemon:
+    image: ${ESPOCRM_IMAGE}
+    entrypoint: docker-daemon.sh
+    environment:
+      ESPOCRM_DATABASE_PLATFORM: Mysql
+      ESPOCRM_DATABASE_HOST: espocrm-db
+      ESPOCRM_DATABASE_NAME: ${ESPOCRM_DB_NAME}
+      ESPOCRM_DATABASE_USER: ${ESPOCRM_DB_USER}
+      ESPOCRM_DATABASE_PASSWORD: ${ESPOCRM_DB_PASSWORD}
+    volumes_from:
+      - espocrm
+    networks:
+      - public
+      - private
+    restart: unless-stopped
+    depends_on:
+      espocrm:
+        condition: service_healthy
+
+  espocrm-websocket:
+    image: ${ESPOCRM_IMAGE}
+    entrypoint: docker-websocket.sh
+    environment:
+      ESPOCRM_CONFIG_USE_WEB_SOCKET: "true"
+      ESPOCRM_CONFIG_WEB_SOCKET_URL: "ws://localhost:${ESPOCRM_WEBSOCKET_PORT}"
+      ESPOCRM_CONFIG_WEB_SOCKET_ZERO_M_Q_SUBSCRIBER_DSN: "tcp://*:7777"
+      ESPOCRM_CONFIG_WEB_SOCKET_ZERO_M_Q_SUBMISSION_DSN: "tcp://espocrm-websocket:7777"
+    volumes_from:
+      - espocrm
+    networks:
+      - public
+      - private
+    ports:
+      - "${ESPOCRM_WEBSOCKET_PORT}:8080"
+    restart: unless-stopped
+    depends_on:
+      espocrm:
+        condition: service_healthy
+
+networks:
+  public:
+  private:
+    internal: true
+
+volumes:
+  espocrm-db:
+  espocrm-data:
+  espocrm-custom:
+  espocrm-client-custom:
+

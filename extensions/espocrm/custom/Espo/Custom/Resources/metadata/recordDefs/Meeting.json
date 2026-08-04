@@ -1,0 +1,8 @@
+{
+    "afterCreateHookClassNameList": [
+        "Espo\\Custom\\Classes\\RecordHooks\\Meeting\\SendInvitationsAfterCreate"
+    ],
+    "afterUpdateHookClassNameList": [
+        "Espo\\Custom\\Classes\\RecordHooks\\Meeting\\SendInvitationsAfterUpdate"
+    ]
+}

@@ -1,0 +1,12 @@
+{
+    "controller": "controllers/record",
+    "boolFilterList": [
+        "onlyMy"
+    ],
+    "relationshipPanels": {
+        "meetings": {
+            "layout": null,
+            "selectPrimaryFilterName": null
+        }
+    }
+}

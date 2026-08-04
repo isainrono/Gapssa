@@ -1,0 +1,10 @@
+{
+    "fields": {
+        "cTratamiento": "Tratamiento",
+        "cZonaAtencion": "Zona Atencion"
+    },
+    "links": {
+        "cTratamiento": "Tratamiento",
+        "cZonaAtencion": "Zona Atencion"
+    }
+}

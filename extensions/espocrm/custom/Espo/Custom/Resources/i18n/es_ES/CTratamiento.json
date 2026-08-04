@@ -1,0 +1,24 @@
+{
+    "labels": {
+        "Create CTratamiento": "Crear Tratamiento"
+    },
+    "fields": {
+        "familia": "Familia",
+        "duracionMinutos": "Duración (minutos)",
+        "activo": "Activo",
+        "meetings": "Citas"
+    },
+    "options": {
+        "familia": {
+            "Masajes": "Masajes",
+            "Aparatología": "Aparatología",
+            "Depilación": "Depilación",
+            "Tratamientos faciales": "Tratamientos faciales",
+            "Uñas": "Uñas",
+            "Pestañas y cejas": "Pestañas y cejas"
+        }
+    },
+    "links": {
+        "meetings": "Citas"
+    }
+}

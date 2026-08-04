@@ -1,0 +1,19 @@
+{
+    "labels": {
+        "Create CZonaAtencion": "Crear Zona de atención"
+    },
+    "fields": {
+        "tipo": "Tipo",
+        "activa": "Activa",
+        "meetings": "Citas"
+    },
+    "options": {
+        "tipo": {
+            "Centro": "Centro",
+            "Domicilio / externa": "Domicilio / externa"
+        }
+    },
+    "links": {
+        "meetings": "Citas"
+    }
+}

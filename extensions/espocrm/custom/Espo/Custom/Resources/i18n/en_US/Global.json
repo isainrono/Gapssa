@@ -1,0 +1,10 @@
+{
+    "scopeNames": {
+        "CTratamiento": "Tratamiento",
+        "CZonaAtencion": "Zona de atención"
+    },
+    "scopeNamesPlural": {
+        "CTratamiento": "Tratamientos",
+        "CZonaAtencion": "Zonas de atención"
+    }
+}

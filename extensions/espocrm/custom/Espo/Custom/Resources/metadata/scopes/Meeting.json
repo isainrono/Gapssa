@@ -1,0 +1,21 @@
+{
+    "stream": true,
+    "disabled": false,
+    "kanbanStatusIgnoreList": null,
+    "stars": false,
+    "preserveAuditLog": false,
+    "activityStatusList": [
+        "Planned"
+    ],
+    "historyStatusList": [
+        "Held",
+        "Not Held"
+    ],
+    "completedStatusList": [
+        "Held"
+    ],
+    "canceledStatusList": [
+        "Not Held"
+    ],
+    "lockable": false
+}

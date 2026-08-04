@@ -1,0 +1,15 @@
+{
+    "controller": "controllers/record",
+    "boolFilterList": [
+        "onlyMy"
+    ],
+    "relationshipPanels": {
+        "meetings": {
+            "layout": null,
+            "selectPrimaryFilterName": null
+        }
+    },
+    "kanbanViewMode": false,
+    "color": "#b10505",
+    "iconClass": "fas fa-camera-retro"
+}

@@ -1,0 +1,13 @@
+{
+    "fields": {
+        "cTratamiento": "Tratamiento",
+        "cZonaAtencion": "Zona Atencion"
+    },
+    "links": {
+        "cTratamiento": "Tratamiento",
+        "cZonaAtencion": "Zona Atencion"
+    },
+    "labels": {
+        "Create Meeting": "Crear Cita"
+    }
+}

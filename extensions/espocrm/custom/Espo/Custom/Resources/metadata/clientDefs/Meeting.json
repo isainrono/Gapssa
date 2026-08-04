@@ -1,0 +1,15 @@
+{
+    "relationshipPanels": {
+        "tratamiento": {
+            "layout": null,
+            "selectPrimaryFilterName": null
+        },
+        "zonaAtencion": {
+            "layout": null,
+            "selectPrimaryFilterName": null
+        }
+    },
+    "kanbanViewMode": false,
+    "color": null,
+    "iconClass": "fas fa-calendar-check"
+}

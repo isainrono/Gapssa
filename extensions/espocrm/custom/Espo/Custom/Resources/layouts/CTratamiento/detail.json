@@ -1,0 +1,30 @@
+[
+    {
+        "rows": [
+            [
+                {
+                    "name": "name"
+                },
+                {
+                    "name": "familia"
+                }
+            ],
+            [
+                {
+                    "name": "duracionMinutos"
+                },
+                {
+                    "name": "activo"
+                }
+            ],
+            [
+                {
+                    "name": "description"
+                },
+                false
+            ]
+        ],
+        "style": "default",
+        "label": "Overview"
+    }
+]
