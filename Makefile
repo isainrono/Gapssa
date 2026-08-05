@@ -153,7 +153,7 @@ gcs-status:
 	docker compose exec espocrm-db sh -c 'mariadb -u$$MARIADB_USER -p$$MARIADB_PASSWORD $$MARIADB_DATABASE -e \
 		"SELECT name, type, status, calendar_id, last_sync_at, LEFT(COALESCE(last_error,\"\"),120) AS last_error \
 		   FROM gcs_account WHERE deleted = 0; \
-		 SELECT name, status, scheduling, last_run_at FROM scheduled_job \
+		 SELECT name, status, scheduling, last_run FROM scheduled_job \
 		   WHERE job = \"GcsPushSweep\" AND deleted = 0; \
 		 SELECT id, name, status, executed_at FROM job \
 		   WHERE (name LIKE \"%GcsPush%\" OR class_name LIKE \"%GcsPush%\") AND deleted = 0 \
