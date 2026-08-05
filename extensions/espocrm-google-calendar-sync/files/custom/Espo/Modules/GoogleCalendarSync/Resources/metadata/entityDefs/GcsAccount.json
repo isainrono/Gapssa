@@ -1,0 +1,128 @@
+{
+    "fields": {
+        "name": {
+            "type": "varchar",
+            "maxLength": 100,
+            "required": true
+        },
+        "type": {
+            "type": "enum",
+            "options": ["Business", "User"],
+            "default": "Business",
+            "required": true
+        },
+        "user": {
+            "type": "link"
+        },
+        "status": {
+            "type": "enum",
+            "options": ["Disconnected", "Active", "Error"],
+            "default": "Disconnected",
+            "readOnly": true,
+            "style": {
+                "Active": "success",
+                "Error": "danger"
+            },
+            "displayAsLabel": true
+        },
+        "googleEmail": {
+            "type": "varchar",
+            "maxLength": 255,
+            "readOnly": true
+        },
+        "calendarId": {
+            "type": "varchar",
+            "maxLength": 255,
+            "view": "google-calendar-sync:views/fields/calendar-select"
+        },
+        "calendarSummary": {
+            "type": "varchar",
+            "maxLength": 255,
+            "readOnly": true
+        },
+        "calendarListCache": {
+            "type": "text",
+            "readOnly": true
+        },
+        "accessToken": {
+            "type": "text",
+            "readOnly": true
+        },
+        "refreshToken": {
+            "type": "text",
+            "readOnly": true
+        },
+        "tokenExpiresAt": {
+            "type": "datetime",
+            "readOnly": true
+        },
+        "oauthState": {
+            "type": "varchar",
+            "maxLength": 255,
+            "readOnly": true
+        },
+        "syncToken": {
+            "type": "varchar",
+            "maxLength": 255,
+            "readOnly": true
+        },
+        "lastSyncAt": {
+            "type": "datetime",
+            "readOnly": true
+        },
+        "lastError": {
+            "type": "text",
+            "readOnly": true
+        },
+        "createdAt": {
+            "type": "datetime",
+            "readOnly": true
+        },
+        "modifiedAt": {
+            "type": "datetime",
+            "readOnly": true
+        },
+        "createdBy": {
+            "type": "link",
+            "readOnly": true,
+            "view": "views/fields/user"
+        },
+        "modifiedBy": {
+            "type": "link",
+            "readOnly": true,
+            "view": "views/fields/user"
+        }
+    },
+    "links": {
+        "user": {
+            "type": "belongsTo",
+            "entity": "User"
+        },
+        "createdBy": {
+            "type": "belongsTo",
+            "entity": "User"
+        },
+        "modifiedBy": {
+            "type": "belongsTo",
+            "entity": "User"
+        },
+        "eventLinks": {
+            "type": "hasMany",
+            "entity": "GcsEventLink",
+            "foreign": "account"
+        }
+    },
+    "indexes": {
+        "user": {
+            "columns": ["userId"]
+        },
+        "type": {
+            "columns": ["type"]
+        }
+    },
+    "collection": {
+        "orderBy": "createdAt",
+        "order": "desc",
+        "textFilterFields": ["name", "googleEmail"]
+    }
+}

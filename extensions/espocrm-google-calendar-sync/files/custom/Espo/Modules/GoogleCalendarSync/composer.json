@@ -1,0 +1,30 @@
+{
+    "name": "isainro/espocrm-google-calendar-sync",
+    "description": "PHP dependencies of the Google Calendar Sync extension for EspoCRM.",
+    "type": "library",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.3.0",
+        "ext-json": "*",
+        "ext-curl": "*",
+        "google/apiclient": "^2.18",
+        "phpseclib/phpseclib": "^3"
+    },
+    "config": {
+        "vendor-dir": "vendor",
+        "optimize-autoloader": true,
+        "sort-packages": true,
+        "platform": {
+            "php": "8.3.0"
+        }
+    },
+    "extra": {
+        "google/apiclient-services": [
+            "Calendar"
+        ]
+    },
+    "scripts": {
+        "post-install-cmd": "Google\\Task\\Composer::cleanup",
+        "post-update-cmd": "Google\\Task\\Composer::cleanup"
+    }
+}

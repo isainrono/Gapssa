@@ -1,0 +1,11 @@
+[
+    {
+        "rows": [
+            [{"name": "name"}, {"name": "type"}],
+            [{"name": "status"}, {"name": "googleEmail"}],
+            [{"name": "calendarId"}, {"name": "calendarSummary"}],
+            [{"name": "lastSyncAt"}, false],
+            [{"name": "lastError", "fullWidth": true}]
+        ]
+    }
+]

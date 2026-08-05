@@ -1,0 +1,9 @@
+{
+    "links": {
+        "gcsEventLinks": {
+            "type": "hasMany",
+            "entity": "GcsEventLink",
+            "foreign": "meeting"
+        }
+    }
+}

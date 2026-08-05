@@ -1,0 +1,10 @@
+{
+    "scopeNames": {
+        "GcsAccount": "Cuenta de Google Calendar",
+        "GcsEventLink": "Vínculo de evento de Google"
+    },
+    "scopeNamesPlural": {
+        "GcsAccount": "Cuentas de Google Calendar",
+        "GcsEventLink": "Vínculos de eventos de Google"
+    }
+}

@@ -1,0 +1,57 @@
+{
+    "fields": {
+        "name": "Name",
+        "type": "Type",
+        "user": "User",
+        "status": "Status",
+        "googleEmail": "Google Account",
+        "calendarId": "Synced Calendar",
+        "calendarSummary": "Calendar Name",
+        "calendarListCache": "Available Calendars (cache)",
+        "tokenExpiresAt": "Token Expires At",
+        "lastSyncAt": "Last Sync At",
+        "lastError": "Last Error"
+    },
+    "options": {
+        "type": {
+            "Business": "Business",
+            "User": "User"
+        },
+        "status": {
+            "Disconnected": "Disconnected",
+            "Active": "Active",
+            "Error": "Error"
+        }
+    },
+    "labels": {
+        "Connect Google": "Connect Google",
+        "Disconnect": "Disconnect",
+        "Refresh Calendars": "Refresh Calendars",
+        "Business Calendar": "Business Calendar"
+    },
+    "messages": {
+        "gcsConnected": "Google account connected successfully.",
+        "gcsDisconnected": "Google account disconnected.",
+        "gcsSelectCalendar": "Connect the account and choose the work calendar. A secondary calendar (for example \"Work\") is recommended instead of the primary one.",
+        "gcsConfirmDisconnect": "Disconnect this Google account? Meetings will no longer be synced. No CRM data is deleted."
+    },
+    "errors": {
+        "clientCredentialsMissing": "Google Client ID or Client Secret is not configured. Set them in Administration → Google Calendar Sync → Settings.",
+        "redirectUriMissing": "Configure the OAuth Redirect URI, or set the Site URL in Administration → Settings.",
+        "refreshTokenMissing": "This account has no refresh token. Connect it to Google again.",
+        "invalidGrant": "The refresh token is no longer valid (invalid_grant). Connect the account again. Common causes: the OAuth app is still in Testing mode, or access was revoked.",
+        "noRefreshTokenReturned": "Google did not return a refresh token. Revoke access at https://myaccount.google.com/permissions and connect again.",
+        "oauthError": "OAuth error: {reason}. {description}",
+        "oauthStateInvalid": "Invalid OAuth state.",
+        "oauthStateMismatch": "OAuth state does not match (possible CSRF). Start the connection again.",
+        "oauthMissingParams": "Missing 'code' or 'state' parameter.",
+        "accountNotFound": "Google account not found.",
+        "missingId": "Missing 'id' parameter.",
+        "adminOnly": "Only an administrator can manage Google accounts.",
+        "businessAccountExists": "A Business account already exists. Only one is allowed.",
+        "pushFailed": "[{time} UTC] Meeting {meetingId}: {message}"
+    },
+    "tooltips": {
+        "calendarId": "Google calendar where events will be created. Connect the account first to load the list."
+    }
+}

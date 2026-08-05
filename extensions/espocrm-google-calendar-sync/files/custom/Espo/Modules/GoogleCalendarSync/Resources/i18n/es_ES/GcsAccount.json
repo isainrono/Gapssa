@@ -1,0 +1,57 @@
+{
+    "fields": {
+        "name": "Nombre",
+        "type": "Tipo",
+        "user": "Usuario",
+        "status": "Estado",
+        "googleEmail": "Cuenta de Google",
+        "calendarId": "Calendario sincronizado",
+        "calendarSummary": "Nombre del calendario",
+        "calendarListCache": "Calendarios disponibles (caché)",
+        "tokenExpiresAt": "Token caduca",
+        "lastSyncAt": "Última sincronización",
+        "lastError": "Último error"
+    },
+    "options": {
+        "type": {
+            "Business": "Business (negocio)",
+            "User": "Usuario"
+        },
+        "status": {
+            "Disconnected": "Desconectada",
+            "Active": "Activa",
+            "Error": "Error"
+        }
+    },
+    "labels": {
+        "Connect Google": "Conectar con Google",
+        "Disconnect": "Desconectar",
+        "Refresh Calendars": "Actualizar calendarios",
+        "Business Calendar": "Calendario Business"
+    },
+    "messages": {
+        "gcsConnected": "Cuenta de Google conectada correctamente.",
+        "gcsDisconnected": "Cuenta de Google desconectada.",
+        "gcsSelectCalendar": "Conecta la cuenta y elige el calendario de trabajo. Se recomienda un calendario secundario (por ejemplo \"Trabajo\"), no el principal.",
+        "gcsConfirmDisconnect": "¿Desconectar esta cuenta de Google? Las citas dejarán de sincronizarse. No se borra ningún dato del CRM."
+    },
+    "errors": {
+        "clientCredentialsMissing": "Falta el Client ID o el Client Secret de Google. Configúralos en Administración → Google Calendar Sync → Configuración.",
+        "redirectUriMissing": "Configura la URI de redirección OAuth, o el Site URL en Administración → Ajustes.",
+        "refreshTokenMissing": "Esta cuenta no tiene refresh token. Vuelve a conectarla con Google.",
+        "invalidGrant": "El refresh token ya no es válido (invalid_grant). Vuelve a conectar la cuenta. Causas habituales: la app OAuth sigue en modo Testing, o se revocó el acceso.",
+        "noRefreshTokenReturned": "Google no devolvió refresh token. Revoca el acceso en https://myaccount.google.com/permissions y vuelve a conectar.",
+        "oauthError": "Error de OAuth: {reason}. {description}",
+        "oauthStateInvalid": "El state de OAuth no es válido.",
+        "oauthStateMismatch": "El state de OAuth no coincide (posible CSRF). Vuelve a iniciar la conexión.",
+        "oauthMissingParams": "Faltan los parámetros 'code' o 'state'.",
+        "accountNotFound": "Cuenta de Google no encontrada.",
+        "missingId": "Falta el parámetro 'id'.",
+        "adminOnly": "Solo un administrador puede gestionar cuentas de Google.",
+        "businessAccountExists": "Ya existe una cuenta Business. Solo puede haber una.",
+        "pushFailed": "[{time} UTC] Cita {meetingId}: {message}"
+    },
+    "tooltips": {
+        "calendarId": "Calendario de Google donde se crearán los eventos. Conecta la cuenta primero para ver la lista."
+    }
+}

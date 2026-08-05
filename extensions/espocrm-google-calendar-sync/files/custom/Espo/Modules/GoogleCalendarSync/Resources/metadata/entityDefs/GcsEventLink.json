@@ -1,0 +1,60 @@
+{
+    "fields": {
+        "name": {
+            "type": "varchar",
+            "maxLength": 255
+        },
+        "meeting": {
+            "type": "link",
+            "required": true
+        },
+        "account": {
+            "type": "link",
+            "required": true
+        },
+        "calendarId": {
+            "type": "varchar",
+            "maxLength": 255
+        },
+        "eventId": {
+            "type": "varchar",
+            "maxLength": 255
+        },
+        "etag": {
+            "type": "varchar",
+            "maxLength": 255
+        },
+        "lastPushedAt": {
+            "type": "datetime"
+        },
+        "createdAt": {
+            "type": "datetime",
+            "readOnly": true
+        },
+        "modifiedAt": {
+            "type": "datetime",
+            "readOnly": true
+        }
+    },
+    "links": {
+        "meeting": {
+            "type": "belongsTo",
+            "entity": "Meeting",
+            "foreign": "gcsEventLinks"
+        },
+        "account": {
+            "type": "belongsTo",
+            "entity": "GcsAccount",
+            "foreign": "eventLinks"
+        }
+    },
+    "indexes": {
+        "meetingAccount": {
+            "unique": true,
+            "columns": ["meetingId", "accountId"]
+        },
+        "eventId": {
+            "columns": ["eventId"]
+        }
+    }
+}

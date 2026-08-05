@@ -1,0 +1,21 @@
+{
+    "googleCalendarSync": {
+        "label": "Google Calendar Sync",
+        "itemList": [
+            {
+                "url": "#Admin/gcsSettings",
+                "label": "Google Calendar Settings",
+                "iconClass": "fas fa-cog",
+                "description": "gcsSettings",
+                "recordView": "google-calendar-sync:views/admin/gcs-settings"
+            },
+            {
+                "url": "#GcsAccount",
+                "label": "Google Accounts",
+                "iconClass": "fab fa-google",
+                "description": "gcsAccounts"
+            }
+        ],
+        "order": 25
+    }
+}

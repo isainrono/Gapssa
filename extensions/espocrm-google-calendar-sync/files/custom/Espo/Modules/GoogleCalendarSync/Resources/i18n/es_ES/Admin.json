@@ -1,0 +1,15 @@
+{
+    "labels": {
+        "Google Calendar Sync": "Google Calendar Sync",
+        "Google Calendar Settings": "Configuración",
+        "Google Accounts": "Cuentas de Google"
+    },
+    "descriptions": {
+        "gcsSettings": "Credenciales OAuth (Client ID, Client Secret y Redirect URI) para la integración con Google Calendar.",
+        "gcsAccounts": "Cuentas de Google conectadas. La cuenta Business recibe una copia de todas las citas."
+    },
+    "keywords": {
+        "gcsSettings": "google,calendar,oauth,sincronización",
+        "gcsAccounts": "google,calendar,cuentas"
+    }
+}

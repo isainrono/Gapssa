@@ -1,0 +1,15 @@
+{
+    "fields": {
+        "gcsClientId": {
+            "type": "varchar",
+            "maxLength": 255
+        },
+        "gcsClientSecret": {
+            "type": "password"
+        },
+        "gcsRedirectUri": {
+            "type": "varchar",
+            "maxLength": 255
+        }
+    }
+}

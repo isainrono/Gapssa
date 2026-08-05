@@ -1,0 +1,7 @@
+{
+    "GcsPushSweep": {
+        "jobClassName": "Espo\\Modules\\GoogleCalendarSync\\Jobs\\GcsPushSweep",
+        "isDefault": true,
+        "scheduling": "*/5 * * * *"
+    }
+}

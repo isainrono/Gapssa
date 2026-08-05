@@ -1,0 +1,5 @@
+{
+    "autoloadFileList": [
+        "custom/Espo/Modules/GoogleCalendarSync/vendor/autoload.php"
+    ]
+}

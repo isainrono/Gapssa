@@ -1,0 +1,8 @@
+{
+    "controller": "controllers/record",
+    "recordViews": {
+        "detail": "google-calendar-sync:views/gcs-account/record/detail"
+    },
+    "boolFilterList": [],
+    "iconClass": "fab fa-google"
+}

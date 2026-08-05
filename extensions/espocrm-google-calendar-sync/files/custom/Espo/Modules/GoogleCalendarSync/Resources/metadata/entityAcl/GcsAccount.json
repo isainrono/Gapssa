@@ -1,0 +1,10 @@
+{
+    "fields": {
+        "forbidden": [
+            "accessToken",
+            "refreshToken",
+            "oauthState",
+            "syncToken"
+        ]
+    }
+}

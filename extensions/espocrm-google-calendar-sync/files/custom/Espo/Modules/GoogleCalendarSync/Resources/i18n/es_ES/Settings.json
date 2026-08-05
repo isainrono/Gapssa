@@ -1,0 +1,12 @@
+{
+    "fields": {
+        "gcsClientId": "Client ID de Google",
+        "gcsClientSecret": "Client Secret de Google",
+        "gcsRedirectUri": "URI de redirección OAuth"
+    },
+    "tooltips": {
+        "gcsClientId": "Client ID del cliente OAuth 2.0 creado en Google Cloud Console.",
+        "gcsClientSecret": "Client Secret del cliente OAuth 2.0. Se guarda en la configuración interna y no se vuelve a mostrar.",
+        "gcsRedirectUri": "Debe coincidir exactamente con el Redirect URI configurado en Google Cloud Console. Normalmente: {siteUrl}/?entryPoint=gcsCallback"
+    }
+}

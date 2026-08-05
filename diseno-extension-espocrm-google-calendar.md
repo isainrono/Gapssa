@@ -421,6 +421,10 @@ Instalación en el cliente: Administración > Extensions > subir ZIP, o `bin/com
 
 `extension.json`: `acceptableVersions: [">=9.0.0"]` (pruébalo de verdad contra la mínima), `php: [">=8.2"]`, `bundled: true`.
 
+> **Nota de implementación:** la extensión final se validó para EspoCRM
+> `>=10.0.0 <11.0.0` y PHP `>=8.3.0`. Estos requisitos sustituyen a los valores
+> preliminares de esta propuesta.
+
 ## 11. Orden de implementación sugerido
 
 1. Esqueleto ext-template + entidades `GcsAccount` y `GcsEventLink` + rebuild. Verifica que todo aparece en la UI.

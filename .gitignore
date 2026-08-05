@@ -8,10 +8,22 @@ data/
 backups/
 *.log
 
+# Extension build artifacts (regenerate with `make gcs-build`)
+extensions/espocrm-google-calendar-sync/build/
+
+# Composer dependencies of the extension: reproducible from composer.lock
+# with `make gcs-deps`. The lock IS versioned; vendor/ is not.
+extensions/espocrm-google-calendar-sync/files/custom/Espo/Modules/GoogleCalendarSync/vendor/
+
+# Generated output directories. Includes the delivery bundles produced by
+# `make gcs-package` (dist/google-calendar-sync-{version}/), whose source
+# manuals live, versioned, in entrega-google-calendar-sync/. Also covers the
+# build output of the JavaScript packages.
+dist/
+
 # JavaScript
 node_modules/
 .next/
-dist/
 coverage/
 
 # IDEs

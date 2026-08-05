@@ -1,0 +1,8 @@
+[
+    {"name": "name", "link": true},
+    {"name": "type"},
+    {"name": "status"},
+    {"name": "googleEmail"},
+    {"name": "calendarSummary"},
+    {"name": "lastSyncAt"}
+]

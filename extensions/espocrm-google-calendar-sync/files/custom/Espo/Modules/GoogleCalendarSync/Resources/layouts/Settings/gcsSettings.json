@@ -1,0 +1,8 @@
+[
+    {
+        "rows": [
+            [{"name": "gcsClientId"}, {"name": "gcsClientSecret"}],
+            [{"name": "gcsRedirectUri"}, false]
+        ]
+    }
+]

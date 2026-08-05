@@ -1,0 +1,17 @@
+[
+    {
+        "route": "/GcsSync/authUrl",
+        "method": "get",
+        "actionClassName": "Espo\\Modules\\GoogleCalendarSync\\Api\\GetAuthUrl"
+    },
+    {
+        "route": "/GcsSync/disconnect",
+        "method": "post",
+        "actionClassName": "Espo\\Modules\\GoogleCalendarSync\\Api\\PostDisconnect"
+    },
+    {
+        "route": "/GcsSync/refreshCalendars",
+        "method": "post",
+        "actionClassName": "Espo\\Modules\\GoogleCalendarSync\\Api\\PostRefreshCalendars"
+    }
+]

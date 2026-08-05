@@ -1,0 +1,16 @@
+{
+    "params": {
+        "gcsClientId": {
+            "level": "admin"
+        },
+        "gcsClientSecret": {
+            "level": "internal"
+        },
+        "gcsRedirectUri": {
+            "level": "admin"
+        },
+        "gcsSyncStartAt": {
+            "level": "internal"
+        }
+    }
+}

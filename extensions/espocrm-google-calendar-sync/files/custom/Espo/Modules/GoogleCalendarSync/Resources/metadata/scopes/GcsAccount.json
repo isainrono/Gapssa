@@ -1,0 +1,14 @@
+{
+    "module": "GoogleCalendarSync",
+    "entity": true,
+    "object": true,
+    "acl": true,
+    "aclPortal": false,
+    "tab": false,
+    "layouts": true,
+    "customizable": false,
+    "importable": false,
+    "notifications": false,
+    "stream": false,
+    "disabled": false
+}

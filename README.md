@@ -50,3 +50,10 @@ docker compose down
 | WebSocket de EspoCRM | `ws://localhost:8083` | Comparte datos con EspoCRM |
 | MariaDB | Solo red privada Docker | Volumen Docker |
 
+## Extensión Google Calendar Sync
+
+Extensión instalable de EspoCRM para sincronizar las citas con Google Calendar
+(fase 1: espejo de salida hacia el calendario Business). Código y documentación
+en `extensions/espocrm-google-calendar-sync/`; instalación con
+`make gcs-install`.
+
