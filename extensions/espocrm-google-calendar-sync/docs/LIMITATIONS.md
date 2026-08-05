@@ -82,3 +82,33 @@
 18. **Solo inglés y español.** Añadir un idioma es copiar
     `Resources/i18n/en_US/` y traducir; `tests/i18n_test.php` avisa de lo que
     falte. Los mensajes del log están siempre en inglés, por diseño.
+
+19. **El título del evento incluye el nombre del cliente.** Es un dato personal
+    que sale del CRM hacia Google. Es el objetivo de la función, pero conviene
+    tenerlo presente al valorar la privacidad del calendario y con quién se
+    comparte. No se envía ningún otro dato del contacto.
+
+20. **Máximo 10 contactos en el título.** Tope defensivo de
+    `ContactNameResolver` para que el asunto no crezca sin límite. Si una cita
+    tuviera más, se incluyen los 10 primeros por orden alfabético.
+
+21. **Renombrar un contacto reexporta como mucho 200 citas.** El hook
+    `Hooks/Contact/GcsContactRename` encola las más recientes y futuras
+    (`dateStart DESC`). Si el contacto tuviera más, las antiguas conservan el
+    título anterior: es históricamente fiel y evita inundar la cola y la cuota
+    de la API por un cambio menor. El aviso queda en el log.
+
+    Corrección respecto a la v1.1.0 de este documento: se afirmaba que el
+    barrido de 14 días acabaría corrigiendo el título. **Es falso.** El barrido
+    filtra por `Meeting.modifiedAt`, que no cambia al editar un Contact, así que
+    la cita nunca se seleccionaba. De ahí este hook.
+
+22. **Un error del ORM al leer los contactos hace fallar la sincronización de
+    esa cita**, a propósito. `ContactNameResolver` no captura excepciones: el
+    fallo llega a `SyncService`, que lo registra en la cuenta y deja que el
+    trabajo se reintente. La alternativa —seguir y exportar el evento sin el
+    nombre del cliente— escondería un fallo real dando el trabajo por bueno.
+
+23. **El orden de los nombres es alfabético**, insensible a mayúsculas y sin
+    depender del locale del servidor. No es el orden en que se vincularon los
+    contactos, que la base de datos no garantiza de forma reproducible.

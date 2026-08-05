@@ -30,7 +30,25 @@ class Messages
      */
     public function get(string $key, string $fallback, array $params = []): string
     {
-        $text = $this->defaultLanguage->translateLabel($key, self::CATEGORY, self::SCOPE);
+        return $this->translate(self::CATEGORY, $key, $fallback, $params);
+    }
+
+    /**
+     * Igual que get(), pero para etiquetas visibles (categoría `labels`).
+     *
+     * @param array<string, string> $params
+     */
+    public function getLabel(string $key, string $fallback, array $params = []): string
+    {
+        return $this->translate('labels', $key, $fallback, $params);
+    }
+
+    /**
+     * @param array<string, string> $params
+     */
+    private function translate(string $category, string $key, string $fallback, array $params): string
+    {
+        $text = $this->defaultLanguage->translateLabel($key, $category, self::SCOPE);
 
         if ($text === $key || $text === '') {
             $text = $fallback;

@@ -1,5 +1,76 @@
 # Decisiones de diseño — Fase 1
 
+## Título con el cliente (v1.1.1, 4/8/2026)
+
+20. **El nombre del cliente se toma de la relación `contacts`**, la misma que
+    EspoCRM usa para las invitaciones por correo, nunca de `parent`. Formato:
+    `Asunto (Nombre)`, o `Asunto (Nombre1, Nombre2)` con varios.
+
+21. **Los cambios de contactos se detectan con `AfterRelate`/`AfterUnrelate`**,
+    no con `afterSave`. Verificado en el código de 10.0.3:
+    `Espo\Core\FieldProcessing\Relation\LinkMultipleSaver::process()` guarda
+    los campos linkMultiple llamando a `relateById()`/`unrelateById()` del
+    repositorio, que pasan por `HookMediator` y disparan esos hooks. El
+    `afterSave` se ejecuta **antes** y no vería el cambio; además `contactsIds`
+    no es un atributo persistente normal.
+
+22. **`silent` NO se ignora en los cambios de relación** (corregido antes de
+    construir la 1.1.1). `LinkMultipleSaver` relaciona los contactos de una cita
+    nueva con `SaveOption::SILENT`. La primera versión se lo saltaba, razonando
+    que el `afterSave` ya había encolado la exportación; eso abría una carrera
+    real:
+
+    1. `afterSave` encola el UPSERT.
+    2. El daemon lo procesa **antes** de que terminen de crearse las relaciones.
+    3. Google recibe el evento sin el nombre del cliente.
+    4. El `afterRelate` posterior se ignoraba por venir con `silent`.
+    5. El barrido tampoco lo corregía: filtra por `Meeting.modifiedAt`, que
+       relacionar un contacto no modifica.
+    6. El título quedaba sin cliente **de forma permanente**.
+
+    Ahora la relación se procesa siempre. `gcsSync` sí se sigue respetando: es
+    lo que marca los cambios originados por la propia sincronización y evita
+    bucles.
+
+    Un UPSERT de más es inofensivo —`SyncService` es idempotente y
+    `GcsEventLink` + `espoMeetingId` impiden duplicar el evento— y desde luego
+    preferible a un evento permanentemente sin cliente.
+
+23. **Deduplicación por petición.** Guardar una cita con tres contactos dispara
+    tres `afterRelate`. El hook recuerda lo ya encolado (`meetingId:acción`) y
+    encola una sola vez.
+
+    Verificado en 10.0.3: `HookManager` cachea las instancias por clase
+    (`$this->hooks[$className]`, líneas 112-116) y es un servicio del
+    contenedor, así que `afterSave` y `afterRelate` **comparten instancia**
+    dentro de una petición y la deduplicación funciona. Aun así, la corrección
+    del punto 22 no depende de ello: si en algún flujo hubiera instancias
+    distintas, se encolarían dos UPSERT sobre la misma cita, lo cual es seguro.
+
+24. **`EventMapper` sigue siendo puro**: recibe los nombres ya resueltos y no
+    consulta la base de datos. `ContactNameResolver` aísla el acceso al ORM y
+    ordena por `name` para que el resultado sea determinista.
+
+25. **Solo el nombre.** Nunca se envían a Google correo, teléfono ni
+    identificadores del contacto. El título es el mínimo necesario.
+
+26. **Renombrar un Contact reexporta sus citas** (`Hooks/Contact/GcsContactRename`,
+    `AfterSave`). Sin él, el título quedaría obsoleto para siempre: el barrido
+    filtra por `Meeting.modifiedAt` y editar un Contact no lo toca. Se vigilan
+    `firstName`, `middleName` y `lastName`, los tres atributos con los que
+    `FieldConverters\PersonName` compone `name`. Consulta la relación inversa
+    `meetings` de Contact, acotando a `id` y a 200 filas por `dateStart DESC`.
+
+27. **Sin degradación silenciosa.** `ContactNameResolver` no captura
+    `Throwable`. Un error del ORM debe hacer fallar la exportación de esa cita
+    —`SyncService` lo registra y el trabajo se reintenta— en vez de guardar en
+    Google un título sin cliente marcando el trabajo como correcto.
+
+28. **El máximo de diez nombres se aplica al final.** Primero se leen hasta 50
+    filas, luego se descartan vacíos y duplicados, se ordena y por último se
+    recorta a diez. Aplicarlo a las filas leídas dejaría fuera contactos
+    válidos si los primeros estuvieran vacíos o repetidos.
+
 ## Portabilidad (v1.1.0, 4/8/2026)
 
 16. **La extensión es genérica, no específica de Gapssa** (validada). Auditado:
@@ -111,7 +182,9 @@ Las tres primeras fueron validadas explícitamente por Isain el 4/8/2026.
 
 5. **El hook nunca llama a Google**. `afterSave`/`afterRemove` solo encolan un
    job (grupo `gcs-push`, ejecución serializada). Un fallo de red jamás impide
-   guardar una cita. Respeta las opciones `silent` y `gcsSync` (esta última,
+   guardar una cita. En `afterSave` respeta `silent` y `gcsSync`; en los hooks
+   de relación **solo** `gcsSync`, por la carrera descrita en la decisión 22
+   (esta última,
    preparada para el pull de la fase 2).
 
 6. **Barrido cada 5 minutos como red de reintentos** (`GcsPushSweep`). Los

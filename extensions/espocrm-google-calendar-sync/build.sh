@@ -112,6 +112,9 @@ if [ "$RUN_TESTS" = "1" ]; then
     PHP_RUN tests/controller_test.php "$EXTRACTED"
     PHP_RUN tests/i18n_test.php "$EXTRACTED"
     PHP_RUN tests/mapper_test.php "$EXTRACTED"
+    PHP_RUN tests/relation_hook_test.php "$EXTRACTED"
+    PHP_RUN tests/contact_hook_test.php "$EXTRACTED"
+    PHP_RUN tests/contact_resolver_test.php "$EXTRACTED"
 
     # Esta se ejecuta sobre el árbol de trabajo, no sobre el ZIP: revisa
     # tools/ y tests/, que no se empaquetan.

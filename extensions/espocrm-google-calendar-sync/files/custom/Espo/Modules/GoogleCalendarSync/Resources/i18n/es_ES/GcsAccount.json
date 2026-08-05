@@ -27,7 +27,8 @@
         "Connect Google": "Conectar con Google",
         "Disconnect": "Desconectar",
         "Refresh Calendars": "Actualizar calendarios",
-        "Business Calendar": "Calendario Business"
+        "Business Calendar": "Calendario Business",
+        "defaultEventTitle": "Cita"
     },
     "messages": {
         "gcsConnected": "Cuenta de Google conectada correctamente.",

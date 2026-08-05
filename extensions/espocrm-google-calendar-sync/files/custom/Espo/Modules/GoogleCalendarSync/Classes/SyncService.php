@@ -26,6 +26,7 @@ class SyncService
         private EntityManager $entityManager,
         private GoogleClientFactory $clientFactory,
         private EventMapper $eventMapper,
+        private ContactNameResolver $contactNameResolver,
         private Config $config,
         private Messages $messages,
         private Log $log
@@ -158,7 +159,11 @@ class SyncService
 
         $calendarId = $account->get('calendarId');
 
-        $event = $this->eventMapper->toGoogleEvent($meeting);
+        // Los nombres se resuelven aquí, en la capa que ya habla con el ORM;
+        // el mapper permanece puro.
+        $contactNames = $this->contactNameResolver->getNames($meeting);
+
+        $event = $this->eventMapper->toGoogleEvent($meeting, $contactNames);
 
         $link = $this->findLink($meetingId, $account->getId());
 

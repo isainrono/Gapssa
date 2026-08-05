@@ -25,14 +25,20 @@ class EventMapper
 
     public function __construct(
         private Config $config,
-        private Metadata $metadata
+        private Metadata $metadata,
+        private Messages $messages
     ) {}
 
-    public function toGoogleEvent(Entity $meeting): Event
+    /**
+     * @param string[] $contactNames Nombres de los contactos de la cita, ya
+     *        obtenidos por ContactNameResolver. El mapper no consulta la base
+     *        de datos: es una función pura de sus argumentos.
+     */
+    public function toGoogleEvent(Entity $meeting, array $contactNames = []): Event
     {
         $event = new Event();
 
-        $event->setSummary($meeting->get('name') ?? '(sin título)');
+        $event->setSummary($this->buildSummary($meeting->get('name'), $contactNames));
         $event->setDescription($meeting->get('description') ?? '');
 
         $extendedProperties = new EventExtendedProperties();
@@ -79,6 +85,61 @@ class EventMapper
         $event->setEnd($end);
 
         return $event;
+    }
+
+    /**
+     * Título del evento: asunto de la cita más, entre paréntesis, los nombres
+     * de los contactos relacionados.
+     *
+     *   Asunto + 1 contacto   -> "Asunto (María García)"
+     *   Asunto + N contactos  -> "Asunto (María García, Ana López)"
+     *   Asunto sin contactos  -> "Asunto"
+     *   Sin asunto + contacto -> "Cita (María García)"
+     *   Sin asunto ni nada    -> "Cita"
+     *
+     * Solo se incluye el nombre: nunca correo, teléfono ni identificadores.
+     *
+     * @param string[] $contactNames
+     */
+    public function buildSummary(?string $subject, array $contactNames = []): string
+    {
+        $subject = trim((string) $subject);
+
+        $names = $this->cleanNames($contactNames);
+
+        $fallback = $this->messages->getLabel('defaultEventTitle', 'Meeting');
+
+        if ($names === []) {
+            return $subject !== '' ? $subject : $fallback;
+        }
+
+        $suffix = ' (' . implode(', ', $names) . ')';
+
+        return ($subject !== '' ? $subject : $fallback) . $suffix;
+    }
+
+    /**
+     * Quita vacíos y duplicados conservando el orden recibido, que ya es
+     * determinista (ContactNameResolver ordena por nombre).
+     *
+     * @param string[] $names
+     * @return string[]
+     */
+    private function cleanNames(array $names): array
+    {
+        $clean = [];
+
+        foreach ($names as $name) {
+            $name = trim((string) $name);
+
+            if ($name === '' || in_array($name, $clean, true)) {
+                continue;
+            }
+
+            $clean[] = $name;
+        }
+
+        return $clean;
     }
 
     /**

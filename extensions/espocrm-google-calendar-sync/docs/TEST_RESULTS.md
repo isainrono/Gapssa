@@ -1,5 +1,72 @@
 # Resultados de validación — Fase 1 (4/8/2026)
 
+## Revisión 6 (4/8/2026) — título con el cliente (v1.1.1) ⚠️ SIN INSTALAR
+
+Los eventos de Google pasan a titularse `Asunto (Nombre del contacto)`. El
+contacto sale de la relación `contacts` de Meeting, la misma que usa EspoCRM
+para las invitaciones por correo.
+
+### Mecanismo verificado en EspoCRM 10.0.3
+
+`LinkMultipleSaver::process()` guarda los campos linkMultiple llamando a
+`relateById()`/`unrelateById()` del repositorio; estas pasan por
+`RDBRelation::afterRelate()` → `HookMediator` → hooks `AfterRelate`/
+`AfterUnrelate`. Por eso el cambio de contactos **no** se detecta con
+`afterSave`, que se ejecuta antes.
+
+### Pruebas ejecutadas ✅
+
+| Prueba | Resultado |
+|---|---|
+| `php -l` sobre 31 archivos PHP propios | 0 errores |
+| `tests/mapper_test.php` | **OK — 35 aserciones** (12 nuevas del título) |
+| `tests/relation_hook_test.php` (nueva) | **OK — 26 aserciones** |
+| `tests/contact_hook_test.php` (nueva) | **OK — 20 aserciones** |
+| `tests/contact_resolver_test.php` (nueva) | **OK — 16 aserciones** |
+| `tests/autoload_test.php` | OK — 21 clases |
+| `tests/controller_test.php` | OK — 4 comprobaciones |
+| `tests/i18n_test.php` | OK — 19 comprobaciones |
+| `tests/no_hardcoded_package_test.php` | OK — 7 archivos |
+| `tools/check-dependencies.php` | OK — vendor completo y autónomo |
+| `tests/symlink_safety_test.sh` | OK — 9 comprobaciones |
+
+`composer.json` y `composer.lock` **sin cambios**: las 19 dependencias siguen
+idénticas.
+
+### Correcciones de la segunda revisión (v1.1.1)
+
+| Problema detectado | Corrección |
+|---|---|
+| Se afirmaba que el barrido de 14 días corregiría el título tras renombrar un contacto. **Falso**: filtra por `Meeting.modifiedAt`, que no cambia al editar un Contact | Nuevo hook `Hooks/Contact/GcsContactRename` (`AfterSave`) que encola las citas del contacto |
+| `ContactNameResolver` capturaba `Throwable` y devolvía `[]`: degradación silenciosa que habría guardado en Google un título sin cliente dando el trabajo por bueno | Sin `try/catch`; el error llega a `SyncService`, se registra en la cuenta y el trabajo se reintenta |
+| El límite de 10 se aplicaba a las **filas leídas**, antes de descartar vacíos y duplicados: podía devolver menos de diez y omitir contactos válidos | Se leen 50 filas, se limpian, deduplican y ordenan, y **al final** se recortan a 10 |
+| «Sin id (no puede duplicar)» era técnicamente incorrecto | La protección real es `GcsEventLink` + `espoMeetingId` + `findEventByMeetingId` + idempotencia de `SyncService`. Corregido en el test y en el informe |
+| `releaseDate` desactualizada | `2026-08-05` |
+| **Carrera con `silent`**: los hooks de relación ignoraban `silent`, pero EspoCRM relaciona los contactos de una cita nueva precisamente con `silent = true`. Si el daemon procesaba el UPSERT de `afterSave` antes de que terminaran las relaciones, el evento quedaba sin cliente **de forma permanente** (el barrido no lo corrige) | `silent` ya no se ignora en `afterRelate`/`afterUnrelate`; solo se respeta `gcsSync`. La deduplicación evita el trabajo repetido y, si aun así hubiera dos, ambos son UPSERT idempotentes |
+
+### Instancia del hook en EspoCRM 10.0.3
+
+`HookManager` cachea las instancias por clase (`$this->hooks[$className]`,
+líneas 112-116) y es un servicio del contenedor: `afterSave` y `afterRelate`
+comparten instancia dentro de una petición, así que la deduplicación por
+`meetingId:acción` funciona. La corrección **no depende** de ello: con
+instancias distintas se encolarían dos UPSERT sobre la misma cita, lo cual es
+seguro por la idempotencia de `SyncService` y por `GcsEventLink` +
+`espoMeetingId`.
+
+### Pendiente ⏳
+
+- [ ] `make gcs-build` con Docker.
+- [ ] Renombrar un contacto con citas y comprobar que los eventos cambian de
+      título **sin duplicarse**.
+- [ ] Actualización 1.1.0 → 1.1.1 en la instancia local.
+- [ ] `app-check`.
+- [ ] Comprobar en Google que el título de una cita existente pasa a incluir el
+      contacto al reexportarse, **sin crear un evento nuevo**.
+- [ ] Añadir, cambiar y quitar contactos verificando que se actualiza el mismo
+      evento.
+- [ ] Confirmar que las invitaciones por correo y el ICS siguen igual.
+
 > Revisión 2 (4/8/2026): el cliente HTTP propio se sustituyó por la librería
 > oficial `google/apiclient` ^2.18. Las validaciones de abajo se reejecutaron
 > sobre el código nuevo; los añadidos de esta revisión están marcados como
