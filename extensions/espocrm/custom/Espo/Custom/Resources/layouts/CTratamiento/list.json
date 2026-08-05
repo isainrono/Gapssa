@@ -1,0 +1,26 @@
+[
+    {
+        "name": "name",
+        "link": true
+    },
+    {
+        "name": "familia",
+        "width": 18
+    },
+    {
+        "name": "duracionMinutos",
+        "width": 12
+    },
+    {
+        "name": "precioOrientativo",
+        "width": 14
+    },
+    {
+        "name": "estadoPrecio",
+        "width": 14
+    },
+    {
+        "name": "activo",
+        "width": 8
+    }
+]

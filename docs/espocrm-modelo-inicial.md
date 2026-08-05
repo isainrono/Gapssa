@@ -10,8 +10,9 @@ Fecha de configuración inicial: 3 de agosto de 2026.
 - La interfaz mostrará `Meeting` como `Cita`; el nombre técnico se mantiene para
   no romper compatibilidad con la API de EspoCRM.
 - Los tratamientos y las zonas son entidades personalizadas de tipo `Base`.
-- Los precios e impuestos no se almacenan como fuente de verdad en EspoCRM;
-  pertenecerán a FacturaScripts.
+- EspoCRM almacena un precio operativo orientativo para preparar el catálogo y
+  la agenda. FacturaScripts será la fuente de verdad económica y fiscal cuando
+  se integre; impuestos, cobros y facturación no se gestionan aquí.
 
 ## Entidad Tratamiento
 
@@ -22,6 +23,8 @@ Nombre técnico: `CTratamiento`.
 | `name` | Texto | Nombre del tratamiento; obligatorio por EspoCRM |
 | `familia` | Lista | Obligatorio y auditado |
 | `duracionMinutos` | Entero | Obligatorio, valor inicial 60, mínimo 5, máximo 480, auditado |
+| `precioOrientativo` | Moneda | Opcional, EUR por configuración, mínimo 0 y auditado; no fiscal |
+| `estadoPrecio` | Lista | `Pendiente`, `Fijo`, `Desde` o `Bajo valoración`; obligatorio y auditado |
 | `activo` | Sí/No | Activo por defecto y auditado |
 | `description` | Texto | Descripción operativa opcional |
 
@@ -43,6 +46,8 @@ Nombre técnico: `CZonaAtencion`.
 | `name` | Texto | Nombre visible de la zona |
 | `tipo` | Lista | `Centro` o `Domicilio / externa`; obligatorio y auditado |
 | `activa` | Sí/No | Activa por defecto y auditada |
+| `capacidadSimultanea` | Entero | Obligatorio, valor inicial 1, mínimo 1, máximo 20 y auditado |
+| `suplementoDesplazamiento` | Moneda | Opcional y auditado; previsto para zonas externas, no fiscal |
 | `description` | Texto | Observaciones opcionales |
 
 ## Relaciones de la cita
@@ -69,8 +74,10 @@ calcular una tasa USD/EUR inexistente durante el arranque inicial.
 - El nombre de la aplicación visible es `Gapssa`.
 - La entidad técnica `Meeting` se muestra como `Cita` / `Citas`.
 - `Tratamientos` y `Zonas de atención` están incluidos en la navegación.
-- El formulario de tratamiento muestra nombre, familia, duración, activo y
-  descripción.
+- El formulario de tratamiento muestra nombre, familia, duración, precio
+  orientativo, estado del precio, activo y descripción.
+- El formulario de zona muestra tipo, estado, capacidad, suplemento opcional y
+  observaciones.
 - El formulario de cita muestra tratamiento y zona de atención.
 
 Datos ficticios creados para la validación:

@@ -345,7 +345,8 @@ La gestoría tendrá acceso completo al área económica, fiscal, contable y lab
 | Citas y estados | EspoCRM | Web, Google Calendar, n8n |
 | Tratamientos, consentimientos y datos sensibles | EspoCRM | Área privada autorizada |
 | Definición operativa de servicios | EspoCRM | Web, n8n |
-| Precio base, impuestos y dimensión económica | FacturaScripts | EspoCRM, Web, n8n |
+| Precio operativo orientativo del catálogo | EspoCRM | Web, n8n; copia provisional |
+| Precio definitivo, impuestos y dimensión económica | FacturaScripts | EspoCRM, Web, n8n |
 | Pagos, deudas y devoluciones | FacturaScripts | CRM, Web |
 | Facturas y documentos fiscales | FacturaScripts | CRM, Web |
 | Stock, lotes, compras y proveedores | FacturaScripts | CRM, dirección |

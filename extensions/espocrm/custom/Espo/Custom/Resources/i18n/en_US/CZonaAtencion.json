@@ -2,6 +2,8 @@
     "fields": {
         "tipo": "Tipo",
         "activa": "Activa",
+        "capacidadSimultanea": "Capacidad simultánea",
+        "suplementoDesplazamiento": "Suplemento de desplazamiento",
         "meetings": "Citas"
     },
     "links": {

@@ -19,6 +19,14 @@
             ],
             [
                 {
+                    "name": "precioOrientativo"
+                },
+                {
+                    "name": "estadoPrecio"
+                }
+            ],
+            [
+                {
                     "name": "description"
                 },
                 false

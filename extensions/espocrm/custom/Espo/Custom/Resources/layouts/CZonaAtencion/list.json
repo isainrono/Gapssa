@@ -1,0 +1,22 @@
+[
+    {
+        "name": "name",
+        "link": true
+    },
+    {
+        "name": "tipo",
+        "width": 22
+    },
+    {
+        "name": "capacidadSimultanea",
+        "width": 16
+    },
+    {
+        "name": "suplementoDesplazamiento",
+        "width": 18
+    },
+    {
+        "name": "activa",
+        "width": 10
+    }
+]

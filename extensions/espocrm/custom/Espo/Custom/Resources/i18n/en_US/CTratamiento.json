@@ -2,6 +2,8 @@
     "fields": {
         "familia": "Familia",
         "duracionMinutos": "Duración (minutos)",
+        "precioOrientativo": "Precio orientativo",
+        "estadoPrecio": "Estado del precio",
         "activo": "Activo",
         "meetings": "Citas"
     },
@@ -19,6 +21,12 @@
             "Tratamientos faciales": "Tratamientos faciales",
             "Uñas": "Uñas",
             "Pestañas y cejas": "Pestañas y cejas"
+        },
+        "estadoPrecio": {
+            "Pendiente": "Pendiente",
+            "Fijo": "Fijo",
+            "Desde": "Desde",
+            "Bajo valoración": "Bajo valoración"
         }
     }
 }

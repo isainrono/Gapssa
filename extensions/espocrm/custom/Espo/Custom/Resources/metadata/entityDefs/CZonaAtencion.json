@@ -54,6 +54,22 @@
             "default": true,
             "audited": true,
             "isCustom": true
+        },
+        "capacidadSimultanea": {
+            "type": "int",
+            "required": true,
+            "default": 1,
+            "min": 1,
+            "max": 20,
+            "audited": true,
+            "isCustom": true
+        },
+        "suplementoDesplazamiento": {
+            "type": "currency",
+            "min": 0,
+            "decimal": true,
+            "audited": true,
+            "isCustom": true
         }
     },
     "links": {

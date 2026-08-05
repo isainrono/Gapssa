@@ -14,8 +14,20 @@
                     "name": "activa"
                 },
                 {
-                    "name": "streamUpdatedAt"
+                    "name": "capacidadSimultanea"
                 }
+            ],
+            [
+                {
+                    "name": "suplementoDesplazamiento"
+                },
+                false
+            ],
+            [
+                {
+                    "name": "description"
+                },
+                false
             ]
         ],
         "style": "default",
