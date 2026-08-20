@@ -1,0 +1,119 @@
+.wrapper {
+  max-width: 30rem;
+  margin-inline: auto;
+}
+
+.title {
+  font-size: var(--text-h2);
+  margin-bottom: var(--space-4);
+}
+
+.intro {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-6);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.label {
+  font-size: var(--text-small);
+  letter-spacing: var(--tracking-nav);
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.hint {
+  font-size: var(--text-small);
+  color: var(--text-muted);
+}
+
+.input {
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-hairline);
+  border-radius: 2px;
+  background: var(--surface-base);
+  color: var(--text-primary);
+  font-size: var(--text-body);
+  font-family: var(--font-sans);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.input[aria-invalid='true'] {
+  border-color: #b3261e;
+}
+
+.submit {
+  align-self: flex-start;
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--color-gold);
+  background: var(--color-gold);
+  color: var(--color-white);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: var(--text-small);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast),
+    opacity var(--motion-fast);
+}
+
+.submit:hover:not(:disabled) {
+  background: var(--color-brown-900);
+  border-color: var(--color-brown-900);
+}
+
+.submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.alertError {
+  padding: var(--space-4);
+  border: 1px solid #b3261e;
+  background: rgba(179, 38, 30, 0.06);
+  color: #7a1c16;
+  font-size: var(--text-small);
+}
+
+.alertSuccess {
+  padding: var(--space-4);
+  border: 1px solid var(--color-gold);
+  background: var(--color-gold-border-soft);
+  color: var(--text-primary);
+  font-size: var(--text-small);
+}
+
+.links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+  font-size: var(--text-small);
+}
+
+.links a {
+  color: var(--color-gold);
+  text-decoration: underline;
+}
+
+.emptyState {
+  padding: var(--space-5);
+  border: var(--border-hairline);
+  background: var(--surface-alt);
+  color: var(--text-secondary);
+  font-size: var(--text-small);
+}

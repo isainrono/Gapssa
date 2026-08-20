@@ -1,0 +1,80 @@
+.wrapper {
+  max-width: 48rem;
+  margin-inline: auto;
+  text-align: center;
+}
+
+.quote {
+  font-family: var(--font-serif);
+  font-size: clamp(1.2rem, 2.4vw, 1.625rem);
+  font-style: italic;
+  font-weight: 300;
+  color: var(--text-primary);
+  line-height: 1.75;
+  margin-bottom: var(--space-6);
+}
+
+.author {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  font-size: var(--text-small);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--color-gold);
+}
+
+.authorLine {
+  height: 1px;
+  width: 1.75rem;
+  background: rgba(196, 162, 87, 0.5);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  margin-top: var(--space-7);
+}
+
+.arrowButton {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-brown-050);
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--motion-fast);
+}
+
+.arrowButton:hover {
+  background: var(--color-gold);
+  border-color: var(--color-gold);
+}
+
+.dots {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: var(--color-brown-050);
+  transition: transform var(--motion-fast);
+}
+
+.dotActive {
+  background: var(--color-gold);
+  transform: scale(1.35);
+}

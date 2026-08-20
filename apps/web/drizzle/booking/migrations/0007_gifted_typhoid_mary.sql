@@ -1,0 +1,2 @@
+ALTER TYPE "public"."booking_audit_reason_code" ADD VALUE 'MeetingGcsExclusionMismatch' BEFORE 'ContactReviewReconciledAfterBookingLinked';--> statement-breakpoint
+ALTER TYPE "public"."booking_review_conflict_type" ADD VALUE 'meeting_gcs_exclusion_mismatch';

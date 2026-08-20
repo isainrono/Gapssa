@@ -1,0 +1,231 @@
+.hero {
+  position: relative;
+  min-height: 88vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--surface-deep);
+}
+
+.heroImage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.heroImage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.heroOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(
+    105deg,
+    rgba(250, 248, 244, 0.97) 0%,
+    rgba(250, 248, 244, 0.9) 40%,
+    rgba(250, 248, 244, 0.6) 70%,
+    rgba(244, 237, 224, 0.3) 100%
+  );
+}
+
+.heroContent {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  max-width: 52rem;
+  padding: var(--space-8) var(--space-5);
+}
+
+.heroTitle {
+  font-size: var(--text-hero);
+  color: var(--text-primary);
+  white-space: pre-line;
+  margin-bottom: var(--space-5);
+}
+
+.heroSubtitle {
+  font-size: 0.9375rem;
+  font-weight: 300;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+  line-height: 1.85;
+  margin-bottom: var(--space-7);
+}
+
+.heroCtas {
+  display: flex;
+  gap: var(--space-5);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.buttonGold {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4) var(--space-7);
+  background: var(--color-gold);
+  color: var(--color-white);
+  font-size: var(--text-small);
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  text-decoration: none;
+  border: 1px solid var(--color-gold);
+  transition:
+    background var(--motion-fast),
+    color var(--motion-fast);
+}
+
+.buttonGold:hover {
+  background: transparent;
+  color: var(--color-gold);
+}
+
+.buttonOutline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4) var(--space-7);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--text-small);
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  text-decoration: none;
+  border: 1px solid var(--color-brown-050);
+  transition:
+    background var(--motion-fast),
+    color var(--motion-fast);
+}
+
+.buttonOutline:hover {
+  background: var(--color-brown-900);
+  color: var(--color-cream);
+  border-color: var(--color-brown-900);
+}
+
+/* Familias */
+.familiasGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-5);
+}
+
+.familiaCard {
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  text-decoration: none;
+}
+
+.familiaCard img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--motion-slow);
+}
+
+.familiaCard:hover img {
+  transform: scale(1.05);
+}
+
+.familiaOverlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(28, 24, 20, 0.75), transparent 55%);
+  display: flex;
+  align-items: flex-end;
+  padding: var(--space-5);
+}
+
+.familiaTitle {
+  font-family: var(--font-serif);
+  font-size: 1.375rem;
+  color: var(--color-white);
+}
+
+@media (min-width: 640px) {
+  .familiasGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1000px) {
+  .familiasGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.centeredCta {
+  text-align: center;
+  margin-top: var(--space-7);
+}
+
+/* Galería teaser */
+.galeriaGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+}
+
+.galeriaItem {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+}
+
+.galeriaItem img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--motion-slow);
+}
+
+.galeriaItem:hover img {
+  transform: scale(1.06);
+}
+
+@media (min-width: 640px) {
+  .galeriaGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Instagram */
+.instagramGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+.instagramItem {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  display: block;
+}
+
+.instagramItem img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (min-width: 640px) {
+  .instagramGrid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
+/* Contacto CTA */
+.contactoCta {
+  text-align: center;
+}

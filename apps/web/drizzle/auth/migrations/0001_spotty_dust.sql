@@ -1,0 +1,2 @@
+ALTER TYPE "public"."audit_reason_code" ADD VALUE 'SessionRevokedByAdmin' BEFORE 'SessionRevokedByPasswordChange';--> statement-breakpoint
+ALTER TYPE "public"."audit_value_representation" ADD VALUE 'event';

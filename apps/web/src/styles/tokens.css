@@ -1,0 +1,84 @@
+/**
+ * Tokens del sistema de diseño de GAPSSA by Nana (Fase 2). Paleta y
+ * tipografía tomadas de `gapssa1/GAPSSA by Nana.dc (1).html` (referencia
+ * visual, no copiada literalmente) — crema/dorado/marrón oscuro,
+ * Cormorant Garamond + Jost. `--motion-*` se anulan por completo bajo
+ * `prefers-reduced-motion: reduce` en vez de dejar que cada componente
+ * decida por su cuenta.
+ */
+:root {
+  /* Color */
+  --color-cream: #faf8f4;
+  --color-cream-alt: #f2ede3;
+  --color-cream-deep: #ede3d2;
+  --color-gold: #c4a257;
+  --color-gold-border: rgba(196, 162, 87, 0.18);
+  --color-gold-border-soft: rgba(196, 162, 87, 0.12);
+  --color-brown-900: #1c1814;
+  --color-brown-800: #28201a;
+  --color-brown-600: #5c5048;
+  --color-brown-500: #6b5f52;
+  --color-brown-400: #7a6e64;
+  --color-brown-300: #8c8078;
+  --color-brown-200: #9a8e84;
+  --color-brown-100: #b0a498;
+  --color-brown-050: #d4c8b0;
+  --color-white: #ffffff;
+  --color-focus-ring: #1c1814;
+
+  /* Superficies semánticas */
+  --surface-base: var(--color-cream);
+  --surface-alt: var(--color-cream-alt);
+  --surface-deep: var(--color-cream-deep);
+  --surface-inverse: var(--color-brown-900);
+  --text-primary: var(--color-brown-900);
+  --text-secondary: var(--color-brown-600);
+  --text-muted: var(--color-brown-400);
+  --text-on-inverse: var(--color-cream);
+
+  /* Tipografía — `--font-serif`/`--font-sans` los define `next/font`
+     (ver `(frontend)/[locale]/layout.tsx`), aplicados como clase en
+     <html>; aquí solo se define la escala tipográfica. */
+  --text-hero: clamp(2.375rem, 5.5vw, 4.375rem);
+  --text-h1: clamp(2.25rem, 4vw, 3.375rem);
+  --text-h2: clamp(1.75rem, 3vw, 2.25rem);
+  --text-h3: 1.375rem;
+  --text-body: 0.9375rem;
+  --text-small: 0.8125rem;
+  --text-eyebrow: 0.625rem;
+  --tracking-eyebrow: 0.2em;
+  --tracking-nav: 0.125em;
+
+  /* Espaciado */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+  --space-9: 6rem;
+  --space-section: clamp(4rem, 8vw, 6.875rem);
+  --content-max-width: 1200px;
+  --content-padding: clamp(1.5rem, 5vw, 3.75rem);
+
+  /* Bordes y radios */
+  --radius-full: 999px;
+  --border-hairline: 1px solid var(--color-gold-border);
+
+  /* Movimiento */
+  --motion-fast: 0.2s ease;
+  --motion-base: 0.35s ease;
+  --motion-slow: 0.6s ease;
+  --motion-reveal-distance: 28px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0s;
+    --motion-base: 0s;
+    --motion-slow: 0s;
+    --motion-reveal-distance: 0px;
+  }
+}

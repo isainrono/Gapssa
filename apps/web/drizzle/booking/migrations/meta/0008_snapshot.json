@@ -1,0 +1,1785 @@
+{
+  "id": "bc591ac0-44c3-4e23-9cac-f983d7211d9c",
+  "prevId": "10be632d-e9ee-4f82-8c85-5e79ff016f87",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.booking_audit_log": {
+      "name": "booking_audit_log",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "entity": {
+          "name": "entity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_type": {
+          "name": "actor_type",
+          "type": "booking_audit_actor_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actor_system_name": {
+          "name": "actor_system_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "channel": {
+          "name": "channel",
+          "type": "booking_audit_channel",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason_code": {
+          "name": "reason_code",
+          "type": "booking_audit_reason_code",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "value_representation": {
+          "name": "value_representation",
+          "type": "booking_audit_value_representation",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "field": {
+          "name": "field",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "previous_value": {
+          "name": "previous_value",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "new_value": {
+          "name": "new_value",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "redacted_algorithm": {
+          "name": "redacted_algorithm",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "redacted_digest": {
+          "name": "redacted_digest",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "redacted_change_kind": {
+          "name": "redacted_change_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "booking_audit_log_entity_entity_id_idx": {
+          "name": "booking_audit_log_entity_entity_id_idx",
+          "columns": [
+            {
+              "expression": "entity",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "booking_audit_log_occurred_at_idx": {
+          "name": "booking_audit_log_occurred_at_idx",
+          "columns": [
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.booking_outbox_jobs": {
+      "name": "booking_outbox_jobs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "job_type": {
+          "name": "job_type",
+          "type": "booking_outbox_job_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "booking_request_id": {
+          "name": "booking_request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "booking_outbox_job_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "claim_token": {
+          "name": "claim_token",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_expires_at": {
+          "name": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "next_attempt_at": {
+          "name": "next_attempt_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_code": {
+          "name": "last_error_code",
+          "type": "booking_outbox_job_error_code",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "booking_outbox_jobs_booking_request_id_job_type_key": {
+          "name": "booking_outbox_jobs_booking_request_id_job_type_key",
+          "columns": [
+            {
+              "expression": "booking_request_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "job_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "booking_outbox_jobs_status_next_attempt_at_idx": {
+          "name": "booking_outbox_jobs_status_next_attempt_at_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "next_attempt_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "booking_outbox_jobs_status_lease_expires_at_idx": {
+          "name": "booking_outbox_jobs_status_lease_expires_at_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lease_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "booking_outbox_jobs_booking_request_id_booking_request_records_id_fk": {
+          "name": "booking_outbox_jobs_booking_request_id_booking_request_records_id_fk",
+          "tableFrom": "booking_outbox_jobs",
+          "tableTo": "booking_request_records",
+          "columnsFrom": [
+            "booking_request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.booking_request_records": {
+      "name": "booking_request_records",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "client_account_id": {
+          "name": "client_account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "meeting_id": {
+          "name": "meeting_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "treatment_id": {
+          "name": "treatment_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "professional_id": {
+          "name": "professional_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "zone_id": {
+          "name": "zone_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "start_at": {
+          "name": "start_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "end_at": {
+          "name": "end_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "booking_request_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending_verification'"
+        },
+        "verification_expires_at": {
+          "name": "verification_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "approval_expires_at": {
+          "name": "approval_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolution": {
+          "name": "resolution",
+          "type": "booking_request_resolution",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason_code": {
+          "name": "reason_code",
+          "type": "booking_reason_code",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload_hash": {
+          "name": "payload_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "identity_fingerprint_key_version": {
+          "name": "identity_fingerprint_key_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "access_token_key_version": {
+          "name": "access_token_key_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "otp_challenge_id": {
+          "name": "otp_challenge_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decision_operation_key": {
+          "name": "decision_operation_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "booking_request_records_idempotency_key_key": {
+          "name": "booking_request_records_idempotency_key_key",
+          "columns": [
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "booking_request_records_decision_operation_key_key": {
+          "name": "booking_request_records_decision_operation_key_key",
+          "columns": [
+            {
+              "expression": "decision_operation_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"booking_request_records\".\"decision_operation_key\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "booking_request_records_status_idx": {
+          "name": "booking_request_records_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "booking_request_records_client_account_id_idx": {
+          "name": "booking_request_records_client_account_id_idx",
+          "columns": [
+            {
+              "expression": "client_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "booking_request_records_meeting_id_idx": {
+          "name": "booking_request_records_meeting_id_idx",
+          "columns": [
+            {
+              "expression": "meeting_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "booking_request_records_professional_time_idx": {
+          "name": "booking_request_records_professional_time_idx",
+          "columns": [
+            {
+              "expression": "professional_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "start_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "end_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "booking_request_records_zone_time_idx": {
+          "name": "booking_request_records_zone_time_idx",
+          "columns": [
+            {
+              "expression": "zone_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "start_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "end_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "booking_request_records_verification_expires_at_idx": {
+          "name": "booking_request_records_verification_expires_at_idx",
+          "columns": [
+            {
+              "expression": "verification_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "booking_request_records_approval_expires_at_idx": {
+          "name": "booking_request_records_approval_expires_at_idx",
+          "columns": [
+            {
+              "expression": "approval_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.booking_review_records": {
+      "name": "booking_review_records",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "booking_request_id": {
+          "name": "booking_request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "conflict_type": {
+          "name": "conflict_type",
+          "type": "booking_review_conflict_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "candidate_contact_ids": {
+          "name": "candidate_contact_ids",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "candidate_meeting_ids": {
+          "name": "candidate_meeting_ids",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "booking_review_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolved_by": {
+          "name": "resolved_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolution_contact_id": {
+          "name": "resolution_contact_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "claim_token": {
+          "name": "claim_token",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_expires_at": {
+          "name": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "booking_review_records_booking_request_id_idx": {
+          "name": "booking_review_records_booking_request_id_idx",
+          "columns": [
+            {
+              "expression": "booking_request_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "booking_review_records_status_expires_at_idx": {
+          "name": "booking_review_records_status_expires_at_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "booking_review_records_status_lease_expires_at_idx": {
+          "name": "booking_review_records_status_lease_expires_at_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lease_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "booking_review_records_active_booking_request_id_key": {
+          "name": "booking_review_records_active_booking_request_id_key",
+          "columns": [
+            {
+              "expression": "booking_request_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"booking_review_records\".\"status\" IN ('pending', 'processing')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "booking_review_records_booking_request_id_booking_request_records_id_fk": {
+          "name": "booking_review_records_booking_request_id_booking_request_records_id_fk",
+          "tableFrom": "booking_review_records",
+          "tableTo": "booking_request_records",
+          "columnsFrom": [
+            "booking_request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.pending_authenticated_contact_details": {
+      "name": "pending_authenticated_contact_details",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "booking_request_id": {
+          "name": "booking_request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "first_name_ciphertext": {
+          "name": "first_name_ciphertext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "first_name_nonce": {
+          "name": "first_name_nonce",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "first_name_key_version": {
+          "name": "first_name_key_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_name_ciphertext": {
+          "name": "last_name_ciphertext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_name_nonce": {
+          "name": "last_name_nonce",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_name_key_version": {
+          "name": "last_name_key_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phone_ciphertext": {
+          "name": "phone_ciphertext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phone_nonce": {
+          "name": "phone_nonce",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phone_key_version": {
+          "name": "phone_key_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "pending_guest_identity_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "pending_authenticated_contact_details_booking_request_id_key": {
+          "name": "pending_authenticated_contact_details_booking_request_id_key",
+          "columns": [
+            {
+              "expression": "booking_request_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "pending_authenticated_contact_details_status_idx": {
+          "name": "pending_authenticated_contact_details_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "pending_authenticated_contact_details_booking_request_id_booking_request_records_id_fk": {
+          "name": "pending_authenticated_contact_details_booking_request_id_booking_request_records_id_fk",
+          "tableFrom": "pending_authenticated_contact_details",
+          "tableTo": "booking_request_records",
+          "columnsFrom": [
+            "booking_request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.pending_guest_identities": {
+      "name": "pending_guest_identities",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "booking_request_id": {
+          "name": "booking_request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "first_name_ciphertext": {
+          "name": "first_name_ciphertext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "first_name_nonce": {
+          "name": "first_name_nonce",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "first_name_key_version": {
+          "name": "first_name_key_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_name_ciphertext": {
+          "name": "last_name_ciphertext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_name_nonce": {
+          "name": "last_name_nonce",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_name_key_version": {
+          "name": "last_name_key_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email_ciphertext": {
+          "name": "email_ciphertext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email_nonce": {
+          "name": "email_nonce",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email_key_version": {
+          "name": "email_key_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phone_ciphertext": {
+          "name": "phone_ciphertext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phone_nonce": {
+          "name": "phone_nonce",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phone_key_version": {
+          "name": "phone_key_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email_lookup_hmac": {
+          "name": "email_lookup_hmac",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email_lookup_hmac_key_version": {
+          "name": "email_lookup_hmac_key_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "pending_guest_identity_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "pending_guest_identities_booking_request_id_key": {
+          "name": "pending_guest_identities_booking_request_id_key",
+          "columns": [
+            {
+              "expression": "booking_request_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "pending_guest_identities_status_idx": {
+          "name": "pending_guest_identities_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "pending_guest_identities_email_lookup_hmac_idx": {
+          "name": "pending_guest_identities_email_lookup_hmac_idx",
+          "columns": [
+            {
+              "expression": "email_lookup_hmac",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "pending_guest_identities_booking_request_id_booking_request_records_id_fk": {
+          "name": "pending_guest_identities_booking_request_id_booking_request_records_id_fk",
+          "tableFrom": "pending_guest_identities",
+          "tableTo": "booking_request_records",
+          "columnsFrom": [
+            "booking_request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.sim_espo_contacts": {
+      "name": "sim_espo_contacts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "gapssa_account_id": {
+          "name": "gapssa_account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "first_name": {
+          "name": "first_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_name": {
+          "name": "last_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phone": {
+          "name": "phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "sim_espo_contacts_email_idx": {
+          "name": "sim_espo_contacts_email_idx",
+          "columns": [
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sim_espo_contacts_phone_idx": {
+          "name": "sim_espo_contacts_phone_idx",
+          "columns": [
+            {
+              "expression": "phone",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sim_espo_contacts_gapssa_account_id_idx": {
+          "name": "sim_espo_contacts_gapssa_account_id_idx",
+          "columns": [
+            {
+              "expression": "gapssa_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.sim_espo_meeting_contacts": {
+      "name": "sim_espo_meeting_contacts",
+      "schema": "",
+      "columns": {
+        "meeting_id": {
+          "name": "meeting_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contact_id": {
+          "name": "contact_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "sim_espo_meeting_contacts_contact_id_idx": {
+          "name": "sim_espo_meeting_contacts_contact_id_idx",
+          "columns": [
+            {
+              "expression": "contact_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "sim_espo_meeting_contacts_meeting_id_sim_espo_meetings_id_fk": {
+          "name": "sim_espo_meeting_contacts_meeting_id_sim_espo_meetings_id_fk",
+          "tableFrom": "sim_espo_meeting_contacts",
+          "tableTo": "sim_espo_meetings",
+          "columnsFrom": [
+            "meeting_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "sim_espo_meeting_contacts_contact_id_sim_espo_contacts_id_fk": {
+          "name": "sim_espo_meeting_contacts_contact_id_sim_espo_contacts_id_fk",
+          "tableFrom": "sim_espo_meeting_contacts",
+          "tableTo": "sim_espo_contacts",
+          "columnsFrom": [
+            "contact_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "sim_espo_meeting_contacts_meeting_id_contact_id_pk": {
+          "name": "sim_espo_meeting_contacts_meeting_id_contact_id_pk",
+          "columns": [
+            "meeting_id",
+            "contact_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.sim_espo_meetings": {
+      "name": "sim_espo_meetings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "booking_request_id": {
+          "name": "booking_request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "treatment_id": {
+          "name": "treatment_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "professional_id": {
+          "name": "professional_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "zone_id": {
+          "name": "zone_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "start_at": {
+          "name": "start_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "end_at": {
+          "name": "end_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "c_estado_reserva": {
+          "name": "c_estado_reserva",
+          "type": "sim_espo_estado_reserva",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PendingCenterApproval'"
+        },
+        "status": {
+          "name": "status",
+          "type": "sim_espo_estado_meeting_nativo",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Planned'"
+        },
+        "decided_by": {
+          "name": "decided_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decided_at": {
+          "name": "decided_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolution_reason": {
+          "name": "resolution_reason",
+          "type": "sim_espo_meeting_resolution_reason",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "sim_espo_meetings_booking_request_id_key": {
+          "name": "sim_espo_meetings_booking_request_id_key",
+          "columns": [
+            {
+              "expression": "booking_request_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sim_espo_meetings_professional_time_idx": {
+          "name": "sim_espo_meetings_professional_time_idx",
+          "columns": [
+            {
+              "expression": "professional_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "start_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "end_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sim_espo_meetings_zone_time_idx": {
+          "name": "sim_espo_meetings_zone_time_idx",
+          "columns": [
+            {
+              "expression": "zone_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "start_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "end_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sim_espo_meetings_c_estado_reserva_idx": {
+          "name": "sim_espo_meetings_c_estado_reserva_idx",
+          "columns": [
+            {
+              "expression": "c_estado_reserva",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.booking_audit_actor_type": {
+      "name": "booking_audit_actor_type",
+      "schema": "public",
+      "values": [
+        "user",
+        "guest",
+        "system"
+      ]
+    },
+    "public.booking_audit_channel": {
+      "name": "booking_audit_channel",
+      "schema": "public",
+      "values": [
+        "web",
+        "admin_espocrm",
+        "n8n",
+        "google_calendar",
+        "email"
+      ]
+    },
+    "public.booking_audit_reason_code": {
+      "name": "booking_audit_reason_code",
+      "schema": "public",
+      "values": [
+        "ApprovedByStaff",
+        "RejectedByStaff",
+        "ApprovalExpired",
+        "VerificationExpired",
+        "RecoveryWindowExceeded",
+        "ClientRequested",
+        "SystemReconciliation",
+        "ContactAmbiguous",
+        "ContactConflictingSignals",
+        "MeetingDuplicate",
+        "MeetingContactMissing",
+        "MeetingContactMismatch",
+        "MeetingMultipleContacts",
+        "ContactReviewRejectedByStaff",
+        "ContactReviewExpired",
+        "MeetingIncompatibleDuringResume",
+        "ContactReviewReplaced",
+        "MeetingGcsExclusionMismatch",
+        "ContactReviewReconciledAfterBookingLinked",
+        "AccountRegistered",
+        "AccountEmailVerified",
+        "LoginSucceeded",
+        "LoginFailedInvalidCredentials",
+        "LoginFailedAccountNotVerified",
+        "LoginFailedAccountSuspended",
+        "LoginRateLimited",
+        "LogoutRequested",
+        "SessionRevokedByUser",
+        "SessionRevokedByAdmin",
+        "SessionRevokedByPasswordChange",
+        "SessionExpiredIdle",
+        "SessionExpiredAbsolute",
+        "PasswordResetRequested",
+        "PasswordResetCompleted",
+        "GuardianLinkRequested",
+        "GuardianLinkConfirmed",
+        "GuardianLinkRevoked",
+        "IndependenceRequested",
+        "IndependenceGranted",
+        "IndependenceRejected",
+        "AccountDeletionRequested",
+        "EspoLinkProposed",
+        "EspoLinkApprovedByStaff",
+        "EspoLinkRejectedByStaff"
+      ]
+    },
+    "public.booking_audit_value_representation": {
+      "name": "booking_audit_value_representation",
+      "schema": "public",
+      "values": [
+        "raw",
+        "redacted",
+        "event"
+      ]
+    },
+    "public.booking_outbox_job_error_code": {
+      "name": "booking_outbox_job_error_code",
+      "schema": "public",
+      "values": [
+        "otp_issue_failed",
+        "otp_rate_limited",
+        "mail_send_failed",
+        "booking_request_not_pending",
+        "booking_request_not_found",
+        "unknown_error"
+      ]
+    },
+    "public.booking_outbox_job_status": {
+      "name": "booking_outbox_job_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "processing",
+        "completed",
+        "failed_retryable"
+      ]
+    },
+    "public.booking_outbox_job_type": {
+      "name": "booking_outbox_job_type",
+      "schema": "public",
+      "values": [
+        "send_guest_verification_otp"
+      ]
+    },
+    "public.booking_reason_code": {
+      "name": "booking_reason_code",
+      "schema": "public",
+      "values": [
+        "Approved",
+        "RejectedByStaff",
+        "ApprovalExpired",
+        "VerificationExpired",
+        "RecoveryWindowExceeded",
+        "ContactReviewRejectedByStaff",
+        "ContactReviewExpired"
+      ]
+    },
+    "public.booking_request_resolution": {
+      "name": "booking_request_resolution",
+      "schema": "public",
+      "values": [
+        "confirmed",
+        "rejected",
+        "verification_expired",
+        "approval_expired",
+        "contact_review_rejected",
+        "contact_review_expired"
+      ]
+    },
+    "public.booking_request_status": {
+      "name": "booking_request_status",
+      "schema": "public",
+      "values": [
+        "pending_verification",
+        "verification_processing",
+        "contact_review_pending",
+        "pending_approval",
+        "resolved"
+      ]
+    },
+    "public.booking_review_conflict_type": {
+      "name": "booking_review_conflict_type",
+      "schema": "public",
+      "values": [
+        "contact_multiple_matches",
+        "contact_conflicting_signals",
+        "meeting_duplicate",
+        "meeting_contact_missing",
+        "meeting_contact_mismatch",
+        "meeting_multiple_contacts",
+        "meeting_incompatible",
+        "meeting_gcs_exclusion_mismatch"
+      ]
+    },
+    "public.booking_review_status": {
+      "name": "booking_review_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "processing",
+        "resolved",
+        "rejected",
+        "expired",
+        "replaced"
+      ]
+    },
+    "public.sim_espo_estado_meeting_nativo": {
+      "name": "sim_espo_estado_meeting_nativo",
+      "schema": "public",
+      "values": [
+        "Planned",
+        "Held",
+        "Not Held"
+      ]
+    },
+    "public.sim_espo_estado_reserva": {
+      "name": "sim_espo_estado_reserva",
+      "schema": "public",
+      "values": [
+        "RequestReceived",
+        "PendingGuardianAuthorization",
+        "PendingAssessment",
+        "PendingCenterApproval",
+        "Confirmed",
+        "ClientArrived",
+        "InTreatment",
+        "Completed",
+        "Canceled",
+        "NoShow",
+        "RescheduleRequested",
+        "ScheduleConflict"
+      ]
+    },
+    "public.sim_espo_meeting_resolution_reason": {
+      "name": "sim_espo_meeting_resolution_reason",
+      "schema": "public",
+      "values": [
+        "Approved",
+        "RejectedByStaff",
+        "ApprovalExpired"
+      ]
+    },
+    "public.pending_guest_identity_status": {
+      "name": "pending_guest_identity_status",
+      "schema": "public",
+      "values": [
+        "active",
+        "consumed",
+        "discarded"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

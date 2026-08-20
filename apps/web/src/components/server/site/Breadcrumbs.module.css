@@ -1,0 +1,28 @@
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  list-style: none;
+  font-size: var(--text-small);
+  color: var(--text-muted);
+  margin-bottom: var(--space-6);
+}
+
+.list li:not(:last-child)::after {
+  content: '/';
+  margin-left: var(--space-2);
+  color: var(--color-brown-050);
+}
+
+.link {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.link:hover {
+  color: var(--color-gold);
+}
+
+.current {
+  color: var(--text-secondary);
+}

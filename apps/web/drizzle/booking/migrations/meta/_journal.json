@@ -1,0 +1,69 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1786115989833,
+      "tag": "0000_shiny_enchantress",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786350502347,
+      "tag": "0001_revision2_outbox_and_identity_fingerprint",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786357229741,
+      "tag": "0002_revision3_outbox_lease",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786373042747,
+      "tag": "0003_aberrant_longshot",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786389139583,
+      "tag": "0004_blue_lyja",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786391496100,
+      "tag": "0005_useful_frightful_four",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786463997151,
+      "tag": "0006_eminent_mimic",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786787880112,
+      "tag": "0007_gifted_typhoid_mary",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786788247309,
+      "tag": "0008_freezing_matthew_murdock",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@gapssa/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Contratos de datos compartidos entre apps/web y el BFF: reservas, estado de cita, cuestionarios/consentimientos, consulta general e idempotencia.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "test": "node --test src/**/*.test.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,69 @@
+.trigger {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: var(--space-2);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.triggerBarWide {
+  width: 26px;
+  height: 1px;
+  background: var(--color-brown-900);
+}
+
+.triggerBarNarrow {
+  width: 18px;
+  height: 1px;
+  background: var(--color-gold);
+}
+
+@media (min-width: 900px) {
+  .trigger {
+    display: none;
+  }
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--surface-base);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  padding: var(--space-6);
+}
+
+.closeButton {
+  position: absolute;
+  top: var(--space-5);
+  right: var(--space-5);
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: var(--space-3);
+}
+
+.link {
+  font-family: var(--font-serif);
+  font-size: 1.75rem;
+  font-weight: 300;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.link:hover {
+  color: var(--color-gold);
+}
+
+.switcherRow {
+  margin-top: var(--space-4);
+}

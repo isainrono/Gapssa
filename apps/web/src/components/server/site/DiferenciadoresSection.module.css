@@ -1,0 +1,44 @@
+.section {
+  background: linear-gradient(160deg, var(--color-brown-900) 0%, var(--color-brown-800) 100%);
+  color: var(--text-on-inverse);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-5);
+}
+
+.card {
+  padding: var(--space-6) var(--space-5);
+  border: 1px solid rgba(196, 162, 87, 0.18);
+}
+
+.card svg {
+  color: var(--color-gold);
+  margin-bottom: var(--space-5);
+}
+
+.card h3 {
+  color: var(--text-on-inverse);
+  font-size: 1.25rem;
+  margin-bottom: var(--space-3);
+}
+
+.card p {
+  color: var(--color-brown-300);
+  font-size: var(--text-small);
+  line-height: 1.75;
+}
+
+@media (min-width: 640px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1000px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

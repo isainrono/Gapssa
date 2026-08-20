@@ -1,0 +1,112 @@
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-8);
+  align-items: start;
+}
+
+.infoList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin-bottom: var(--space-7);
+  list-style: none;
+}
+
+.infoRow {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+}
+
+.infoIcon {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border: 1px solid var(--color-gold-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-gold);
+}
+
+.infoLabel {
+  font-size: var(--text-eyebrow);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--color-gold);
+  margin-bottom: var(--space-2);
+}
+
+.infoValue {
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: var(--text-body);
+}
+
+.horarioList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-small);
+  color: var(--text-secondary);
+}
+
+.mapCard {
+  border: 1px solid var(--color-gold-border);
+  padding: var(--space-7) var(--space-5);
+  text-align: center;
+  background: var(--surface-alt);
+}
+
+.mapButton {
+  display: inline-flex;
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-6);
+  border: 1px solid var(--color-gold);
+  color: var(--color-gold);
+  text-decoration: none;
+  font-size: var(--text-small);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mapButton:hover {
+  background: var(--color-gold);
+  color: var(--color-white);
+}
+
+.formAviso {
+  padding: var(--space-5);
+  background: var(--surface-alt);
+  border-left: 3px solid var(--color-gold);
+  color: var(--text-secondary);
+  font-size: var(--text-small);
+  line-height: 1.7;
+  margin-bottom: var(--space-6);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  opacity: 0.6;
+}
+
+.field {
+  width: 100%;
+  padding: var(--space-3) 0;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-brown-050);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  color: var(--text-primary);
+}
+
+@media (min-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-8);
+  }
+}

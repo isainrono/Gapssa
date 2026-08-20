@@ -1,0 +1,2 @@
+ALTER TYPE "public"."audit_reason_code" ADD VALUE 'AccountDeletionRequested' BEFORE 'EspoLinkProposed';--> statement-breakpoint
+ALTER TYPE "public"."session_revoked_reason" ADD VALUE 'account_deletion_requested';

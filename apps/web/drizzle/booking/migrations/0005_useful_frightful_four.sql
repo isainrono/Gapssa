@@ -1,0 +1,1 @@
+ALTER TYPE "public"."booking_audit_reason_code" ADD VALUE 'ContactReviewReconciledAfterBookingLinked' BEFORE 'AccountRegistered';
