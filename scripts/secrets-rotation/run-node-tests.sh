@@ -34,6 +34,7 @@ lib/recoverOldSecretValue.test.mjs
 lib/redisVerify.test.mjs
 lib/secretClassification.test.mjs
 lib/secretValueContract.test.mjs
+lib/updateRedisSecrets.test.mjs
 lib/updateSecretsFileField.test.mjs
 lib/validateProbeJson.test.mjs
 lib/validateSecretsFileForBackup.test.mjs

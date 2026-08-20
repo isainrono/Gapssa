@@ -2729,66 +2729,131 @@ except Exception:
 # ---------------------------------------------------------------------------
 # S5 — Redis (REDIS_URL automatizado con percent-encoding correcto)
 # ---------------------------------------------------------------------------
+# Marca la puerta S5 como 'rollback_required' — mismo tratamiento que
+# on_interrupt() da a una puerta 'applying'/'verifying' interrumpida por
+# señal: NUNCA 'failed' (que confirm_gate trataría como "nada se aplicó
+# todavía", falso una vez que REDIS_PASSWORD/REDIS_URL ya se escribieron
+# atómicamente en el almacén externo). En el próximo arranque,
+# confirm_gate ofrece restaurar el backup tomado por enter_gate Y
+# reconciliar el servidor real (restore_secrets_file_from_latest_backup
+# -> reconcile_server_after_restore, Bloque 5) — la MISMA máquina de
+# recuperación coordinada ya usada por S2-S4, nunca una reescritura
+# aislada del fichero que deje Redis con el valor nuevo mientras el
+# archivo vuelve al antiguo.
+_s5_mark_rollback_required() {
+  local reason="$1"
+  state_set "S5" rollback_required
+  say "Puerta S5: $reason"
+  say "REDIS_PASSWORD/REDIS_URL YA se escribieron atómicamente en el almacén externo — queda marcada 'rollback_required'. Vuelve a ejecutar este script: te ofrecerá restaurar el backup de esta puerta Y reconciliar Redis real antes de continuar. S6 no puede avanzar mientras S5 no esté 'done'."
+  CURRENT_GATE=""
+}
+
 gate_s5() {
   divider
   say "Puerta S5 — Redis (REDIS_PASSWORD, REDIS_URL)"
-  say "Genera una contraseña nueva, sincroniza REDIS_URL automáticamente (con percent-encoding correcto) y verifica con PING autenticado."
+  say "Genera una contraseña nueva, la escribe junto con REDIS_URL en una única actualización atómica (URL parseada con la clase URL nativa, nunca una regex — lib/updateRedisSecrets.mjs) y verifica con PING autenticado."
   confirm_gate "S5" || return 0
   require_secrets_file || return 1
   enter_gate "S5" || return 1
 
-  local old_pw
+  local old_pw redis_port
   old_pw="$(field_from_secrets_file REDIS_PASSWORD)"
-
-  if ! bash "$SCRIPT_DIR/02-generate-secret.sh" "$SECRETS_FILE" --set-line REDIS_PASSWORD --format base64 --bytes 24 $([ "$DRY_RUN" = true ] && printf -- '--dry-run'); then
-    leave_gate_failed "S5" "no se pudo generar REDIS_PASSWORD."
-    unset old_pw
-    return 1
-  fi
+  redis_port="$(field_from_secrets_file REDIS_HOST_PORT)"; redis_port="${redis_port:-6380}"
 
   if [ "$DRY_RUN" = true ]; then
-    say "[dry-run] no se sincroniza REDIS_URL ni se reinicia/verifica nada real."
+    say "[dry-run] no se genera REDIS_PASSWORD, no se sincroniza REDIS_URL, no se reinicia/verifica nada real."
     leave_gate_done "S5"
     unset old_pw
     return 0
   fi
 
-  say "Sincronizando REDIS_URL con percent-encoding correcto..."
-  python3 - "$SECRETS_FILE" <<'PYEOF'
-import sys, re, os
-from urllib.parse import quote
-target = sys.argv[1]
-with open(target, "r", encoding="utf-8") as f:
-    lines = f.readlines()
-pw = None
-for line in lines:
-    if line.startswith("REDIS_PASSWORD="):
-        pw = line.rstrip("\n").split("=", 1)[1]
-        break
-if not pw:
-    print("ERROR: REDIS_PASSWORD no encontrado.", file=sys.stderr)
-    sys.exit(1)
-encoded = quote(pw, safe="")
-out = []
-for line in lines:
-    if line.startswith("REDIS_URL="):
-        rest = line[len("REDIS_URL="):]
-        rest = re.sub(r"^(redis://:)[^@]*(@)", rf"\g<1>{encoded}\g<2>", rest)
-        line = "REDIS_URL=" + rest
-    out.append(line)
-fd = os.open(target, os.O_WRONLY | os.O_TRUNC, 0o600)
-with os.fdopen(fd, "w") as f:
-    f.writelines(out)
-pw = None
-print("redis_url_sync_ok=true")
-PYEOF
+  say "Identificando el contenedor/volumen(es)/red de 'redis' de ESTE proyecto por etiquetas de compose (nunca por nombre asumido)..."
+  local redis_cid_before
+  redis_cid_before="$(_gapssa_compose ps -q redis 2>/dev/null || true)"
+  if [ -n "$redis_cid_before" ]; then
+    local redis_mounts redis_networks
+    redis_mounts="$(docker inspect --format '{{range .Mounts}}{{.Name}} {{end}}' "$redis_cid_before" 2>/dev/null || true)"
+    redis_networks="$(docker inspect --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$redis_cid_before" 2>/dev/null || true)"
+    say "  contenedor actual: ${redis_cid_before:0:12}  volumen(es): ${redis_mounts:-ninguno}  red(es): ${redis_networks:-ninguna}"
+  else
+    say "  (sin contenedor 'redis' corriendo todavía en este proyecto — se creará al arrancar)"
+  fi
 
+  say "Comprobando que no haya un consumidor activo (apps/web) conectado con la credencial ANTERIOR..."
+  local apps_web_port
+  apps_web_port="$(field_from_secrets_file GAPSSA_APPS_WEB_PORT)"; apps_web_port="${apps_web_port:-3000}"
+  if curl -sS -o /dev/null --max-time 1 "http://127.0.0.1:${apps_web_port}/" 2>/dev/null; then
+    say "AVISO: algo responde en 127.0.0.1:${apps_web_port} (¿apps/web corriendo?) — recrear Redis ahora invalidará de inmediato cualquier conexión activa que tenga abierta con la contraseña ANTERIOR."
+    if ! ask_yes_no "¿Continuar de todas formas?"; then
+      leave_gate_failed "S5" "cancelada por el operador — había un consumidor activo en 127.0.0.1:${apps_web_port} sin coordinar."
+      unset old_pw
+      return 1
+    fi
+  else
+    say "  OK — nada responde en 127.0.0.1:${apps_web_port} (esperado en este punto de S1→S9; apps/web solo arranca en S9)."
+  fi
+
+  local baseline_before=""
+  if [ -n "$old_pw" ]; then
+    say "Capturando línea base de datos/TTL (no sensible — solo dbsize y hashes SHA-256 de un lote acotado de claves) antes de recrear..."
+    baseline_before="$(printf '{"host":"127.0.0.1","port":%s}\n%s' "$redis_port" "$old_pw" | node "$SCRIPT_DIR/lib/redisDataBaseline.mjs" 2>/dev/null || true)"
+    if [ -n "$baseline_before" ]; then
+      local before_summary
+      before_summary="$(printf '%s' "$baseline_before" | python3 -c 'import sys,json
+d=json.load(sys.stdin)
+print(f"dbsize={d[\"dbsize\"]}, muestra={len(d[\"sample\"])} clave(s)")' 2>/dev/null || printf '?')"
+      say "  OK — línea base capturada ($before_summary)."
+    else
+      say "  (no se pudo capturar — probablemente redis no está arrancado todavía o es la primera rotación; la comparación de datos se omitirá)."
+    fi
+  fi
+
+  say "Generando REDIS_PASSWORD nuevo y escribiendo REDIS_PASSWORD+REDIS_URL en una sola actualización atómica (temporal 600 fijado, fsync, rename, fsync de directorio — nunca O_TRUNC, nunca dos escrituras independientes)..."
   local new_pw
-  new_pw="$(field_from_secrets_file REDIS_PASSWORD)"
+  new_pw="$(openssl rand -base64 24)"
 
+  local pin_lines
+  if ! pin_lines="$(gapssa_secrets_mktemp_secure_same_dir "$SECRETS_FILE" redis)"; then
+    leave_gate_failed "S5" "no se pudo crear el temporal para actualizar REDIS_PASSWORD/REDIS_URL."
+    unset old_pw new_pw
+    return 1
+  fi
+  local pin_tmp pin_dir pin_dev pin_ino pin_uid pin_mode
+  {
+    read -r pin_tmp
+    read -r pin_dir
+    read -r pin_dev pin_ino pin_uid pin_mode
+  } <<<"$pin_lines"
+  if ! gapssa_secrets_verify_pinned_tmp "$pin_tmp" "$pin_dir" "$pin_dev" "$pin_ino" "$pin_uid" "$pin_mode"; then
+    leave_gate_failed "S5" "el temporal para REDIS_PASSWORD/REDIS_URL no superó la verificación de identidad."
+    unset old_pw new_pw
+    return 1
+  fi
+  gapssa_cleanup_push shred_pinned_tmp "$pin_tmp" "$pin_dir" "$pin_dev" "$pin_ino" "$pin_uid" "$pin_mode"
+
+  local sync_ok=false
+  if printf '%s' "$new_pw" | node "$SCRIPT_DIR/lib/updateRedisSecrets.mjs" "$SECRETS_FILE" "$pin_tmp" "$pin_dev" "$pin_ino" "$pin_uid" "$pin_mode" "$(current_secrets_schema_version)"; then
+    sync_ok=true
+  fi
+  gapssa_cleanup_pop_matching shred_pinned_tmp "$pin_tmp" "$pin_dir" "$pin_dev" "$pin_ino" "$pin_uid" "$pin_mode"
+
+  if [ "$sync_ok" != true ]; then
+    leave_gate_failed "S5" "no se pudo generar/escribir REDIS_PASSWORD/REDIS_URL de forma atómica — ver mensaje de arriba. Nada se ha aplicado a Redis todavía."
+    unset old_pw new_pw
+    return 1
+  fi
+  say "  OK — REDIS_PASSWORD/REDIS_URL escritos atómicamente (relectura de REDIS_URL confirmó la contraseña nueva ya codificada)."
+
+  # A partir de aquí el almacén externo YA tiene la contraseña nueva —
+  # cualquier fallo posterior nunca puede volver a 'failed' (que
+  # confirm_gate trataría como si nada se hubiera aplicado): usa la
+  # misma máquina de recuperación coordinada que S2-S4
+  # (_s5_mark_rollback_required -> confirm_gate -> restaurar backup +
+  # reconciliar servidor real), nunca una reescritura aislada del
+  # fichero que deje Redis con el valor nuevo.
   say "Reiniciando redis con la contraseña nueva (--requirepass viene del propio arranque del contenedor)..."
   if ! run_cmd docker compose --env-file "$SECRETS_FILE" up -d --force-recreate redis; then
-    leave_gate_failed "S5" "no se pudo reiniciar redis."
+    _s5_mark_rollback_required "no se pudo reiniciar redis tras escribir la contraseña nueva."
     unset old_pw new_pw
     return 1
   fi
@@ -2796,41 +2861,71 @@ PYEOF
   state_set "S5" verifying
 
   say "Esperando a que redis confirme salud con la contraseña nueva (healthcheck de compose.yml)..."
-  if [ "$DRY_RUN" != true ] && ! _gapssa_wait_healthy redis; then
-    leave_gate_failed "S5" "redis no confirmó salud (healthcheck) tras el force-recreate — revisa 'docker compose logs redis'."
+  if ! _gapssa_wait_healthy redis; then
+    _s5_mark_rollback_required "redis no confirmó salud (healthcheck) tras el force-recreate — revisa 'docker compose logs redis'."
     unset old_pw new_pw
     return 1
   fi
 
-  say "Verificando PING autenticado por TCP real (Bloque 5 — cliente Node, nunca 'docker compose exec' dentro del propio contenedor; la contraseña viaja solo en memoria de proceso, nunca en argv ni en fichero residual)..."
-  local redis_port
-  redis_port="$(field_from_secrets_file REDIS_HOST_PORT)"; redis_port="${redis_port:-6380}"
-  local ping_ok=false
-  if [ "$DRY_RUN" != true ]; then
-    local check
-    check="$(printf '{"host":"127.0.0.1","port":%s}\n%s' "$redis_port" "$new_pw" | node "$SCRIPT_DIR/lib/redisVerify.mjs" 2>/dev/null || true)"
-    [ "$check" = true ] && ping_ok=true
-  else
-    ping_ok=true
-  fi
+  say "Verificando PING autenticado por TCP real (cliente Node, nunca 'docker compose exec' dentro del propio contenedor; la contraseña viaja solo en memoria de proceso, nunca en argv ni en fichero residual)..."
+  local ping_ok=false check
+  check="$(printf '{"host":"127.0.0.1","port":%s}\n%s' "$redis_port" "$new_pw" | node "$SCRIPT_DIR/lib/redisVerify.mjs" 2>/dev/null || true)"
+  [ "$check" = true ] && ping_ok=true
 
   if [ "$ping_ok" != true ]; then
-    leave_gate_failed "S5" "PING autenticado (TCP real) con la contraseña nueva falló."
+    _s5_mark_rollback_required "PING autenticado (TCP real) con la contraseña nueva falló."
     unset old_pw new_pw
     return 1
   fi
   say "  OK — PING autenticado con la contraseña nueva (TCP real)."
 
-  if [ -n "$old_pw" ] && [ "$DRY_RUN" != true ]; then
+  if [ -n "$old_pw" ]; then
     say "Verificando que la contraseña ANTERIOR queda rechazada (TCP real)..."
     local old_check
     old_check="$(printf '{"host":"127.0.0.1","port":%s}\n%s' "$redis_port" "$old_pw" | node "$SCRIPT_DIR/lib/redisVerify.mjs" 2>/dev/null || true)"
     if [ "$old_check" = true ]; then
-      leave_gate_failed "S5" "la contraseña ANTERIOR de Redis todavía autentica."
+      _s5_mark_rollback_required "la contraseña ANTERIOR de Redis todavía autentica — el force-recreate no la invalidó."
       unset old_pw new_pw
       return 1
     fi
     say "  OK — contraseña anterior ya rechazada."
+  fi
+
+  if [ -n "$baseline_before" ]; then
+    say "Capturando línea base de datos/TTL DESPUÉS de recrear, para confirmar que el volumen y los datos se conservaron..."
+    local baseline_after
+    baseline_after="$(printf '{"host":"127.0.0.1","port":%s}\n%s' "$redis_port" "$new_pw" | node "$SCRIPT_DIR/lib/redisDataBaseline.mjs" 2>/dev/null || true)"
+    if [ -z "$baseline_after" ]; then
+      _s5_mark_rollback_required "no se pudo releer la línea base de datos DESPUÉS de recrear — no se puede confirmar que el volumen sobrevivió."
+      unset old_pw new_pw
+      return 1
+    fi
+    local data_preserved
+    data_preserved="$(BEFORE_JSON="$baseline_before" AFTER_JSON="$baseline_after" python3 -c "
+import os, json
+before = json.loads(os.environ['BEFORE_JSON'])
+after = json.loads(os.environ['AFTER_JSON'])
+ok = before['dbsize'] == after['dbsize']
+if ok:
+    before_ttl = {e['h']: e['ttl'] for e in before['sample']}
+    after_ttl = {e['h']: e['ttl'] for e in after['sample']}
+    for h in set(before_ttl) & set(after_ttl):
+        b, a = before_ttl[h], after_ttl[h]
+        if b == -1:
+            if a != -1:
+                ok = False
+                break
+        elif a == -2 or a > b:
+            ok = False
+            break
+print('true' if ok else 'false')
+" 2>/dev/null || printf false)"
+    if [ "$data_preserved" != true ]; then
+      _s5_mark_rollback_required "la línea base de datos/TTL DESPUÉS de recrear no coincide con la de ANTES (dbsize distinto, o el TTL de alguna clave muestreada saltó de persistente a expirable, o aumentó) — revisa manualmente antes de confiar en que los datos sobrevivieron."
+      unset old_pw new_pw
+      return 1
+    fi
+    say "  OK — dbsize y TTL de la muestra se conservan tras el force-recreate."
   fi
 
   unset old_pw new_pw
