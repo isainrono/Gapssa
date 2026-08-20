@@ -2575,6 +2575,7 @@ gate_s4() {
   new_admin_pw="$(field_from_secrets_file ESPOCRM_ADMIN_PASSWORD)"
 
   say "Cambiando la contraseña de '$admin_user' (bin/command set-password, por stdin)..."
+  say "  Nota esperada: 'docker compose exec -T' no asigna una TTY real. EspoCRM (application/Espo/Core/Console/IO.php::readLineInternal, verificado contra el código fuente real de la imagen) llama a 'stty -echo'/'stty echo' alrededor de la lectura por stdin sin comprobar si hay terminal — sin TTY, cada llamada imprime 'stty: standard input: Inappropriate ioctl for device'. Verás DOS avisos así (uno antes y otro después de leer la contraseña): son esperados, no contienen ningún secreto (stty solo toca el driver de la terminal, nunca el valor leído por stdin) y no alteran el resultado — el código de salida real de 'set-password' sigue siendo la única señal de éxito/fracaso, y su stderr no se filtra."
   if ! run_cmd_stdin "${new_admin_pw}
 " docker compose --env-file "$SECRETS_FILE" exec -T espocrm bin/command set-password "$admin_user"; then
     leave_gate_failed "S4" "bin/command set-password falló."
@@ -2630,9 +2631,15 @@ except Exception:
   local old_api_key
   old_api_key="$(field_from_secrets_file ESPOCRM_API_KEY)"
 
-  say "Foto de ACL antes de rotar (para comprobar después que la rotación no la tocó)..."
+  say "Foto de ACL antes de rotar (comparación canónica: ordenada, deduplicada, solo teamsIds/rolesIds — ver lib/aclRest.sh::_s4_fetch_portal_acl_canonical)..."
   local acl_before acl_after
-  acl_before="$(capture_cmd curl -K "$curl_admin_cfg" -sS -G --data-urlencode "select=teamsIds,rolesIds" "http://localhost:${espocrm_port}/api/v1/User/${user_id}")"
+  if ! acl_before="$(_s4_fetch_portal_acl_canonical "$curl_admin_cfg" "$espocrm_port" "$user_id")"; then
+    leave_gate_failed "S4" "no se pudo leer/parsear la ACL de 'portal-gapssa-api' antes de rotar — la API Key NO se ha tocado."
+    gapssa_secrets_shred "$curl_admin_cfg"
+    gapssa_cleanup_pop_matching shred_plain "$curl_admin_cfg"
+    unset new_admin_pw old_api_key
+    return 1
+  fi
 
   # Bloque 6: reutiliza EXACTAMENTE el mismo helper endurecido que la
   # recuperación de S4 (Bloque 5, lib/espoRecovery.sh —
@@ -2650,11 +2657,24 @@ except Exception:
     return 1
   fi
 
-  acl_after="$(capture_cmd curl -K "$curl_admin_cfg" -sS -G --data-urlencode "select=teamsIds,rolesIds" "http://localhost:${espocrm_port}/api/v1/User/${user_id}")"
-  if [ "$acl_before" != "$acl_after" ]; then
-    say "AVISO: teamsIds/rolesIds de 'portal-gapssa-api' cambiaron durante esta puerta — inesperado, revísalo manualmente (no debería tener relación con regenerar la API Key)."
+  # A partir de aquí la API Key YA está rotada y escrita en el almacén
+  # externo — irreversible en la práctica (la anterior queda invalidada
+  # por EspoCRM). Un fallo de lectura/parseo de la ACL en este punto, o
+  # una deriva ACL real, nunca puede volver a "failed" (que confirm_gate
+  # trataría como si nada se hubiera aplicado): ambos casos terminan en
+  # "blocked" — la rotación de credenciales se completa y se verifica
+  # igual (ver más abajo), pero la puerta nunca se marca "done" con esa
+  # duda sin resolver.
+  local s4_block_reason=""
+  if ! acl_after="$(_s4_fetch_portal_acl_canonical "$curl_admin_cfg" "$espocrm_port" "$user_id")"; then
+    s4_block_reason="la API Key ya se rotó — no se pudo releer/parsear la ACL de 'portal-gapssa-api' después para confirmar que no cambió. Revisa manualmente antes de dar S4 por cerrada."
+  elif [ "$acl_before" != "$acl_after" ]; then
+    s4_block_reason="las credenciales se rotaron; teamsIds/rolesIds de 'portal-gapssa-api' cambiaron DE VERDAD durante la puerta (comparación canónica, no un simple reordenamiento o atributo adicional de la respuesta). Revisa manualmente antes de dar S4 por cerrada."
   else
-    say "  OK — ACL (equipos/roles) de 'portal-gapssa-api' sin cambios."
+    say "  OK — ACL (equipos/roles) de 'portal-gapssa-api' sin cambios (comparación canónica)."
+  fi
+  if [ -n "$s4_block_reason" ]; then
+    say "AVISO: $s4_block_reason"
   fi
 
   local new_api_key
@@ -2699,7 +2719,11 @@ except Exception:
   gapssa_cleanup_pop_matching shred_plain "$curl_admin_cfg"
   gapssa_cleanup_pop_matching shred_plain "$curl_newkey_cfg"
   unset new_admin_pw old_api_key new_api_key
-  leave_gate_done "S4"
+  if [ -n "$s4_block_reason" ]; then
+    leave_gate_blocked "S4" "$s4_block_reason"
+  else
+    leave_gate_done "S4"
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -3987,13 +4011,34 @@ main() {
       echo "ERROR: puerta desconocida '--only ${ONLY_GATE}'. Usa S1..S9." >&2
       exit 1
     fi
-    "gate_${ONLY_GATE}"
+    # Captura el código de salida REAL de la puerta sin dejar que `set -e`
+    # mate el proceso aquí mismo (que se saltaría por completo el "Estado
+    # final" de abajo) -- mismo motivo que el bucle S1->S9 usa
+    # `if ! "gate_${gate}"; then ...`. A diferencia de un simple `|| true`
+    # (que perdería el código de salida y este proceso siempre saldría 0,
+    # incluso tras una puerta 'failed'/'blocked'): se guarda el rc real en
+    # `only_gate_rc` y se reutiliza en el `exit` final, así que el código
+    # de salida del proceso para `--only <puerta>` sigue siendo exactamente
+    # el mismo que antes de este cambio (0 si la puerta terminó su propia
+    # lógica con éxito, no-cero si `return 1` en algún punto de la puerta)
+    # -- lo único nuevo es que ahora SIEMPRE se llega a imprimir el estado.
+    local only_gate_rc=0
+    "gate_${ONLY_GATE}" || only_gate_rc=$?
     if [ "$DRY_RUN" = true ]; then
       gapssa_dry_print_summary
     fi
     divider
-    say "Fin (puerta única)."
-    exit 0
+    # Genérico para cualquier puerta única: `state_get` es la ÚNICA fuente
+    # de verdad (real o virtual bajo --dry-run, ver state_get() más arriba)
+    # -- nunca se infiere el resultado del código de salida de la puerta ni
+    # de lo que haya impreso. "Fin" (más abajo) NUNCA debe leerse como
+    # sinónimo de éxito: una puerta 'blocked' o 'failed' también llega
+    # aquí y también termina con "Fin".
+    local only_gate_key
+    only_gate_key="$(printf '%s' "$ONLY_GATE" | tr '[:lower:]' '[:upper:]')"
+    say "Estado final de ${only_gate_key}: $(state_get "$only_gate_key")"
+    say "Fin (puerta única) — 'Fin' indica que el asistente terminó de ejecutarse, NO que la puerta tuvo éxito; el 'Estado final' de arriba es la única fuente de verdad."
+    exit "$only_gate_rc"
   fi
 
   local gate

@@ -400,3 +400,82 @@ except Exception:
     print('false')
 "
 }
+
+# _s4_fetch_portal_acl_canonical <curl_cfg> <port> <user_id>
+#
+# Lee SOLO teamsIds/rolesIds de un User por id y los reduce a forma
+# canónica (ordenada, deduplicada, subconjunto EXCLUSIVO teamsIds/rolesIds)
+# — usado por gate_s4 para detectar deriva ACL real de 'portal-gapssa-api'
+# entre el "antes" y el "después" de rotar su API Key, sin que el orden de
+# un array, un duplicado, o un atributo adicional que EspoCRM decida
+# incluir en la respuesta (ver el comentario de
+# _s9_fetch_professional_candidates_json más arriba: "EspoCRM puede
+# devolver más atributos que los pedidos en select=") produzcan un falso
+# positivo.
+#
+# Contrato — deliberadamente MÁS estricto que el resto de este fichero
+# (_s9_fetch_*_json siempre sale con código 0 y delega la distinción
+# éxito/error a la FORMA del JSON, un sentinel {"__error__":true} que el
+# llamador debe inspeccionar con _s9_json_has_error): aquí el CÓDIGO DE
+# SALIDA real es la única señal de éxito/fracaso — nunca un sentinel
+# mezclado con datos válidos que el llamador tenga que distinguir por
+# contenido:
+#   - éxito: stdout = UNA línea JSON {"rolesIds":[...],"teamsIds":[...]}
+#     con arrays ordenados/deduplicados de IDs string no vacíos, exit 0.
+#   - CUALQUIER anomalía (curl no devolvió 0 — incluida una respuesta
+#     HTTP no-2xx, gracias a --fail; stdout no es JSON válido; no es un
+#     objeto; teamsIds/rolesIds ausentes, no-array, o con algún elemento
+#     que no sea string no vacío) -> stdout vacío, exit 1. El llamador
+#     NUNCA debe inspeccionar stdout para decidir éxito/fracaso, solo el
+#     exit code (idéntico al resto de comprobaciones "hard" de gate_s4:
+#     `if ! ...; then leave_gate_failed/blocked ...; fi`).
+#   - el código de salida de curl y el del parser Python se comprueban
+#     POR SEPARADO, en dos pasos — nunca "curl | python3" en una única
+#     tubería cuyo fallo de curl pudiera enmascararse tras un `except`
+#     genérico en Python que de todos modos saliera con 0.
+_s4_fetch_portal_acl_canonical() {
+  local curl_cfg="$1" port="$2" user_id="$3"
+
+  local curl_out
+  if ! curl_out="$(capture_cmd curl -K "$curl_cfg" -sS -G --fail \
+    --data-urlencode "select=teamsIds,rolesIds" \
+    "http://localhost:${port}/api/v1/User/${user_id}")"; then
+    return 1
+  fi
+
+  local canon_json
+  if ! canon_json="$(printf '%s' "$curl_out" | python3 -c '
+import sys, json
+
+def fail():
+    sys.exit(1)
+
+try:
+    d = json.loads(sys.stdin.read())
+except Exception:
+    fail()
+
+if not isinstance(d, dict):
+    fail()
+
+def canon(key):
+    if key not in d:
+        fail()
+    v = d[key]
+    if not isinstance(v, list):
+        fail()
+    for x in v:
+        if not isinstance(x, str) or x == "":
+            fail()
+    return sorted(set(v))
+
+teams = canon("teamsIds")
+roles = canon("rolesIds")
+print(json.dumps({"teamsIds": teams, "rolesIds": roles}, sort_keys=True, separators=(",", ":")))
+'
+  )"; then
+    return 1
+  fi
+
+  printf '%s' "$canon_json"
+}

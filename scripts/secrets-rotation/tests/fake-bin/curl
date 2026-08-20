@@ -48,7 +48,7 @@ while [ "$i" -lt "${#args[@]}" ]; do
     i=$((i + 1))
     headers+=("${args[$i]}")
     ;;
-  -sS | -s | -G | -o)
+  -sS | -s | -G | -o | --fail)
     if [ "$a" = "-o" ]; then i=$((i + 1)); fi
     ;;
   *)
@@ -101,7 +101,26 @@ case "$url" in
   exit 0
   ;;
 */api/v1/User/fake-user-id-123)
-  printf '{"teamsIds":["team-1"],"rolesIds":["role-1"]}'
+  # Contador de llamadas por proceso (persistido en $STATE, que es propio
+  # de cada escenario) -- gate_s4 llama a esta URL exactamente 2 veces por
+  # ejecución real (acl_before, acl_after). Los escenarios de
+  # tests/run_scenarios.py que ejercitan _s4_fetch_portal_acl_canonical
+  # escriben `s4_acl_response_call_<N>` / `s4_acl_fail_call_<N>` en
+  # $STATE ANTES de lanzar el proceso para controlar, llamada a llamada,
+  # qué ve gate_s4 -- ausente cualquiera de los dos, se usa el mismo
+  # cuerpo por defecto que antes de este mecanismo (compatibilidad con
+  # escenarios existentes que no lo usan).
+  call_n="$(get_state s4_acl_call_count 0)"
+  call_n=$((call_n + 1))
+  set_state s4_acl_call_count "$call_n"
+  if [ "$(get_state "s4_acl_fail_call_${call_n}" 0)" = "1" ]; then
+    exit 22
+  fi
+  body="$(get_state "s4_acl_response_call_${call_n}" "")"
+  if [ -z "$body" ]; then
+    body='{"teamsIds":["team-1"],"rolesIds":["role-1"]}'
+  fi
+  printf '%s' "$body"
   exit 0
   ;;
 */api/v1/UserSecurity/apiKey/generate)

@@ -1053,6 +1053,483 @@ def scenario_s1_s4_espocrm():
             ok = False
         else:
             report(name + " — estado S4=done", True)
+        if "Estado final de S4: done" not in p2.transcript:
+            report(name + " — '--only S4' imprime 'Estado final de S4: done'", False, p2.transcript)
+            ok = False
+        else:
+            report(name + " — '--only S4' imprime 'Estado final de S4: done'", True)
+        if "stty: standard input: Inappropriate ioctl for device" in p2.transcript and "Nota esperada" not in p2.transcript:
+            report(name + " — el aviso stty va precedido de la explicación esperada", False, p2.transcript)
+            ok = False
+        if "Nota esperada" not in p2.transcript or "Inappropriate ioctl for device" not in p2.transcript:
+            report(name + " — mensaje explicativo de los avisos stty aparece antes de set-password", False, p2.transcript)
+            ok = False
+        else:
+            report(name + " — mensaje explicativo de los avisos stty aparece antes de set-password", True)
+        if ok:
+            report(name, True)
+
+
+# ---------------------------------------------------------------------------
+# Escenarios de deriva ACL de S4 (comparación canónica de teamsIds/rolesIds)
+# — _s4_fetch_portal_acl_canonical (lib/aclRest.sh), gate_s4
+# (rotate-all-interactive.sh). Todos comparten el mismo fake curl
+# (tests/fake-bin/curl), que ahora soporta controlar, llamada a llamada,
+# la respuesta (o el fallo) de `GET /api/v1/User/fake-user-id-123` — la
+# 1ª llamada de cada ejecución real de gate_s4 es "acl_before", la 2ª es
+# "acl_after" (nunca hay una 3ª en un camino normal).
+# ---------------------------------------------------------------------------
+
+
+def _s4_prepare_s1(tmp, name):
+    """Boilerplate común: --only S1 en un proceso propio, para dejar el
+    almacén externo listo antes de ejercitar S4 en un SEGUNDO proceso
+    (mismo patrón que scenario_s1_s4_espocrm). Devuelve
+    (repo, sr_dir, home, secrets_dir, transcript, state, env) o None si
+    la preparación falló (ya reportado)."""
+    repo = os.path.join(tmp, "repo")
+    os.makedirs(repo)
+    sr_dir = build_fixture_repo(repo)
+    home = os.path.join(tmp, "home")
+    os.makedirs(home)
+    secrets_dir = os.path.join(home, ".gapssa-secrets")
+    transcript = os.path.join(tmp, "transcript.log")
+    state = os.path.join(tmp, "docker-state")
+    seed_docker_state(state)
+    env = base_env(home, secrets_dir, state, transcript)
+
+    p = PtyProcess(["bash", os.path.join(sr_dir, "rotate-all-interactive.sh"), "--only", "S1"], env=env, cwd=repo)
+    try:
+        p.expect("Escribe exactamente")
+        p.send_line("confirmo fuera de claude code")
+        p.expect(r"\[si/no/salir\]")
+        p.send_line("si")
+        p.expect("confirmo fuera de claude code")
+        p.send_line("confirmo fuera de claude code")
+        p.wait(timeout=10)
+    except TimeoutError as exc:
+        report(name + " (preparación S1)", False, str(exc))
+        p.close()
+        return None
+    p.close()
+    return repo, sr_dir, home, secrets_dir, transcript, state, env
+
+
+def _s4_set_acl_call(state_dir, call_n, *, body=None, fail=False):
+    """Escribe en $STATE la respuesta (o el fallo) que el `curl` falso
+    debe dar en la N-ésima llamada a `GET /api/v1/User/fake-user-id-123`
+    dentro de ESTE proceso — ver el comentario nuevo en
+    tests/fake-bin/curl."""
+    if fail:
+        with open(os.path.join(state_dir, f"s4_acl_fail_call_{call_n}"), "w", encoding="utf-8") as f:
+            f.write("1")
+        return
+    with open(os.path.join(state_dir, f"s4_acl_response_call_{call_n}"), "w", encoding="utf-8") as f:
+        f.write(body)
+
+
+def _s4_read_api_key(secrets_dir):
+    with open(os.path.join(secrets_dir, ".env.gapssa")) as f:
+        for line in f:
+            if line.startswith("ESPOCRM_API_KEY="):
+                return line.strip().split("=", 1)[1]
+    return None
+
+
+def _s4_run_only_s4(sr_dir, repo, env, name, *, expect_repeat_prompt=False, repeat_answer="si"):
+    """Lanza `--only S4` en un proceso propio y conduce los prompts
+    estándar (confirmación de harness, opcionalmente "¿repetir puerta ya
+    done?", frase de backup) — devuelve el PtyProcess YA esperado
+    (`.wait()` ya llamado) o None si algún `expect` dio timeout (ya
+    reportado). El llamador es responsable de las aserciones específicas
+    del escenario sobre `.transcript` / código de salida."""
+    p2 = PtyProcess(["bash", os.path.join(sr_dir, "rotate-all-interactive.sh"), "--only", "S4"], env=env, cwd=repo)
+    try:
+        p2.expect("Escribe exactamente")
+        p2.send_line("confirmo fuera de claude code")
+        p2.expect(r"\[si/no/salir\]")
+        if expect_repeat_prompt:
+            p2.send_line(repeat_answer)
+            if repeat_answer == "no":
+                p2.rc = p2.wait(timeout=10)
+                return p2
+        else:
+            p2.send_line("si")
+        respond_to_backup_passphrase_prompt(p2)
+        p2.expect("confirmo fuera de claude code")
+        p2.send_line("confirmo fuera de claude code")
+        p2.rc = p2.wait(timeout=15)
+    except TimeoutError as exc:
+        report(name, False, str(exc))
+        p2.close()
+        return None
+    p2.close()
+    return p2
+
+
+def scenario_s4_acl_identical_no_aviso():
+    name = "Escenario S4 ACL: idéntica (mismo cuerpo antes/después) -> done, sin AVISO"
+    with tempfile.TemporaryDirectory(prefix="gapssa-rot-s4-acl-") as tmp:
+        prep = _s4_prepare_s1(tmp, name)
+        if prep is None:
+            return
+        repo, sr_dir, home, secrets_dir, transcript, state, env = prep
+        _s4_set_acl_call(state, 1, body='{"teamsIds":["team-1"],"rolesIds":["role-1"]}')
+        _s4_set_acl_call(state, 2, body='{"teamsIds":["team-1"],"rolesIds":["role-1"]}')
+        p2 = _s4_run_only_s4(sr_dir, repo, env, name)
+        if p2 is None:
+            return
+        ok = True
+        if "AVISO:" in p2.transcript:
+            report(name + " — sin AVISO", False, p2.transcript)
+            ok = False
+        else:
+            report(name + " — sin AVISO", True)
+        if "OK — ACL (equipos/roles) de 'portal-gapssa-api' sin cambios (comparación canónica)" not in p2.transcript:
+            report(name + " — imprime el OK canónico", False, p2.transcript)
+            ok = False
+        if "Estado final de S4: done" not in p2.transcript:
+            report(name + " — Estado final de S4: done", False, p2.transcript)
+            ok = False
+        with open(os.path.join(secrets_dir, ".rotation-status")) as f:
+            content = f.read()
+        if "S4=done" not in content:
+            report(name + " — .rotation-status S4=done", False, content)
+            ok = False
+        if ok:
+            report(name, True)
+
+
+def scenario_s4_acl_reordered_deduped_no_aviso():
+    name = "Escenario S4 ACL: arrays reordenados + duplicados -> done, sin AVISO (comparación canónica)"
+    with tempfile.TemporaryDirectory(prefix="gapssa-rot-s4-acl-") as tmp:
+        prep = _s4_prepare_s1(tmp, name)
+        if prep is None:
+            return
+        repo, sr_dir, home, secrets_dir, transcript, state, env = prep
+        _s4_set_acl_call(state, 1, body='{"teamsIds":["team-1","team-2"],"rolesIds":["role-1"]}')
+        _s4_set_acl_call(state, 2, body='{"teamsIds":["team-2","team-1","team-1"],"rolesIds":["role-1","role-1"]}')
+        p2 = _s4_run_only_s4(sr_dir, repo, env, name)
+        if p2 is None:
+            return
+        ok = True
+        if "AVISO:" in p2.transcript:
+            report(name + " — sin AVISO pese al reordenamiento/duplicados", False, p2.transcript)
+            ok = False
+        else:
+            report(name + " — sin AVISO pese al reordenamiento/duplicados", True)
+        if "Estado final de S4: done" not in p2.transcript:
+            report(name + " — Estado final de S4: done", False, p2.transcript)
+            ok = False
+        if ok:
+            report(name, True)
+
+
+def scenario_s4_acl_extra_rest_fields_no_aviso():
+    name = "Escenario S4 ACL: atributo REST adicional (teamsNames) -> done, sin AVISO (reducción exclusiva a teamsIds/rolesIds)"
+    with tempfile.TemporaryDirectory(prefix="gapssa-rot-s4-acl-") as tmp:
+        prep = _s4_prepare_s1(tmp, name)
+        if prep is None:
+            return
+        repo, sr_dir, home, secrets_dir, transcript, state, env = prep
+        _s4_set_acl_call(state, 1, body='{"teamsIds":["team-1"],"rolesIds":["role-1"]}')
+        _s4_set_acl_call(
+            state,
+            2,
+            body='{"teamsIds":["team-1"],"rolesIds":["role-1"],"teamsNames":{"team-1":"Equipo Uno"},"rolesNames":{"role-1":"Rol Uno"}}',
+        )
+        p2 = _s4_run_only_s4(sr_dir, repo, env, name)
+        if p2 is None:
+            return
+        ok = True
+        if "AVISO:" in p2.transcript:
+            report(name + " — sin AVISO pese al atributo REST adicional", False, p2.transcript)
+            ok = False
+        else:
+            report(name + " — sin AVISO pese al atributo REST adicional", True)
+        if "Estado final de S4: done" not in p2.transcript:
+            report(name + " — Estado final de S4: done", False, p2.transcript)
+            ok = False
+        if ok:
+            report(name, True)
+
+
+def scenario_s4_acl_pre_invalid_json_fails_closed():
+    name = "Escenario S4 ACL: JSON inválido ANTES de rotar -> failed, API Key NUNCA se toca"
+    with tempfile.TemporaryDirectory(prefix="gapssa-rot-s4-acl-") as tmp:
+        prep = _s4_prepare_s1(tmp, name)
+        if prep is None:
+            return
+        repo, sr_dir, home, secrets_dir, transcript, state, env = prep
+        api_key_before = _s4_read_api_key(secrets_dir)
+        _s4_set_acl_call(state, 1, body="esto no es JSON en absoluto")
+        p2 = _s4_run_only_s4(sr_dir, repo, env, name)
+        if p2 is None:
+            return
+        ok = True
+        if p2.rc == 0:
+            report(name + " — código de salida no-cero", False, f"rc={p2.rc}")
+            ok = False
+        else:
+            report(name + " — código de salida no-cero", True)
+        if "no se pudo leer/parsear la ACL de 'portal-gapssa-api' antes de rotar" not in p2.transcript:
+            report(name + " — mensaje de fallo pre-rotación", False, p2.transcript)
+            ok = False
+        if "Regenerando la API Key (" in p2.transcript:
+            report(name + " — la API Key NUNCA se intentó rotar", False, p2.transcript)
+            ok = False
+        else:
+            report(name + " — la API Key NUNCA se intentó rotar", True)
+        if _s4_read_api_key(secrets_dir) != api_key_before:
+            report(name + " — ESPOCRM_API_KEY sin cambios en el almacén externo", False, "cambió pese al fallo pre-rotación")
+            ok = False
+        else:
+            report(name + " — ESPOCRM_API_KEY sin cambios en el almacén externo", True)
+        if "Estado final de S4: failed" not in p2.transcript:
+            report(name + " — Estado final de S4: failed", False, p2.transcript)
+            ok = False
+        if ok:
+            report(name, True)
+
+
+def scenario_s4_acl_pre_invalid_types_fails_closed():
+    name = "Escenario S4 ACL: tipos inválidos (elemento no-string) ANTES de rotar -> failed, API Key NUNCA se toca"
+    with tempfile.TemporaryDirectory(prefix="gapssa-rot-s4-acl-") as tmp:
+        prep = _s4_prepare_s1(tmp, name)
+        if prep is None:
+            return
+        repo, sr_dir, home, secrets_dir, transcript, state, env = prep
+        api_key_before = _s4_read_api_key(secrets_dir)
+        _s4_set_acl_call(state, 1, body='{"teamsIds":["team-1",""],"rolesIds":["role-1"]}')
+        p2 = _s4_run_only_s4(sr_dir, repo, env, name)
+        if p2 is None:
+            return
+        ok = True
+        if p2.rc == 0:
+            report(name + " — código de salida no-cero", False, f"rc={p2.rc}")
+            ok = False
+        else:
+            report(name + " — código de salida no-cero", True)
+        if "Regenerando la API Key (" in p2.transcript:
+            report(name + " — la API Key NUNCA se intentó rotar", False, p2.transcript)
+            ok = False
+        else:
+            report(name + " — la API Key NUNCA se intentó rotar", True)
+        if _s4_read_api_key(secrets_dir) != api_key_before:
+            report(name + " — ESPOCRM_API_KEY sin cambios en el almacén externo", False, "cambió pese al fallo pre-rotación")
+            ok = False
+        else:
+            report(name + " — ESPOCRM_API_KEY sin cambios en el almacén externo", True)
+        if "Estado final de S4: failed" not in p2.transcript:
+            report(name + " — Estado final de S4: failed", False, p2.transcript)
+            ok = False
+        if ok:
+            report(name, True)
+
+
+def scenario_s4_acl_pre_curl_failure_fails_closed():
+    name = "Escenario S4 ACL: curl falla ANTES de rotar -> failed, API Key NUNCA se toca"
+    with tempfile.TemporaryDirectory(prefix="gapssa-rot-s4-acl-") as tmp:
+        prep = _s4_prepare_s1(tmp, name)
+        if prep is None:
+            return
+        repo, sr_dir, home, secrets_dir, transcript, state, env = prep
+        api_key_before = _s4_read_api_key(secrets_dir)
+        _s4_set_acl_call(state, 1, fail=True)
+        p2 = _s4_run_only_s4(sr_dir, repo, env, name)
+        if p2 is None:
+            return
+        ok = True
+        if p2.rc == 0:
+            report(name + " — código de salida no-cero", False, f"rc={p2.rc}")
+            ok = False
+        else:
+            report(name + " — código de salida no-cero", True)
+        if "Regenerando la API Key (" in p2.transcript:
+            report(name + " — la API Key NUNCA se intentó rotar", False, p2.transcript)
+            ok = False
+        else:
+            report(name + " — la API Key NUNCA se intentó rotar", True)
+        if _s4_read_api_key(secrets_dir) != api_key_before:
+            report(name + " — ESPOCRM_API_KEY sin cambios en el almacén externo", False, "cambió pese al fallo pre-rotación")
+            ok = False
+        else:
+            report(name + " — ESPOCRM_API_KEY sin cambios en el almacén externo", True)
+        if "Estado final de S4: failed" not in p2.transcript:
+            report(name + " — Estado final de S4: failed", False, p2.transcript)
+            ok = False
+        if ok:
+            report(name, True)
+
+
+def scenario_s4_acl_post_curl_failure_blocked():
+    name = "Escenario S4 ACL: curl falla DESPUÉS de rotar -> blocked (credenciales ya rotadas y verificadas)"
+    with tempfile.TemporaryDirectory(prefix="gapssa-rot-s4-acl-") as tmp:
+        prep = _s4_prepare_s1(tmp, name)
+        if prep is None:
+            return
+        repo, sr_dir, home, secrets_dir, transcript, state, env = prep
+        api_key_before = _s4_read_api_key(secrets_dir)
+        _s4_set_acl_call(state, 1, body='{"teamsIds":["team-1"],"rolesIds":["role-1"]}')
+        _s4_set_acl_call(state, 2, fail=True)
+        p2 = _s4_run_only_s4(sr_dir, repo, env, name)
+        if p2 is None:
+            return
+        ok = True
+        if p2.rc != 0:
+            report(name + " — código de salida 0 (blocked no es un fallo del proceso)", False, f"rc={p2.rc}")
+            ok = False
+        else:
+            report(name + " — código de salida 0 (blocked no es un fallo del proceso)", True)
+        if "no se pudo releer/parsear la ACL de 'portal-gapssa-api' después" not in p2.transcript:
+            report(name + " — mensaje de bloqueo post-rotación", False, p2.transcript)
+            ok = False
+        api_key_after = _s4_read_api_key(secrets_dir)
+        if api_key_after == api_key_before:
+            report(name + " — ESPOCRM_API_KEY SÍ cambió (la rotación se completó pese al bloqueo)", False, "no cambió")
+            ok = False
+        else:
+            report(name + " — ESPOCRM_API_KEY SÍ cambió (la rotación se completó pese al bloqueo)", True)
+        if "API Key nueva verificada" not in p2.transcript:
+            report(name + " — la verificación de la API Key nueva se completó igualmente", False, p2.transcript)
+            ok = False
+        else:
+            report(name + " — la verificación de la API Key nueva se completó igualmente", True)
+        with open(os.path.join(secrets_dir, ".rotation-status")) as f:
+            content = f.read()
+        if "S4=blocked" not in content:
+            report(name + " — .rotation-status S4=blocked", False, content)
+            ok = False
+        else:
+            report(name + " — .rotation-status S4=blocked", True)
+        if "Estado final de S4: blocked" not in p2.transcript:
+            report(name + " — Estado final de S4: blocked", False, p2.transcript)
+            ok = False
+        if ok:
+            report(name, True)
+
+
+def scenario_s4_acl_real_drift_team_blocked():
+    name = "Escenario S4 ACL: deriva REAL de equipo (teamsIds) -> blocked (credenciales ya rotadas y verificadas)"
+    with tempfile.TemporaryDirectory(prefix="gapssa-rot-s4-acl-") as tmp:
+        prep = _s4_prepare_s1(tmp, name)
+        if prep is None:
+            return
+        repo, sr_dir, home, secrets_dir, transcript, state, env = prep
+        api_key_before = _s4_read_api_key(secrets_dir)
+        _s4_set_acl_call(state, 1, body='{"teamsIds":["team-1"],"rolesIds":["role-1"]}')
+        _s4_set_acl_call(state, 2, body='{"teamsIds":["team-1","team-2"],"rolesIds":["role-1"]}')
+        p2 = _s4_run_only_s4(sr_dir, repo, env, name)
+        if p2 is None:
+            return
+        ok = True
+        if p2.rc != 0:
+            report(name + " — código de salida 0 (blocked no es un fallo del proceso)", False, f"rc={p2.rc}")
+            ok = False
+        if "cambiaron DE VERDAD durante la puerta" not in p2.transcript:
+            report(name + " — mensaje de deriva ACL real", False, p2.transcript)
+            ok = False
+        else:
+            report(name + " — mensaje de deriva ACL real", True)
+        api_key_after = _s4_read_api_key(secrets_dir)
+        if api_key_after == api_key_before:
+            report(name + " — ESPOCRM_API_KEY SÍ cambió pese a la deriva", False, "no cambió")
+            ok = False
+        else:
+            report(name + " — ESPOCRM_API_KEY SÍ cambió pese a la deriva", True)
+        if "API Key anterior ya rechazada" not in p2.transcript:
+            report(name + " — la verificación de la API Key anterior se completó igualmente", False, p2.transcript)
+            ok = False
+        else:
+            report(name + " — la verificación de la API Key anterior se completó igualmente", True)
+        with open(os.path.join(secrets_dir, ".rotation-status")) as f:
+            content = f.read()
+        if "S4=blocked" not in content:
+            report(name + " — .rotation-status S4=blocked", False, content)
+            ok = False
+        if "Estado final de S4: blocked" not in p2.transcript:
+            report(name + " — Estado final de S4: blocked", False, p2.transcript)
+            ok = False
+        if ok:
+            report(name, True)
+
+
+def scenario_s4_acl_real_drift_role_blocked():
+    name = "Escenario S4 ACL: deriva REAL de rol (rolesIds) -> blocked (credenciales ya rotadas y verificadas)"
+    with tempfile.TemporaryDirectory(prefix="gapssa-rot-s4-acl-") as tmp:
+        prep = _s4_prepare_s1(tmp, name)
+        if prep is None:
+            return
+        repo, sr_dir, home, secrets_dir, transcript, state, env = prep
+        api_key_before = _s4_read_api_key(secrets_dir)
+        _s4_set_acl_call(state, 1, body='{"teamsIds":["team-1"],"rolesIds":["role-1"]}')
+        _s4_set_acl_call(state, 2, body='{"teamsIds":["team-1"],"rolesIds":["role-1","role-2"]}')
+        p2 = _s4_run_only_s4(sr_dir, repo, env, name)
+        if p2 is None:
+            return
+        ok = True
+        if p2.rc != 0:
+            report(name + " — código de salida 0 (blocked no es un fallo del proceso)", False, f"rc={p2.rc}")
+            ok = False
+        if "cambiaron DE VERDAD durante la puerta" not in p2.transcript:
+            report(name + " — mensaje de deriva ACL real", False, p2.transcript)
+            ok = False
+        else:
+            report(name + " — mensaje de deriva ACL real", True)
+        api_key_after = _s4_read_api_key(secrets_dir)
+        if api_key_after == api_key_before:
+            report(name + " — ESPOCRM_API_KEY SÍ cambió pese a la deriva", False, "no cambió")
+            ok = False
+        else:
+            report(name + " — ESPOCRM_API_KEY SÍ cambió pese a la deriva", True)
+        with open(os.path.join(secrets_dir, ".rotation-status")) as f:
+            content = f.read()
+        if "S4=blocked" not in content:
+            report(name + " — .rotation-status S4=blocked", False, content)
+            ok = False
+        if "Estado final de S4: blocked" not in p2.transcript:
+            report(name + " — Estado final de S4: blocked", False, p2.transcript)
+            ok = False
+        if ok:
+            report(name, True)
+
+
+def scenario_s4_resume_done_declines_no_rerun():
+    name = "Escenario S4: reanudación con S4 ya 'done' -> declina repetir -> ninguna rotación, estado intacto"
+    with tempfile.TemporaryDirectory(prefix="gapssa-rot-s4-acl-") as tmp:
+        prep = _s4_prepare_s1(tmp, name)
+        if prep is None:
+            return
+        repo, sr_dir, home, secrets_dir, transcript, state, env = prep
+        seed_rotation_status(secrets_dir, "S4", "done")
+        api_key_before = _s4_read_api_key(secrets_dir)
+        p2 = _s4_run_only_s4(sr_dir, repo, env, name, expect_repeat_prompt=True, repeat_answer="no")
+        if p2 is None:
+            return
+        ok = True
+        if p2.rc != 0:
+            report(name + " — código de salida 0", False, f"rc={p2.rc}")
+            ok = False
+        else:
+            report(name + " — código de salida 0", True)
+        if "Regenerando la API Key (" in p2.transcript:
+            report(name + " — ninguna rotación real se intentó", False, p2.transcript)
+            ok = False
+        else:
+            report(name + " — ninguna rotación real se intentó", True)
+        if _s4_read_api_key(secrets_dir) != api_key_before:
+            report(name + " — ESPOCRM_API_KEY sin cambios (nunca se repitió la rotación)", False, "cambió")
+            ok = False
+        else:
+            report(name + " — ESPOCRM_API_KEY sin cambios (nunca se repitió la rotación)", True)
+        with open(os.path.join(secrets_dir, ".rotation-status")) as f:
+            content = f.read()
+        if "S4=done" not in content:
+            report(name + " — .rotation-status sigue S4=done", False, content)
+            ok = False
+        if "Estado final de S4: done" not in p2.transcript:
+            report(name + " — Estado final de S4: done (nunca se reescribió)", False, p2.transcript)
+            ok = False
         if ok:
             report(name, True)
 
@@ -2473,6 +2950,16 @@ def main():
     scenario_s1_s2_rotate_postgres()
     scenario_s1_s3_mariadb()
     scenario_s1_s4_espocrm()
+    scenario_s4_acl_identical_no_aviso()
+    scenario_s4_acl_reordered_deduped_no_aviso()
+    scenario_s4_acl_extra_rest_fields_no_aviso()
+    scenario_s4_acl_pre_invalid_json_fails_closed()
+    scenario_s4_acl_pre_invalid_types_fails_closed()
+    scenario_s4_acl_pre_curl_failure_fails_closed()
+    scenario_s4_acl_post_curl_failure_blocked()
+    scenario_s4_acl_real_drift_team_blocked()
+    scenario_s4_acl_real_drift_role_blocked()
+    scenario_s4_resume_done_declines_no_rerun()
     scenario_ctrl_c_mid_gate()
     scenario_resume_after_interrupt()
     scenario_home_with_spaces()
