@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# `curl` falso para el arnés de pruebas — simula la API REST de EspoCRM lo
+# justo para ejercitar la puerta S4 sin tocar ninguna instancia real.
+# Registra el argv completo (nunca el contenido de -K) en el transcript.
+set -euo pipefail
+
+STATE="${FAKE_DOCKER_STATE:?FAKE_DOCKER_STATE no definido}"
+TRANSCRIPT="${FAKE_DOCKER_TRANSCRIPT:?FAKE_DOCKER_TRANSCRIPT no definido}"
+mkdir -p "$STATE"
+
+{
+  printf 'CURL_ARGV:'
+  for a in "$@"; do printf ' [%s]' "$a"; done
+  printf '\n'
+} >>"$TRANSCRIPT"
+
+get_state() { cat "$STATE/$1" 2>/dev/null || printf '%s' "${2:-}"; }
+set_state() { printf '%s' "$2" >"$STATE/$1"; }
+
+kcfg=""
+method="GET"
+data=""
+url=""
+declare -a qparams=()
+declare -a headers=()
+i=0
+args=("$@")
+while [ "$i" -lt "${#args[@]}" ]; do
+  a="${args[$i]}"
+  case "$a" in
+  -K)
+    i=$((i + 1))
+    kcfg="${args[$i]}"
+    ;;
+  -X)
+    i=$((i + 1))
+    method="${args[$i]}"
+    ;;
+  --data)
+    i=$((i + 1))
+    data="${args[$i]}"
+    ;;
+  --data-urlencode)
+    i=$((i + 1))
+    qparams+=("${args[$i]}")
+    ;;
+  -H)
+    i=$((i + 1))
+    headers+=("${args[$i]}")
+    ;;
+  -sS | -s | -G | -o)
+    if [ "$a" = "-o" ]; then i=$((i + 1)); fi
+    ;;
+  *)
+    url="$a"
+    ;;
+  esac
+  i=$((i + 1))
+done
+
+auth_user=""
+auth_pass=""
+api_key_header=""
+if [ -n "$kcfg" ] && [ -f "$kcfg" ]; then
+  while IFS= read -r line; do
+    case "$line" in
+    'user = "'*)
+      pair="${line#user = \"}"
+      pair="${pair%\"}"
+      auth_user="${pair%%:*}"
+      auth_pass="${pair#*:}"
+      ;;
+    'header = "X-Api-Key: '*)
+      api_key_header="${line#header = \"X-Api-Key: }"
+      api_key_header="${api_key_header%\"}"
+      ;;
+    esac
+  done <"$kcfg"
+fi
+
+authorized=false
+if [ -n "$auth_user" ]; then
+  current_admin_pw="$(get_state "espocrm_admin_pw_${auth_user}" "")"
+  [ -n "$current_admin_pw" ] && [ "$auth_pass" = "$current_admin_pw" ] && authorized=true
+elif [ -n "$api_key_header" ]; then
+  current_api_key="$(get_state espocrm_api_key "")"
+  [ -n "$current_api_key" ] && [ "$api_key_header" = "$current_api_key" ] && authorized=true
+fi
+
+if [ "$authorized" != true ]; then
+  exit 22
+fi
+
+case "$url" in
+*/api/v1/App/user)
+  printf '{}'
+  exit 0
+  ;;
+*/api/v1/User)
+  printf '{"total":1,"list":[{"id":"fake-user-id-123"}]}'
+  exit 0
+  ;;
+*/api/v1/User/fake-user-id-123)
+  printf '{"teamsIds":["team-1"],"rolesIds":["role-1"]}'
+  exit 0
+  ;;
+*/api/v1/UserSecurity/apiKey/generate)
+  new_key="FAKE-API-KEY-$(date +%s%N)"
+  set_state espocrm_api_key "$new_key"
+  printf '{"id":"fake-user-id-123","apiKey":"%s"}' "$new_key"
+  exit 0
+  ;;
+esac
+
+printf '{}'
+exit 0

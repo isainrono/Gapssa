@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# `ps` falso para los escenarios de integración — simula la ancestría de
+# procesos LIMPIA de una Terminal.app real (bash <- login <- Terminal),
+# nunca la ancestría real de la sesión de pruebas (que, al correr estos
+# escenarios desde dentro de Claude Code, SÍ tiene 'claude' como ancestro
+# real — eso ya está probado por separado, con su propio `ps` falso, en
+# lib.test.sh, capa 2b, casos positivo y negativo).
+#
+# Sin este doble de prueba, todo escenario de integración de este arnés
+# sería rechazado por la guardia de ancestría real (comportamiento
+# correcto de la guardia, pero inútil para poder probar el RESTO del
+# script en un entorno aislado).
+set -euo pipefail
+
+mode=""
+for a in "$@"; do
+  case "$a" in
+  comm=) mode="comm" ;;
+  ppid=) mode="ppid" ;;
+  esac
+done
+
+if [ "$mode" = "ppid" ]; then
+  echo "1"
+else
+  echo "bash"
+fi

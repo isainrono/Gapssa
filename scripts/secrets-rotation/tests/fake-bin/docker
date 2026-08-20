@@ -1,0 +1,314 @@
+#!/usr/bin/env bash
+# `docker` falso para el arnés de pruebas de rotate-all-interactive.sh.
+# Nunca toca Docker real. Mantiene un estado mínimo (contraseñas "actuales"
+# simuladas) en $FAKE_DOCKER_STATE para poder demostrar que una ALTER
+# ROLE/ALTER USER simulada realmente invalida la contraseña anterior. El
+# test runner pre-siembra el estado inicial (pg_password, mariadb_pw_root,
+# mariadb_pw_espocrm, redis_password) con los valores "comprometidos" de la
+# fixture antes de arrancar el orquestador.
+#
+# Registra CADA invocación completa (argv, NUNCA el contenido de un
+# --env-file) en $FAKE_DOCKER_TRANSCRIPT — el arnés de pruebas comprueba
+# después que ningún valor secreto generado aparece ahí.
+set -euo pipefail
+
+STATE="${FAKE_DOCKER_STATE:?FAKE_DOCKER_STATE no definido}"
+TRANSCRIPT="${FAKE_DOCKER_TRANSCRIPT:?FAKE_DOCKER_TRANSCRIPT no definido}"
+mkdir -p "$STATE"
+
+{
+  printf 'ARGV:'
+  for a in "$@"; do printf ' [%s]' "$a"; done
+  printf '\n'
+} >>"$TRANSCRIPT"
+
+get_state() {
+  local key="$1" default="${2:-}"
+  cat "$STATE/$key" 2>/dev/null || printf '%s' "$default"
+}
+set_state() {
+  printf '%s' "$2" >"$STATE/$1"
+}
+
+read_env_var() {
+  local file="$1" var="$2"
+  [ -f "$file" ] || return 1
+  grep "^$var=" "$file" 2>/dev/null | tail -n1 | cut -d= -f2-
+}
+
+if [ "${1:-}" = "inspect" ]; then
+  # Bloque 6: _gapssa_wait_healthy (rotate-all-interactive.sh) usa
+  # `docker inspect --format '{{.State.Health.Status}}' <cid>` para
+  # esperar a que apps-db/espocrm-db/redis confirmen salud antes de
+  # operar sobre ellos. Este doble falso no simula un healthcheck real
+  # (igual que 'compose up'/'exec ... app-check' ya asumen éxito
+  # inmediato más abajo) -- siempre informa 'healthy' sin esperar, para
+  # no bloquear los escenarios mecánicos de estado que no ejercen
+  # infraestructura real (esos se prueban aparte, contra Docker real, en
+  # el ensayo integral tests/s1_s9_full_rehearsal.py).
+  printf 'healthy\n'
+  exit 0
+fi
+
+if [ "${1:-}" = "compose" ]; then
+  shift
+  env_file=""
+  if [ "${1:-}" = "--env-file" ]; then
+    env_file="$2"
+    shift 2
+  fi
+
+  case "${1:-}" in
+  up)
+    exit 0
+    ;;
+  exec)
+    shift
+    while [ "${1:-}" = "-T" ]; do shift; done
+    service="$1"
+    shift
+    joined="$*"
+    case "$service" in
+    espocrm)
+      case "$joined" in
+      "bin/command app-check")
+        exit 0
+        ;;
+      "bin/command set-password "*)
+        target_user="$3"
+        new_pw="$(cat)"
+        set_state "espocrm_admin_pw_${target_user}" "$new_pw"
+        exit 0
+        ;;
+      esac
+      ;;
+    redis)
+      case "$joined" in
+      "sh -c "*)
+        sh_cmd="$2"
+        in_container_file="$(printf '%s' "$sh_cmd" | sed -n "s/.*cat '\\([^']*\\)'.*/\\1/p")"
+        key="container_file_${in_container_file//\//_}"
+        provided="$(get_state "$key" "MISSING")"
+        current="$(get_state redis_password "")"
+        if [ -n "$current" ] && [ "$provided" = "$current" ]; then
+          printf 'PONG\n'
+          exit 0
+        fi
+        exit 1
+        ;;
+      "rm -f "*)
+        exit 0
+        ;;
+      esac
+      ;;
+    # Bloque 5 (Revisión 2) — vía administrativa de recuperación/
+    # reaplicación de S2 (socket, siempre "trust" en la imagen real:
+    # nunca comprueba ninguna contraseña de autenticación, igual que
+    # Postgres de verdad). Protocolo actual (sin fichero ni `cat`
+    # intermedios): `SELECT format('ALTER ROLE %I WITH PASSWORD %L',
+    # 'role', convert_from(decode('B64','base64'),'UTF8')) AS sql \gset`
+    # + `:sql;`, todo por STDIN.
+    apps-db)
+      case "$joined" in
+      "psql "*)
+        script="$(cat)"
+        b64="$(printf '%s' "$script" | sed -n "s/.*decode('\\([^']*\\)','base64').*/\\1/p")"
+        if [ -n "$b64" ]; then
+          newpw="$(printf '%s' "$b64" | base64 -d 2>/dev/null || true)"
+          if [ -n "$newpw" ]; then
+            set_state pg_password "$newpw"
+          fi
+        fi
+        exit 0
+        ;;
+      esac
+      exit 0
+      ;;
+    # Bloque 5 (Revisión 2) — S3: reaplicación real vía un fichero de
+    # opciones MariaDB (`--defaults-extra-file=RUTA`, copiado antes por
+    # `docker cp`, nunca `MYSQL_PWD` en el entorno) — autenticación real:
+    # SÍ comprueba la contraseña del fichero copiado, como el 'root' real
+    # de esta imagen, que nunca permite socket sin contraseña.
+    espocrm-db)
+      case "$joined" in
+      "mariadb --defaults-extra-file="*)
+        in_container_file="${joined#mariadb --defaults-extra-file=}"
+        key="container_file_${in_container_file//\//_}"
+        optfile_content="$(get_state "$key" "")"
+        auth_user="$(printf '%s' "$optfile_content" | sed -n 's/^user="\(.*\)"$/\1/p' | tail -n1)"
+        auth_pw="$(printf '%s' "$optfile_content" | sed -n 's/^password="\(.*\)"$/\1/p' | tail -n1)"
+        current="$(get_state "mariadb_pw_${auth_user}" "")"
+        if [ -n "$current" ] && [ "$auth_pw" != "$current" ]; then
+          echo "ERROR 1045 (28000): Access denied" >&2
+          exit 1
+        fi
+        sql="$(cat)"
+        b64="$(printf '%s' "$sql" | sed -n "s/.*FROM_BASE64('\\([^']*\\)').*/\\1/p")"
+        target_user="$(printf '%s' "$sql" | sed -n "s/.*ALTER USER '\\([a-zA-Z]*\\)'@'[^']*' IDENTIFIED BY.*/\\1/p")"
+        if [ -n "$b64" ] && [ -n "$target_user" ]; then
+          newpw="$(printf '%s' "$b64" | base64 -d 2>/dev/null || true)"
+          if [ -n "$newpw" ]; then
+            set_state "mariadb_pw_${target_user}" "$newpw"
+          fi
+        fi
+        exit 0
+        ;;
+      "chmod 600 "* | "rm -f "*)
+        exit 0
+        ;;
+      "sh -c "*)
+        # Comprobación de AUSENCIA (`[ -e '<ruta>' ]`) antes del `cp` —
+        # el doble falso simula un contenedor "limpio": la ruta CSPRNG
+        # nunca existe todavía, así que responde "no existe" (exit != 0),
+        # dejando que el llamador real continúe con el `cp`.
+        exit 1
+        ;;
+      esac
+      exit 0
+      ;;
+    esac
+    exit 0
+    ;;
+  cp)
+    shift
+    src="$1"
+    dest="$2"
+    dest_path="${dest#*:}"
+    cp "$src" "$STATE/container_file_${dest_path//\//_}"
+    exit 0
+    ;;
+  ps)
+    printf 'apps-db\nredis\nespocrm-db\nespocrm\nespocrm-daemon\nespocrm-websocket\n'
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+  esac
+fi
+
+if [ "${1:-}" = "run" ]; then
+  shift
+  image=""
+  mount_hostpath=""
+  rest=()
+  skip_next=false
+  skip_next_kind=""
+  for a in "$@"; do
+    # Los flags de `docker run` (-v/-e/--rm/-i/--network) SOLO se
+    # reconocen ANTES del nombre de la imagen — una vez capturado
+    # `image`, el resto de argumentos son del PROPIO comando dentro del
+    # contenedor (p.ej. el `-v` de psql para fijar una variable, que NO
+    # tiene relación alguna con el `-v` de volumen de docker) y deben
+    # pasar tal cual a `rest`, nunca reinterpretarse como flags de
+    # docker (bug real detectado y corregido durante la Revisión 2: sin
+    # esta guarda, `psql -v ON_ERROR_STOP=1` hacía que este doble falso
+    # confundiera "ON_ERROR_STOP=1" con la ruta del volumen montado,
+    # sobrescribiendo la ruta real del .pgpass).
+    if [ -n "$image" ]; then
+      rest+=("$a")
+      continue
+    fi
+    if [ "$skip_next" = true ]; then
+      case "$skip_next_kind" in
+      volume)
+        # Forma "hostpath:containerpath[:ro]" — el fake docker corre en
+        # el mismo host, así que lee el fichero de credenciales
+        # directamente por su ruta de HOST (Bloque 5, Revisión 2, punto
+        # 9: pg_capture/mariadb_capture ya no pasan PGPASSWORD/MYSQL_PWD
+        # por --env-file, sino por un fichero .pgpass/opciones montado
+        # de solo lectura).
+        mount_hostpath="${a%%:*}"
+        ;;
+      esac
+      skip_next=false
+      skip_next_kind=""
+      continue
+    fi
+    case "$a" in
+    -v)
+      skip_next=true
+      skip_next_kind=volume
+      ;;
+    -e)
+      skip_next=true
+      skip_next_kind=envvar
+      ;;
+    --rm | -i)
+      ;;
+    --network)
+      skip_next_network=true
+      ;;
+    *)
+      if [ "${skip_next_network:-false}" = true ]; then
+        skip_next_network=false
+      elif [ -z "$image" ]; then
+        image="$a"
+      else
+        rest+=("$a")
+      fi
+      ;;
+    esac
+  done
+
+  case "${rest[0]:-}" in
+  psql)
+    sql="$(cat)"
+    pgpw=""
+    if [ -n "$mount_hostpath" ] && [ -f "$mount_hostpath" ]; then
+      # Formato .pgpass: *:*:*:role:pass (los valores de prueba nunca
+      # contienen ':' ni '\', así que un `cut` simple basta para este
+      # doble falso — el escapado real lo ejerce
+      # gapssa_secrets_pgpass_escape en el script real).
+      pgpw="$(cut -d: -f5 <"$mount_hostpath")"
+    fi
+    current="$(get_state pg_password "")"
+    if [ -n "$current" ] && [ "$pgpw" != "$current" ]; then
+      echo "FATAL: password authentication failed for user" >&2
+      exit 1
+    fi
+    case "$sql" in
+    *"ALTER ROLE"*)
+      newpw="$(printf '%s' "$sql" | sed -n "s/.*WITH PASSWORD '\\([^']*\\)'.*/\\1/p")"
+      set_state pg_password "$newpw"
+      ;;
+    esac
+    printf '1\n'
+    exit 0
+    ;;
+  mariadb)
+    sql="$(cat)"
+    mypw="" user="root"
+    if [ -n "$mount_hostpath" ] && [ -f "$mount_hostpath" ]; then
+      user="$(sed -n 's/^user="\(.*\)"$/\1/p' "$mount_hostpath" | tail -n1)"
+      mypw="$(sed -n 's/^password="\(.*\)"$/\1/p' "$mount_hostpath" | tail -n1)"
+      [ -n "$user" ] || user="root"
+    fi
+    current="$(get_state "mariadb_pw_${user}" "")"
+    if [ -n "$current" ] && [ "$mypw" != "$current" ]; then
+      echo "ERROR 1045 (28000): Access denied" >&2
+      exit 1
+    fi
+    case "$sql" in
+    *"SELECT User, Host FROM mysql.user"*)
+      printf 'root\t%%\n'
+      printf 'espocrm\t%%\n'
+      ;;
+    *"ALTER USER"*)
+      printf '%s' "$sql" | grep -o "ALTER USER '[a-zA-Z]*'@'[^']*' IDENTIFIED BY '[^']*'" | while read -r stmt; do
+        u="$(printf '%s' "$stmt" | sed -n "s/ALTER USER '\\([a-zA-Z]*\\)'@.*/\\1/p")"
+        pw="$(printf '%s' "$stmt" | sed -n "s/.*IDENTIFIED BY '\\([^']*\\)'.*/\\1/p")"
+        set_state "mariadb_pw_${u}" "$pw"
+      done
+      printf 'OK\n'
+      ;;
+    *"SELECT 1"*)
+      printf '1\n'
+      ;;
+    esac
+    exit 0
+    ;;
+  esac
+fi
+
+exit 0
