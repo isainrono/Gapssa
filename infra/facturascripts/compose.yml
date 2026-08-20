@@ -1,0 +1,67 @@
+name: gapssa-facturascripts
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      TZ: ${GENERIC_TIMEZONE:-Europe/Madrid}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - database
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+
+  facturascripts:
+    image: facturascripts/facturascripts:2026.4
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${FACTURASCRIPTS_PORT:-8082}:80"
+    environment:
+      FS_DB_TYPE: mysql
+      FS_DB_HOST: mysql
+      FS_DB_PORT: 3306
+      FS_DB_NAME: ${MYSQL_DATABASE}
+      FS_DB_USER: ${MYSQL_USER}
+      FS_DB_PASS: ${MYSQL_PASSWORD}
+      FS_INITIAL_USER: ${FACTURASCRIPTS_ADMIN_USER:-admin}
+      FS_INITIAL_PASS: ${FACTURASCRIPTS_ADMIN_PASSWORD}
+      FS_LANG: es_ES
+      FS_DEBUG: "false"
+      TZ: ${GENERIC_TIMEZONE:-Europe/Madrid}
+    volumes:
+      - facturascripts-data:/var/www/html
+    networks:
+      - database
+      - outbound
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1/') === false ? 1 : 0);"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  database:
+    internal: true
+  outbound:
+
+volumes:
+  mysql-data:
+  facturascripts-data:

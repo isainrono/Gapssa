@@ -96,14 +96,92 @@ services:
       espocrm:
         condition: service_healthy
 
+  # ---- Fase 1: base de plataforma del portal (apps/web + Payload) ----
+  #
+  # Postgres y Redis viven en "apps-private", nunca en "public"
+  # (docs/contratos-portal-v1.md exige que ninguna base de datos sea
+  # accesible desde la red pública) y nunca en la "private" de EspoCRM
+  # (redes separadas por servicio, no una única "private" compartida).
+  #
+  # "apps-private" NO es "internal: true", a diferencia de "private": se
+  # comprobó en el arranque real que Docker no aplica la publicación de
+  # puertos al host (127.0.0.1:...) en absoluto para contenedores cuya
+  # única red es "internal" — el mapeo queda declarado pero nunca se activa
+  # (verificado con `docker inspect`: HostConfig.PortBindings lo declara,
+  # NetworkSettings.Ports queda vacío). apps/web corre con `next dev` en el
+  # host, no en un contenedor, durante el desarrollo local, y necesita
+  # alcanzar Postgres/Redis: por eso esta red permite el mapeo de puertos.
+  # Sigue sin ser "public": el puerto publicado se ata solo a 127.0.0.1
+  # (nunca 0.0.0.0), así que no es alcanzable desde fuera de esta máquina,
+  # y "apps-private" nunca se une a la red "public" ni a "private". La
+  # contrapartida documentada: a diferencia de "private" (sin salida a
+  # Internet), los contenedores de "apps-private" sí podrían iniciar
+  # conexiones salientes — aceptable en desarrollo local, a revisar si esta
+  # topología se lleva a producción (Fase 7).
+  apps-db:
+    image: ${POSTGRES_IMAGE}
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Leídas por infra/postgres/init/001-create-databases.sh — nombres
+      # configurables, no hardcodeados en el script de inicialización.
+      POSTGRES_AUTH_DB: ${POSTGRES_AUTH_DB}
+      POSTGRES_BOOKING_DB: ${POSTGRES_BOOKING_DB}
+    volumes:
+      # Postgres 18+ espera un único punto de montaje en /var/lib/postgresql
+      # (no en .../data): guarda los datos en un subdirectorio con el
+      # nombre de la versión mayor, pensado para pg_upgrade --link.
+      # Verificado contra el arranque real de la imagen: montar en
+      # .../data como en versiones anteriores hace que el contenedor se
+      # niegue a arrancar.
+      - apps-db-data:/var/lib/postgresql
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - apps-private
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT}:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  redis:
+    image: ${REDIS_IMAGE}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    command: >-
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - apps-private
+    ports:
+      - "127.0.0.1:${REDIS_HOST_PORT}:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
 networks:
   public:
   private:
     internal: true
+  apps-private:
 
 volumes:
   espocrm-db:
   espocrm-data:
   espocrm-custom:
   espocrm-client-custom:
+  apps-db-data:
+  redis-data:
 

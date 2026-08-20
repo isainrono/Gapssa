@@ -8,6 +8,14 @@ data/
 backups/
 *.log
 
+# Excepción exacta: apps/web/src/seed/data/ es código fuente del seed de
+# Fase 2 (datos semilla en TypeScript), no datos de runtime — la regla
+# "data/" de arriba lo ocultaba por error al no estar anclada a la raíz.
+# Git exige des-ignorar el directorio en sí además de su contenido para
+# que las negaciones surtan efecto (no basta con el patrón de contenido).
+!apps/web/src/seed/data/
+!apps/web/src/seed/data/**
+
 # Extension build artifacts (regenerate with `make gcs-build`)
 extensions/espocrm-google-calendar-sync/build/
 
@@ -24,9 +32,37 @@ dist/
 # JavaScript
 node_modules/
 .next/
+.next-integration-test/
 coverage/
+test-results/
+playwright-report/
+*.tsbuildinfo
+
+# Almacenamiento local de subidas de Payload (apps/web) — binarios
+# generados por /admin o por el seed de Fase 2, nunca código fuente.
+apps/web/media/
+
+# equipo/diana.jpg: contenido propio de Gapssa sin autorización pública
+# explícita confirmada todavía (docs/deuda-imagenes-stock.md). Exclusión
+# exacta de este único fichero — el resto de apps/web/public/images/equipo/
+# sigue versionable con normalidad. Retirar esta línea únicamente tras
+# confirmación humana explícita de consentimiento, y volver a añadir la
+# entrada a MEDIA_FILES en ese momento.
+/apps/web/public/images/equipo/diana.jpg
 
 # IDEs
 .idea/
 .vscode/
+
+# Prototipo local anterior a apps/web — repositorio git propio embebido,
+# se conserva en disco como referencia pero nunca se versiona desde aquí.
+gapssa1/
+
+# Claude Code: configuración/estado local de sesión, nunca compartido.
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Python
+__pycache__/
+*.pyc
 

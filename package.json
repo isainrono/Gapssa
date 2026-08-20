@@ -1,0 +1,24 @@
+{
+  "name": "gapssa",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "dotenv -e .env -- npm run dev -w @gapssa/web",
+    "build": "dotenv -e .env -- npm run build -w @gapssa/web",
+    "lint": "npm run lint -w @gapssa/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:integration": "dotenv -e .env -- npm run test:integration -w @gapssa/web",
+    "test:e2e": "dotenv -e .env -- npm run test:e2e -w @gapssa/web",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:ps": "docker compose ps"
+  },
+  "devDependencies": {
+    "dotenv-cli": "11.0.0",
+    "jsdom": "29.1.1"
+  }
+}
