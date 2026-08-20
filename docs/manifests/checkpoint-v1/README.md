@@ -2,17 +2,20 @@
 
 ## Propósito
 
-Estos ocho ficheros (`commit-1.txt` … `commit-8.txt`) son la lista
-exacta, revisable y versionable de qué ruta va en cada uno de los ocho
+Estos nueve ficheros (`commit-1.txt` … `commit-9.txt`) son la lista
+exacta, revisable y versionable de qué ruta va en cada uno de los nueve
 commits del checkpoint: los seis commits funcionales acordados
 (`commit-1.txt` … `commit-6.txt`), un séptimo commit exclusivamente
 correctivo de formato (`commit-7.txt`, ver "Commit 7 — correctivo" más
-abajo) y un octavo commit correctivo de una dependencia temporal
+abajo), un octavo commit correctivo de una dependencia temporal
 detectada al validar el séptimo (`commit-8.txt`, ver "Commit 8 —
-correctivo" más abajo). Sustituyen a cualquier plan de commits que solo
-existiera en el contexto de una conversación anterior — la clasificación
-vive en disco, se puede auditar con herramientas de línea de comandos y
-no depende de la memoria de ninguna sesión.
+correctivo" más abajo), y un noveno commit correctivo de un defecto
+bloqueante encontrado en un dry-run manual del asistente de rotación
+(`commit-9.txt`, ver "Commit 9 — correctivo" más abajo). Sustituyen a
+cualquier plan de commits que solo existiera en el contexto de una
+conversación anterior — la clasificación vive en disco, se puede
+auditar con herramientas de línea de comandos y no depende de la
+memoria de ninguna sesión.
 
 Cada `.txt` contiene una ruta relativa a la raíz del repositorio por
 línea, ordenada alfabéticamente, sin patrones glob ni comodines — cada
@@ -75,6 +78,7 @@ misma sesión de checkpoint).
 | **6 — Documentación y tooling del proyecto** | Configuración de asistencia IA, tooling de validación de checkpoints, estos manifiestos, y el resto de `docs/**` | `.claude/**` (excepto lo ignorado), `scripts/checkpoint-validation/**` (generador de entorno sintético, guard, comprobador de socket), `docs/manifests/checkpoint-v1/**`, `README.md` raíz, `PROJECT_CONTEXT.md`, y todo `docs/**` que no esté explícitamente en Commit 5 (incluye `docs/espocrm-modelo-inicial.md`, `docs/contratos-portal-v1.md`, `docs/dependencias-vulnerabilidad-undici.md`, `docs/deuda-imagenes-stock.md`, `docs/deuda-tecnica-orden-tests-integracion.md`, `docs/fase3-*.md`, `docs/fase4a-*.md`, `docs/fase4b-*.md`) |
 | **7 — Correctivo (formato)** | Nada semántico. Únicamente los 5 ficheros con incidencias de espacio en blanco detectadas por `git diff 6bd2111..HEAD --check` tras crear los commits 1–6, más la actualización de estos manifiestos para documentarlo | `apps/web/src/lib/auth/redirectSafety.ts`, `apps/web/src/server/auth/db/migrate.ts`, `apps/web/src/server/auth/db/schema.ts`, `docs/fase4b-integracion-http.md`, `scripts/secrets-rotation/tests/probes_real_execution.sh`, `docs/manifests/checkpoint-v1/README.md`, `docs/manifests/checkpoint-v1/commit-7.txt` |
 | **8 — Correctivo (fixture temporal)** | Nada de negocio. Un único fixture de test con dependencia temporal (offset relativo al reloj real que podía violar el horizonte de reserva según el día de la semana), más la prueba matemática que lo demuestra y la actualización de estos manifiestos | `apps/web/tests/integration/booking.sweepRecovery.int.test.ts`, `docs/manifests/checkpoint-v1/README.md`, `docs/manifests/checkpoint-v1/commit-8.txt` |
+| **9 — Correctivo (dry-run fresco S1→S9)** | Nada de negocio ni de infraestructura real. Corrige que `--dry-run` exigiera artefactos físicos o leyera un almacén externo real preexistente en vez de validar un estado virtual propio — solo `scripts/secrets-rotation/` (asistente + script auxiliar), sus pruebas nuevas (Escenarios A-F) y la documentación de ambos, más la actualización de estos manifiestos | `docs/manifests/checkpoint-v1/README.md`, `docs/manifests/checkpoint-v1/commit-9.txt`, `scripts/secrets-rotation/02-generate-secret.sh`, `scripts/secrets-rotation/README.md`, `scripts/secrets-rotation/rotate-all-interactive.sh`, `scripts/secrets-rotation/tests/run_scenarios.py` |
 
 Verificado programáticamente: las 578 rutas candidatas de los commits
 1–6 (todo lo modificado/eliminado respecto a HEAD, más todo lo nuevo no
@@ -96,7 +100,8 @@ manifiestos.
 | 6 — Documentación y tooling | 50 |
 | 7 — Correctivo (formato) | 7 |
 | 8 — Correctivo (fixture temporal) | 3 |
-| **Total** | **588** |
+| 9 — Correctivo (dry-run fresco S1→S9) | 6 |
+| **Total** | **594** |
 
 ## Archivos ignorados
 
@@ -105,7 +110,7 @@ construcción de la lista ya parte de `git ls-files --others
 --exclude-standard`, que respeta el `.gitignore` vigente (incluida la
 corrección de este checkpoint para `apps/web/src/seed/data/` y la
 exclusión exacta de `apps/web/public/images/equipo/diana.jpg`).
-Comprobado explícitamente que ninguna línea de los ocho `.txt` coincide
+Comprobado explícitamente que ninguna línea de los nueve `.txt` coincide
 con: `.env`, `.claude/settings.local.json`, `.claude/scheduled_tasks.lock`,
 `backups/`, `node_modules/`, `.next/`, `coverage/`, `test-results/`,
 `*.zip`, `__pycache__/`, `*.pyc`, `gapssa1/`, `apps/web/media/`
@@ -115,7 +120,7 @@ con: `.env`, `.claude/settings.local.json`, `.claude/scheduled_tasks.lock`,
 ## Secretos
 
 Estos manifiestos son listas de **rutas**, nunca de contenido. Ninguno de
-los ocho `.txt` ni este `README.md` contiene valores de variables de
+los nueve `.txt` ni este `README.md` contiene valores de variables de
 entorno, claves, contraseñas ni tokens. El `.env` real del repositorio no
 se lee ni se modifica para generar ni validar este checkpoint — la
 validación aislada usa exclusivamente
@@ -266,6 +271,54 @@ cambios.
 checkpoint — ninguno de los siete commits anteriores se reescribe, se
 rebasea ni se fuerza.
 
+## Commit 9 — correctivo
+
+**Causa (dry-run fresco S1→S9)**: un dry-run manual sobre una máquina
+fresca (`~/.gapssa-secrets` inexistente, servicios GAPSSA detenidos,
+`.env` real presente pero prohibido leer) reprodujo un defecto
+bloqueante: S1 en `--dry-run` informaba correctamente
+(`would_create_dir=...`, `[dry-run] no se copia .env todavía`, `estado
+quedaría: S1=done`), pero al aceptar S2 el asistente abortaba con
+`ERROR: no existe .../.env.gapssa todavía. Ejecuta primero la puerta
+S1.` — `require_secrets_file()` (`rotate-all-interactive.sh`) exigía el
+artefacto FÍSICO de S1 sin mirar `$DRY_RUN`, y S1 en `--dry-run` nunca
+lo crea por diseño. Auditando el mismo patrón contra las 9 puertas se
+encontraron 3 focos más del mismo defecto de fondo: `field_from_secrets_file()`
+y `current_secrets_schema_version()` podían leer el contenido/esquema de
+un almacén externo REAL preexistente en la máquina incluso bajo
+`--dry-run`; `02-generate-secret.sh` comprobaba la existencia física de
+su fichero destino ANTES de mirar su propio flag `--dry-run`; y
+`gate_s3()` ejecutaba un healthcheck Docker real y pedía una contraseña
+ROOT real ANTES de su propio corte de `--dry-run`. Detalle completo,
+diseño de la corrección (estado virtual en memoria del proceso,
+Bash 3.2, nunca en disco) y las pruebas nuevas (Escenarios A-F) en
+`scripts/secrets-rotation/README.md` §"Bloque 7 — corrección 'dry-run
+fresco S1→S9'".
+
+**Ausencia de cambios de negocio y de superficie de riesgo**: ningún
+cambio toca código de producción de `apps/web`, EspoCRM, Google Calendar
+Sync, ni infraestructura Docker real — el commit se limita a
+`scripts/secrets-rotation/` (el asistente de rotación y su script
+auxiliar `02-generate-secret.sh`) y a sus propias pruebas y
+documentación. No se ejecutó ninguna rotación real durante esta
+corrección ni durante su validación — solo `--dry-run` contra
+fixtures/HOME temporales desechables, nunca contra `~/.gapssa-secrets`
+real ni contra ningún servicio GAPSSA real.
+
+**Resultados finales**: `tests/run_scenarios.py` — **97/97** (73
+previas + 24 nuevas de los Escenarios A-F, dos ejecuciones consecutivas
+sin flakiness); `lib.test.sh` — **128/128** (sin cambios, este commit no
+toca `lib.sh`); `run-node-tests.sh` — **17/17** ficheros; `tests/static_bash32_compat_guard.sh`
+— **17/17** (ninguna sintaxis de Bash 4+ introducida); cinco ejecuciones
+consecutivas de `rotate-all-interactive.sh --dry-run` completas (S1→S9,
+sin `--only`) contra el script real bajo un `HOME`/almacén externo
+temporales, las cinco con código de salida 0 y sin crear
+`~/.gapssa-secrets`.
+
+**No es un `amend`**: es un commit nuevo, noveno, posterior al
+checkpoint — ninguno de los ocho commits anteriores se reescribe, se
+rebasea ni se fuerza.
+
 ## Orden de aplicación
 
 1. Commit 1 — Higiene, workspace e infraestructura base.
@@ -279,6 +332,9 @@ rebasea ni se fuerza.
 8. Commit 8 — Correctivo de fixture temporal (incluye `commit-8.txt` y
    la actualización de este mismo `README.md`, que por tanto solo puede
    aplicarse al final, una vez existen).
+9. Commit 9 — Correctivo de dry-run fresco S1→S9 (incluye `commit-9.txt`
+   y la actualización de este mismo `README.md` — aplicarse al final,
+   una vez existen los ocho anteriores).
 
 ## Alcance
 

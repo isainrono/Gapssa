@@ -1,0 +1,6 @@
+docs/manifests/checkpoint-v1/README.md
+docs/manifests/checkpoint-v1/commit-9.txt
+scripts/secrets-rotation/02-generate-secret.sh
+scripts/secrets-rotation/README.md
+scripts/secrets-rotation/rotate-all-interactive.sh
+scripts/secrets-rotation/tests/run_scenarios.py

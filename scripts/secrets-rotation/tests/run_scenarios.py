@@ -9,6 +9,7 @@ Exit code 0 = every scenario passed, 1 = at least one failed.
 """
 import json
 import os
+import re
 import shlex
 import shutil
 import stat
@@ -16,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import time
 
 shlexquote = shlex.quote
 
@@ -2048,6 +2050,420 @@ def scenario_s6_missing_probe_script_fails_closed():
         p.close()
 
 
+# ---------------------------------------------------------------------------
+# Corrección "dry-run fresco S1->S9" — Escenarios A-F. Fixture propio
+# (nunca el .env de FIXTURE_ENV): simula una máquina/usuario fresco con
+# ~/.gapssa-secrets inexistente y un ".env real" que en realidad es una
+# TRAMPA con un valor centinela — cualquier lectura real de su contenido
+# (bug de la clase que motivó esta corrección) hace fallar el escenario
+# en vez de pasar en silencio. Nunca usa infraestructura real (Docker
+# real, EspoCRM real): --dry-run nunca debería necesitarla, y estos
+# escenarios existen precisamente para demostrar eso.
+# ---------------------------------------------------------------------------
+
+DRY_RUN_TRAP_SENTINEL = "THIS-IS-THE-REAL-ENV-SENTINEL-NEVER-READ-ME-fresh-dry-run-6f1a9c"
+REAL_STORE_SENTINEL = "REAL-PREEXISTING-STORE-SENTINEL-NEVER-ADOPT-OR-READ-ME-8b3e2d"
+
+ALL_GATES = ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9"]
+
+
+def write_trap_env_file(path):
+    """El ".env" TRAMPA de los escenarios A-F: nunca tiene forma de
+    fixture completo (SECRETS_FILE_KEY_INVENTORY) a propósito -- si algún
+    camino de código llegara a copiarlo o parsearlo de verdad, el
+    resultado sería observable como un error o como el centinela
+    apareciendo donde no debe, nunca como un .env.gapssa "por casualidad
+    válido"."""
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(f"POSTGRES_PASSWORD={DRY_RUN_TRAP_SENTINEL}\n")
+        f.write(f"ESPOCRM_DB_ROOT_PASSWORD={DRY_RUN_TRAP_SENTINEL}\n")
+        f.write(f"REDIS_PASSWORD={DRY_RUN_TRAP_SENTINEL}\n")
+    os.chmod(path, 0o600)
+
+
+def build_fresh_dryrun_fixture_repo(root):
+    """Como build_fixture_repo, más lo que --dry-run necesita para NUNCA
+    tocar el .env real: scripts/checkpoint-validation/generate-synthetic-env.sh
+    (invocado por rotate-all-interactive.sh en dry-run para servir
+    valores sintéticos vía field_from_secrets_file) y .env.example (su
+    única fuente de claves — plantilla versionable, nunca un secreto).
+    Sustituye el .env de fixture normal (FIXTURE_ENV, con valores
+    "fixture-initial-...") por el .env TRAMPA de arriba."""
+    dest_sr = build_fixture_repo(root)
+    dest_cv = os.path.join(root, "scripts", "checkpoint-validation")
+    os.makedirs(dest_cv, exist_ok=True)
+    shutil.copy2(
+        os.path.join(REAL_REPO_ROOT, "scripts", "checkpoint-validation", "generate-synthetic-env.sh"),
+        os.path.join(dest_cv, "generate-synthetic-env.sh"),
+    )
+    os.chmod(os.path.join(dest_cv, "generate-synthetic-env.sh"), 0o755)
+    shutil.copy2(os.path.join(REAL_REPO_ROOT, ".env.example"), os.path.join(root, ".env.example"))
+    write_trap_env_file(os.path.join(root, ".env"))
+    return dest_sr
+
+
+def seed_real_preexisting_store(secrets_dir):
+    """Escenario F: simula un almacén externo REAL, de una rotación
+    previa ya completa (las 9 puertas 'done', backups presentes), bajo el
+    HOME temporal del propio escenario -- nunca el HOME real. Un
+    --dry-run posterior en un PROCESO NUEVO nunca debe leer el contenido
+    de $secrets_dir/.env.gapssa (centinela propio, distinto del .env
+    TRAMPA del repositorio) ni adoptar su '.rotation-status' real como si
+    esta sesión de dry-run lo hubiera producido -- el estado virtual de
+    cada proceso nuevo siempre empieza vacío, por diseño."""
+    os.makedirs(secrets_dir, exist_ok=True)
+    os.chmod(secrets_dir, 0o700)
+    status_file = os.path.join(secrets_dir, ".rotation-status")
+    with open(status_file, "w", encoding="utf-8") as f:
+        for g in ALL_GATES:
+            f.write(f"{g}=done\n")
+    os.chmod(status_file, 0o600)
+    secrets_file = os.path.join(secrets_dir, ".env.gapssa")
+    with open(secrets_file, "w", encoding="utf-8") as f:
+        f.write(f"POSTGRES_PASSWORD={REAL_STORE_SENTINEL}\n")
+        f.write(f"ESPOCRM_DB_ROOT_PASSWORD={REAL_STORE_SENTINEL}\n")
+        f.write("COMPOSE_PROJECT_NAME=gapssa-real-preexisting\n")
+    os.chmod(secrets_file, 0o600)
+    backup_dir = os.path.join(secrets_dir, "backups")
+    os.makedirs(backup_dir, exist_ok=True)
+    os.chmod(backup_dir, 0o700)
+    backup_file = os.path.join(backup_dir, "S1-20260101T000000Z-deadbeef.env.gapssa.enc")
+    with open(backup_file, "wb") as f:
+        f.write(os.urandom(64))
+    os.chmod(backup_file, 0o600)
+
+
+def _auto_pilot_dry_run(p, timeout=180):
+    """Piloto automático para un --dry-run completo (sin --only):
+    responde 'si' a cada '¿Ejecutar la puerta ... ahora?' y la frase de
+    confirmación del harness a cada 'Escribe exactamente' (una por
+    invocación de 01-init-external-store.sh/02-generate-secret.sh dentro
+    de cada puerta) -- NUNCA a un prompt de contraseña real: si uno
+    apareciera bajo --dry-run (justo el bug de gate_s3 corregido en esta
+    misma corrección), el bucle se queda sin patrón que reconocer y el
+    escenario expira por timeout en vez de alimentarle una respuesta a
+    ciegas, hacièndolo visible como fallo."""
+    deadline = time.time() + timeout
+    last_len = 0
+    while time.time() < deadline:
+        p.read_available(timeout=0.5)
+        if p.proc.poll() is not None:
+            return
+        new_text = p.transcript[last_len:]
+        if re.search(r"Escribe exactamente", new_text):
+            p.send_line("confirmo fuera de claude code")
+            last_len = len(p.transcript)
+        elif re.search(r"\[si/no/salir\]", new_text):
+            p.send_line("si")
+            last_len = len(p.transcript)
+        elif re.search(r"Pulsa Enter cuando lo hayas hecho", new_text):
+            p.send_line("")
+            last_len = len(p.transcript)
+    raise TimeoutError(f"auto-pilot dry-run: timeout tras {timeout}s (ningún patrón reconocido -- posible prompt real inesperado bajo --dry-run).\n--- transcript ---\n{p.transcript}")
+
+
+def _dry_run_fresh_env(tmp):
+    """HOME temporal fresco + GAPSSA_SECRETS_DIR bajo él (inexistente al
+    empezar) -- nunca el HOME real del operador."""
+    home = os.path.join(tmp, "home")
+    os.makedirs(home)
+    secrets_dir = os.path.join(home, ".gapssa-secrets")
+    transcript = os.path.join(tmp, "fake-cmd-transcript.log")
+    state = os.path.join(tmp, "docker-state")
+    return home, secrets_dir, base_env(home, secrets_dir, state, transcript), transcript
+
+
+# --- Escenario A -----------------------------------------------------------
+def scenario_dry_run_fresh_A_full_traversal():
+    name = "Escenario A (dry-run fresco): usuario fresco S1->S9 completo respondiendo 'si', cero artefactos"
+    with tempfile.TemporaryDirectory(prefix="gapssa-rot-freshdry-a-") as tmp:
+        repo = os.path.join(tmp, "repo")
+        os.makedirs(repo)
+        sr_dir = build_fresh_dryrun_fixture_repo(repo)
+        env_before = snapshot_tree(repo)
+        home, secrets_dir, env, _transcript = _dry_run_fresh_env(tmp)
+
+        p = PtyProcess(["bash", os.path.join(sr_dir, "rotate-all-interactive.sh"), "--dry-run"], env=env, cwd=repo)
+        try:
+            _auto_pilot_dry_run(p, timeout=240)
+            rc = p.wait(timeout=15)
+        except TimeoutError as exc:
+            report(name, False, str(exc))
+            p.close()
+            return
+        p.close()
+
+        ok = True
+        if rc != 0:
+            report(name + " — código de salida 0", False, f"rc={rc}")
+            ok = False
+        else:
+            report(name + " — código de salida 0", True)
+        if os.path.exists(secrets_dir):
+            report(name + " — ~/.gapssa-secrets nunca se crea", False, "el directorio existe tras el dry-run")
+            ok = False
+        else:
+            report(name + " — ~/.gapssa-secrets nunca se crea", True)
+        for g in ALL_GATES:
+            if f"{g}=simulated_ok" not in p.transcript:
+                report(name + f" — {g}=simulated_ok en el resumen final", False, "ausente del resumen")
+                ok = False
+        if "ready_for_real_run=true" not in p.transcript:
+            report(name + " — ready_for_real_run=true en el resumen", False, "ausente")
+            ok = False
+        if not assert_no_secret_in_transcript(p.transcript, [DRY_RUN_TRAP_SENTINEL], name + " — el centinela del .env TRAMPA nunca aparece en stdout/stderr"):
+            ok = False
+        env_after = snapshot_tree(repo)
+        # Solo comparamos los ficheros que YA existían antes (el propio
+        # dry-run puede crear ficheros efímeros propios del arnés, p.ej.
+        # bajo TMPDIR -- fuera de `repo` -- pero nunca debe MODIFICAR
+        # ninguno de los que ya estaban, en particular ".env").
+        changed = {k for k in env_before if k in env_after and env_before[k] != env_after[k]}
+        removed = {k for k in env_before if k not in env_after}
+        if changed or removed:
+            report(name + " — ningún fichero preexistente del repo (incluido .env) se modifica", False, f"modificados={changed} eliminados={removed}")
+            ok = False
+        else:
+            report(name + " — ningún fichero preexistente del repo (incluido .env) se modifica", True)
+        if ok:
+            report(name, True)
+
+
+# --- Escenario B -------------------------------------------------------
+def scenario_dry_run_fresh_B_skip_s1_blocks_s2():
+    name = "Escenario B (dry-run fresco): --only S2 --dry-run sin S1 previo en esta sesión -> falla por estado VIRTUAL ausente, nunca exige el artefacto físico"
+    with tempfile.TemporaryDirectory(prefix="gapssa-rot-freshdry-b-") as tmp:
+        repo = os.path.join(tmp, "repo")
+        os.makedirs(repo)
+        sr_dir = build_fresh_dryrun_fixture_repo(repo)
+        home, secrets_dir, env, _transcript = _dry_run_fresh_env(tmp)
+
+        p = PtyProcess(["bash", os.path.join(sr_dir, "rotate-all-interactive.sh"), "--only", "S2", "--dry-run"], env=env, cwd=repo)
+        ok = True
+        try:
+            p.expect("Escribe exactamente")
+            p.send_line("confirmo fuera de claude code")
+            p.expect(r"\[si/no/salir\]")
+            p.send_line("si")
+            p.expect(r"ERROR: \[dry-run\].*no existe \(ni siquiera de forma simulada\)")
+            rc = p.wait(timeout=10)
+        except TimeoutError as exc:
+            report(name, False, str(exc))
+            p.close()
+            return
+        p.close()
+        if rc == 0:
+            report(name + " — código de salida no-cero", False, f"rc={rc}")
+            ok = False
+        else:
+            report(name + " — código de salida no-cero", True)
+        if os.path.exists(secrets_dir):
+            report(name + " — ~/.gapssa-secrets nunca se crea", False, "existe")
+            ok = False
+        else:
+            report(name + " — ~/.gapssa-secrets nunca se crea", True)
+        if ok:
+            report(name, True)
+
+
+# --- Escenario C -------------------------------------------------------
+def scenario_dry_run_fresh_C_s1_accepted_s2_no_physical_requirement():
+    name = "Escenario C (dry-run fresco): S1 aceptada en esta misma sesión -> S2 continúa sin exigir .env.gapssa físico"
+    with tempfile.TemporaryDirectory(prefix="gapssa-rot-freshdry-c-") as tmp:
+        repo = os.path.join(tmp, "repo")
+        os.makedirs(repo)
+        sr_dir = build_fresh_dryrun_fixture_repo(repo)
+        home, secrets_dir, env, _transcript = _dry_run_fresh_env(tmp)
+
+        p = PtyProcess(["bash", os.path.join(sr_dir, "rotate-all-interactive.sh"), "--dry-run"], env=env, cwd=repo)
+        ok = True
+        try:
+            p.expect("Escribe exactamente")
+            p.send_line("confirmo fuera de claude code")
+            p.expect(r"Puerta S1")
+            p.expect(r"\[si/no/salir\]")
+            p.send_line("si")
+            p.expect("confirmo fuera de claude code")  # guardia propia de 01-init-external-store.sh
+            p.send_line("confirmo fuera de claude code")
+            p.expect(r"Puerta S2")
+            p.expect(r"\[si/no/salir\]")
+            p.send_line("si")
+            p.expect("confirmo fuera de claude code")  # guardia propia de 02-generate-secret.sh
+            p.send_line("confirmo fuera de claude code")
+            p.expect(r"Puerta S3", timeout=20)
+        except TimeoutError as exc:
+            report(name, False, str(exc))
+            p.close()
+            return
+        s2_section = p.transcript.split("Puerta S2", 1)[-1].split("Puerta S3", 1)[0]
+        p.sigint()
+        p.wait(timeout=10)
+        p.close()
+
+        if "no existe" in s2_section and "Ejecuta primero la puerta S1" in s2_section:
+            report(name + " — S2 nunca exige el artefacto físico de S1 dentro de la misma sesión", False, s2_section)
+            ok = False
+        else:
+            report(name + " — S2 nunca exige el artefacto físico de S1 dentro de la misma sesión", True)
+        if "estado quedaría: S2=done" not in s2_section:
+            report(name + " — S2 llega a 'done' (simulado)", False, s2_section)
+            ok = False
+        else:
+            report(name + " — S2 llega a 'done' (simulado)", True)
+        if os.path.exists(secrets_dir):
+            report(name + " — ~/.gapssa-secrets nunca se crea", False, "existe")
+            ok = False
+        else:
+            report(name + " — ~/.gapssa-secrets nunca se crea", True)
+        if ok:
+            report(name, True)
+
+
+# --- Escenario D -------------------------------------------------------
+def scenario_dry_run_fresh_D_zero_mutating_commands():
+    name = "Escenario D (dry-run fresco): S1->S9 simulated_ok, CERO invocaciones reales de docker/curl, cero secretos generados"
+    with tempfile.TemporaryDirectory(prefix="gapssa-rot-freshdry-d-") as tmp:
+        repo = os.path.join(tmp, "repo")
+        os.makedirs(repo)
+        sr_dir = build_fresh_dryrun_fixture_repo(repo)
+        home, secrets_dir, env, fake_cmd_transcript = _dry_run_fresh_env(tmp)
+
+        p = PtyProcess(["bash", os.path.join(sr_dir, "rotate-all-interactive.sh"), "--dry-run"], env=env, cwd=repo)
+        try:
+            _auto_pilot_dry_run(p, timeout=240)
+            rc = p.wait(timeout=15)
+        except TimeoutError as exc:
+            report(name, False, str(exc))
+            p.close()
+            return
+        p.close()
+
+        ok = True
+        if rc != 0:
+            report(name + " — código de salida 0", False, f"rc={rc}")
+            ok = False
+        for g in ALL_GATES:
+            if f"{g}=simulated_ok" not in p.transcript:
+                report(name + f" — {g}=simulated_ok", False, "ausente")
+                ok = False
+        # fake-bin/docker y fake-bin/curl registran CUALQUIER invocación
+        # (incluso de solo-lectura) en este único fichero -- vacío/ausente
+        # es la única evidencia aceptable de "cero invocaciones reales".
+        fake_log = read_transcript(fake_cmd_transcript)
+        if fake_log.strip():
+            report(name + " — cero invocaciones a docker/curl (fake-bin, argv completo)", False, fake_log)
+            ok = False
+        else:
+            report(name + " — cero invocaciones a docker/curl (fake-bin, argv completo)", True)
+        if os.path.exists(secrets_dir):
+            report(name + " — ~/.gapssa-secrets nunca se crea (cero secretos escritos)", False, "existe")
+            ok = False
+        else:
+            report(name + " — ~/.gapssa-secrets nunca se crea (cero secretos escritos)", True)
+        if ok:
+            report(name, True)
+
+
+# --- Escenario E -------------------------------------------------------
+def scenario_dry_run_fresh_E_exit_via_salir():
+    name = "Escenario E (dry-run fresco): responder 'salir' termina limpiamente, cero residuos"
+    with tempfile.TemporaryDirectory(prefix="gapssa-rot-freshdry-e-") as tmp:
+        repo = os.path.join(tmp, "repo")
+        os.makedirs(repo)
+        sr_dir = build_fresh_dryrun_fixture_repo(repo)
+        home, secrets_dir, env, _transcript = _dry_run_fresh_env(tmp)
+        tmp_root_before = {f for f in os.listdir(tempfile.gettempdir()) if f.startswith("gapssa-dryrun-synth.")}
+
+        p = PtyProcess(["bash", os.path.join(sr_dir, "rotate-all-interactive.sh"), "--dry-run"], env=env, cwd=repo)
+        ok = True
+        try:
+            p.expect("Escribe exactamente")
+            p.send_line("confirmo fuera de claude code")
+            p.expect(r"Puerta S1")
+            p.expect(r"\[si/no/salir\]")
+            p.send_line("salir")
+            rc = p.wait(timeout=10)
+        except TimeoutError as exc:
+            report(name, False, str(exc))
+            p.close()
+            return
+        p.close()
+
+        if rc != 0:
+            report(name + " — código de salida 0", False, f"rc={rc}")
+            ok = False
+        else:
+            report(name + " — código de salida 0", True)
+        if "Saliendo por decisión tuya" not in p.transcript:
+            report(name + " — mensaje de salida limpia", False, "ausente")
+            ok = False
+        else:
+            report(name + " — mensaje de salida limpia", True)
+        if os.path.exists(secrets_dir):
+            report(name + " — ~/.gapssa-secrets nunca se crea", False, "existe")
+            ok = False
+        else:
+            report(name + " — ~/.gapssa-secrets nunca se crea", True)
+        tmp_root_after = {f for f in os.listdir(tempfile.gettempdir()) if f.startswith("gapssa-dryrun-synth.")}
+        stray = tmp_root_after - tmp_root_before
+        if stray:
+            report(name + " — cero temporales sintéticos huérfanos bajo TMPDIR", False, f"{stray}")
+            ok = False
+        else:
+            report(name + " — cero temporales sintéticos huérfanos bajo TMPDIR", True)
+        if ok:
+            report(name, True)
+
+
+# --- Escenario F -------------------------------------------------------
+def scenario_dry_run_fresh_F_preexisting_real_store_not_adopted():
+    name = "Escenario F (dry-run fresco): almacén real preexistente bajo HOME temporal -- nunca leído, nunca adoptado como estado ejecutado"
+    with tempfile.TemporaryDirectory(prefix="gapssa-rot-freshdry-f-") as tmp:
+        repo = os.path.join(tmp, "repo")
+        os.makedirs(repo)
+        sr_dir = build_fresh_dryrun_fixture_repo(repo)
+        home, secrets_dir, env, _transcript = _dry_run_fresh_env(tmp)
+        seed_real_preexisting_store(secrets_dir)
+        before = snapshot_tree(secrets_dir)
+        if not before:
+            report(name, False, "el almacén real preexistente quedó vacío -- no se puede medir identidad sobre nada")
+            return
+
+        p = PtyProcess(["bash", os.path.join(sr_dir, "rotate-all-interactive.sh"), "--dry-run"], env=env, cwd=repo)
+        try:
+            _auto_pilot_dry_run(p, timeout=240)
+            p.wait(timeout=15)
+        except TimeoutError as exc:
+            report(name, False, str(exc))
+            p.close()
+            return
+        p.close()
+
+        ok = True
+        if not assert_no_secret_in_transcript(p.transcript, [REAL_STORE_SENTINEL], name + " — el centinela del almacén real preexistente nunca aparece"):
+            ok = False
+        after = snapshot_tree(secrets_dir)
+        if before != after:
+            added = set(after) - set(before)
+            removed = set(before) - set(after)
+            changed = {k for k in set(before) & set(after) if before[k] != after[k]}
+            report(name + " — el almacén real preexistente queda byte a byte intacto", False, f"añadidos={added} eliminados={removed} modificados={changed}")
+            ok = False
+        else:
+            report(name + " — el almacén real preexistente queda byte a byte intacto", True)
+        if "Puerta S1" not in p.transcript:
+            report(name + " — la sesión simula S1 igualmente, nunca se salta por el 'done' real preexistente", False, "no se vio 'Puerta S1'")
+            ok = False
+        else:
+            report(name + " — la sesión simula S1 igualmente, nunca se salta por el 'done' real preexistente", True)
+        for g in ALL_GATES:
+            if f"{g}=simulated_ok" not in p.transcript:
+                report(name + f" — {g}=simulated_ok pese al almacén real preexistente", False, "ausente")
+                ok = False
+        if ok:
+            report(name, True)
+
+
 def main():
     if not os.access("/bin/bash", os.X_OK):
         print("bash no disponible — abortando", file=sys.stderr)
@@ -2074,6 +2490,12 @@ def main():
     scenario_s9_rejects_forward_recovery_required()
     scenario_s3_divergence_root_declined()
     scenario_s3_divergence_root_provided()
+    scenario_dry_run_fresh_A_full_traversal()
+    scenario_dry_run_fresh_B_skip_s1_blocks_s2()
+    scenario_dry_run_fresh_C_s1_accepted_s2_no_physical_requirement()
+    scenario_dry_run_fresh_D_zero_mutating_commands()
+    scenario_dry_run_fresh_E_exit_via_salir()
+    scenario_dry_run_fresh_F_preexisting_real_store_not_adopted()
 
     print()
     passed = sum(1 for _, ok, _ in RESULTS if ok)

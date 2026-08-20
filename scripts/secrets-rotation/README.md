@@ -561,6 +561,118 @@ fallo que pueda necesitarla. Regresión cubierta por dos aserciones
 nuevas en el propio escenario PTY (fichero restaurado, directorio de
 cuarentena vacío).
 
+### Bloque 7 — corrección "dry-run fresco S1→S9"
+
+Un dry-run manual sobre una máquina fresca (`~/.gapssa-secrets`
+inexistente, servicios GAPSSA detenidos) reprodujo un defecto
+bloqueante: S1 en `--dry-run` informaba correctamente
+(`would_create_dir=...`, `[dry-run] no se copia .env todavía`,
+`estado quedaría: S1=done`), pero al aceptar S2 el asistente abortaba con
+`ERROR: no existe .../.env.gapssa todavía. Ejecuta primero la puerta S1.`
+— S2 exigía el artefacto FÍSICO de S1 incluso bajo `--dry-run`, pese a
+que S1 en `--dry-run` nunca lo crea por diseño.
+
+**Causa exacta**: `require_secrets_file()` comprobaba `[ ! -f
+"$SECRETS_FILE" ]` sin mirar `$DRY_RUN` en absoluto. Auditando el mismo
+patrón contra las 9 puertas se encontraron 3 focos más del mismo defecto
+de fondo ("una puerta dry-run no crea su salida; la siguiente exige
+físicamente esa salida, o lee estado/secretos que en dry-run no deben
+existir"):
+
+1. `field_from_secrets_file()` leía `$SECRETS_FILE` con `grep`
+   incondicionalmente — si un almacén externo REAL ya existía en esa
+   máquina (de una rotación real anterior), un `--dry-run` posterior
+   leía su contenido de verdad.
+2. `current_secrets_schema_version()` invocaba
+   `lib/detectSecretsSchemaVersion.mjs` sobre `$SECRETS_FILE` real en
+   cuanto este existía físicamente, sin mirar `$DRY_RUN` — llamada desde
+   `enter_gate()`, en el camino de TODAS las puertas.
+3. `02-generate-secret.sh` comprobaba `[ ! -f "$TARGET_FILE" ]` ANTES de
+   su propio flag `--dry-run` — pasarle `--dry-run` sobre un archivo
+   destino inexistente abortaba igual con un error físico.
+4. `gate_s3()`: el healthcheck real (`_gapssa_wait_healthy`, `docker
+   compose ps`/`docker inspect` reales) y el prompt de la contraseña
+   ROOT actual de MariaDB vivían ANTES del corte de `--dry-run` de esa
+   puerta — bajo dry-run, `docker compose up -d` de la línea anterior
+   nunca arranca nada real (`run_cmd`), así que el healthcheck fallaba
+   de verdad contra un contenedor inexistente y bloqueaba la puerta, y
+   además se pedía una credencial real sin necesidad.
+
+**Diseño del estado virtual**: `state_set()`/`state_get()` — ya
+documentado como el único punto de choque de la máquina de estados desde
+el Bloque anterior (nunca escriben `.rotation-status` bajo `--dry-run`)
+— ahora también son la única fuente de verdad de LECTURA bajo
+`--dry-run`: en memoria del proceso, con variables indirectas Bash 3.2
+(`GAPSSA_DRY_VSTATE_<gate>`, nunca un array asociativo — sintaxis de
+Bash 4+ prohibida en este directorio por
+`tests/static_bash32_compat_guard.sh`), nunca en disco. `require_secrets_file()`
+y `backup_secrets_file()` preguntan `state_get S1` (virtual) en vez de
+`-f "$SECRETS_FILE"` (real). `field_from_secrets_file()` sirve, bajo
+`--dry-run`, valores puramente sintéticos derivados ÚNICAMENTE de
+`.env.example` — reutiliza
+`scripts/checkpoint-validation/generate-synthetic-env.sh` (ya auditado,
+con su propio guard-test: nunca abre `.env` real), cargados una única
+vez en variables de proceso indirectas y con el temporal que los
+contuvo triturado y borrado de inmediato. `current_secrets_schema_version()`
+devuelve un `active` fijo bajo `--dry-run` (el único esquema consistente
+con un S1 fresco, que es lo único que `--dry-run` puede simular).
+`02-generate-secret.sh` corta en `--dry-run` ANTES de cualquier
+comprobación física. `gate_s3()` mueve su corte de `--dry-run` antes del
+healthcheck y del prompt de contraseña.
+
+Consecuencia intencional de este diseño: `--only <puerta> --dry-run` en
+AISLAMIENTO (proceso nuevo, sin que las puertas anteriores hayan corrido
+—ni siquiera de forma simulada— en ESE MISMO proceso) sigue rechazando
+igual que antes exigía el artefacto físico — la diferencia es que ahora
+nunca "hace trampa" leyendo un almacén externo real preexistente en esa
+máquina para simular esa precondición en su lugar. El recorrido continuo
+`rotate-all-interactive.sh --dry-run` (sin `--only`, el caso que reporta
+el defecto original) no se ve afectado: las 9 puertas corren en el mismo
+proceso, así que el estado virtual se propaga de una a la siguiente
+exactamente igual que antes se esperaba que lo hiciera el estado real.
+
+**Resumen saneado de cierre**: al terminar (con o sin `--only`) bajo
+`--dry-run`, el asistente imprime un bloque final con `dry_run=true`,
+`S1`..`S9=simulated_ok` (o `simulated_<estado>` si alguna quedó
+pendiente/omitida — nunca `done` sin calificar), `real_writes=0`,
+`real_services_touched=0`, `real_secrets_generated=0`,
+`real_secrets_read=0`, `external_store_created=false`,
+`ready_for_real_run=true/false` y la lista de puertas pendientes si
+aplica — nunca puede confundirse con el informe final de una rotación
+real (`gate_s9`, formato completamente distinto).
+
+**Pruebas nuevas** (`tests/run_scenarios.py`, Escenarios A-F): fixture
+propio con `.env` TRAMPA (valor centinela, nunca el `.env` real) y
+`scripts/checkpoint-validation/` copiado (necesario para servir valores
+sintéticos). A — usuario fresco, S1→S9 completo respondiendo `si`, cero
+artefactos, centinela nunca en stdout/stderr, ningún fichero preexistente
+del repo (incluido `.env`) se modifica. B — `--only S2 --dry-run` sin S1
+previo en esa sesión falla por estado virtual ausente. C — S1 aceptada
+en la misma sesión, S2 continúa sin exigir `.env.gapssa` físico. D — las
+9 puertas `simulated_ok`, cero invocaciones a `docker`/`curl`
+(`fake-bin`, transcript de argv vacío). E — responder `salir` termina
+limpiamente, cero residuos (incluido el temporal sintético bajo
+`TMPDIR`). F — almacén externo REAL preexistente bajo un `HOME`
+temporal (rotación previa completa simulada, `S1`..`S9=done` reales):
+centinela propio del almacén nunca aparece, contenido byte a byte
+intacto, la sesión simula S1 igual que en una máquina fresca (nunca
+adopta el `done` real como sustituto). Límite reconocido: estas pruebas
+verifican ausencia del centinela en la salida y unicidad byte a byte del
+contenido antes/después (mismo método que el resto de este arnés,
+`tests/run_scenarios.py`/`s1_s9_full_rehearsal.py`) — no instrumentan
+llamadas `open()`/`read()` a nivel de sistema operativo (`strace`/`dtrace`),
+así que no sustituyen una auditoría de syscalls si esa garantía más
+fuerte llega a ser necesaria.
+
+Última ejecución (cierre del Bloque 7, corrección de dry-run fresco):
+`run_scenarios.py` 97/97 (73 previas + 24 nuevas de los Escenarios A-F),
+`lib.test.sh` 128/128 (sin cambios — este bloque no toca `lib.sh`),
+`run-node-tests.sh` 17/17 ficheros, `tests/static_bash32_compat_guard.sh`
+17/17, cinco ejecuciones consecutivas de
+`rotate-all-interactive.sh --dry-run` completas (S1→S9, sin `--only`)
+contra el script real, todas con código de salida 0 y sin crear
+`~/.gapssa-secrets`.
+
 ## Archivos
 
 - `lib.sh` — funciones compartidas: guardas de ruta/harness/permisos,

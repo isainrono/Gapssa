@@ -89,19 +89,15 @@ done
 gapssa_secrets_abort_if_inside_workspace "$TARGET_FILE"
 gapssa_secrets_require_interactive_confirmation
 
-if [ ! -f "$TARGET_FILE" ]; then
-  echo "ERROR: '$TARGET_FILE' no existe todavía — ejecuta 01-init-external-store.sh primero" >&2
-  echo "       y crea el archivo vacío con modo 600 antes de generar secretos." >&2
-  exit 1
-fi
-
-file_mode_ok="$(gapssa_secrets_check_file_mode "$TARGET_FILE")"
-echo "target_file_mode_600=$file_mode_ok"
-if [ "$file_mode_ok" != "true" ]; then
-  echo "ERROR: '$TARGET_FILE' no tiene modo 600 — corrígelo (chmod 600) antes de continuar." >&2
-  exit 1
-fi
-
+# Corrección "dry-run fresco S1->S9": --dry-run debe cortar ANTES de
+# cualquier comprobación física sobre $TARGET_FILE (existencia, modo) —
+# antes de esta corrección, un $TARGET_FILE inexistente (el caso normal
+# de un almacén externo que ningún S1 real ha creado todavía) hacía
+# abortar con un error físico incluso pasando --dry-run, porque la
+# comprobación `-f` corría antes de mirar $DRY_RUN. La puerta que invoca
+# este script decide su propia precondición virtual (ver
+# require_secrets_file en rotate-all-interactive.sh) — este script nunca
+# debe imponer una física adicional en modo simulado.
 echo "mode=$MODE"
 echo "var_name=$VAR_NAME"
 if [ -n "$VERSION_KEY" ]; then
@@ -115,6 +111,19 @@ if [ "$DRY_RUN" = true ]; then
   echo "would_write_to=$TARGET_FILE"
   echo "S_DRY_RUN_OK=true"
   exit 0
+fi
+
+if [ ! -f "$TARGET_FILE" ]; then
+  echo "ERROR: '$TARGET_FILE' no existe todavía — ejecuta 01-init-external-store.sh primero" >&2
+  echo "       y crea el archivo vacío con modo 600 antes de generar secretos." >&2
+  exit 1
+fi
+
+file_mode_ok="$(gapssa_secrets_check_file_mode "$TARGET_FILE")"
+echo "target_file_mode_600=$file_mode_ok"
+if [ "$file_mode_ok" != "true" ]; then
+  echo "ERROR: '$TARGET_FILE' no tiene modo 600 — corrígelo (chmod 600) antes de continuar." >&2
+  exit 1
 fi
 
 # El valor nunca sale de este subshell salvo para escribirse en el archivo

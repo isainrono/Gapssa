@@ -263,8 +263,53 @@ capture_cmd_stdin() {
   printf '%s' "$input" | "$@"
 }
 
+# Corrección "dry-run fresco S1->S9" — En --dry-run, NUNCA se lee el
+# contenido de $SECRETS_FILE, exista o no físicamente (un almacén externo
+# real preexistente en esta máquina nunca se adopta como sustituto
+# silencioso): se sirve un valor sintético cerrado, derivado únicamente de
+# .env.example (nunca de .env real), cargado una única vez en memoria del
+# proceso — ver _gapssa_dry_load_synthetic_env más abajo.
 field_from_secrets_file() {
+  if [ "$DRY_RUN" = true ]; then
+    _gapssa_dry_load_synthetic_env
+    local varname="GAPSSA_DRY_FIELD_$1"
+    printf '%s' "${!varname:-}"
+    return 0
+  fi
   grep "^$1=" "$SECRETS_FILE" 2>/dev/null | tail -n1 | cut -d= -f2-
+}
+
+# Carga perezosa (una sola vez por proceso) del entorno sintético de
+# dry-run — reutiliza scripts/checkpoint-validation/generate-synthetic-env.sh
+# (ya auditado y con su propio guard-test: nunca abre .env real, solo
+# .env.example) en vez de duplicar esa lógica aquí. El fichero resultante
+# vive en un directorio desechable FUERA de $SECRETS_DIR (nunca crea
+# ~/.gapssa-secrets), se carga en variables de proceso indirectas (Bash
+# 3.2 — nunca un array asociativo, sintaxis de Bash 4+ prohibida por
+# tests/static_bash32_compat_guard.sh) y se tritura + borra de inmediato,
+# nunca queda en disco más que el instante de esta carga.
+GAPSSA_DRY_SYNTH_LOADED=false
+_gapssa_dry_load_synthetic_env() {
+  [ "$GAPSSA_DRY_SYNTH_LOADED" = true ] && return 0
+  local synth_dir
+  synth_dir="$(mktemp -d "${TMPDIR:-/tmp}/gapssa-dryrun-synth.XXXXXX")"
+  chmod 700 "$synth_dir"
+  if ! bash "$REPO_ROOT/scripts/checkpoint-validation/generate-synthetic-env.sh" "$synth_dir" >/dev/null 2>&1; then
+    rm -rf "$synth_dir"
+    say "ERROR: [dry-run] no se pudo generar el entorno sintético desde .env.example — abortando (nunca se recurre a .env real como sustituto)."
+    exit 1
+  fi
+  local line k v
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in '' | '#'*) continue ;; esac
+    k="${line%%=*}"
+    case "$k" in *[!A-Za-z0-9_]* | '') continue ;; esac
+    v="${line#*=}"
+    printf -v "GAPSSA_DRY_FIELD_${k}" '%s' "$v"
+  done <"$synth_dir/.env"
+  gapssa_secrets_shred "$synth_dir/.env"
+  rm -rf "$synth_dir"
+  GAPSSA_DRY_SYNTH_LOADED=true
 }
 
 compose_network_name() {
@@ -289,14 +334,40 @@ CURRENT_GATE=""
 # SÍ modificaba el almacén externo (bug real, detectado en revisión).
 # Arreglar aquí, en el único punto por el que pasan todas las
 # transiciones, corrige las 9 puertas de una vez sin tocar cada una.
+# Estado virtual de dry-run (corrección "dry-run fresco S1->S9") — en
+# memoria del proceso ÚNICAMENTE, nunca en disco, Bash 3.2 compatible
+# (variables indirectas, nunca un array asociativo de Bash 4+). Vive y
+# muere con ESTE proceso:
+# para el recorrido continuo S1->S9 (sin --only, el caso que reporta el
+# defecto) todas las puertas corren en el mismo proceso, así que la puerta
+# N ve el estado virtual que dejó la N-1. Con --only, cada invocación es
+# un proceso nuevo sin memoria de las anteriores — igual que ya ocurría
+# con el estado REAL en modo no-dry-run antes de esta corrección (una
+# puerta aislada siempre exige que la anterior haya dejado evidencia
+# recuperable), así que el comportamiento es consistente, nunca peor.
+_gapssa_dry_vstate_set() {
+  printf -v "GAPSSA_DRY_VSTATE_$1" '%s' "$2"
+}
+_gapssa_dry_vstate_get() {
+  local varname="GAPSSA_DRY_VSTATE_$1"
+  printf '%s' "${!varname:-pending}"
+}
+
 state_set() {
   if [ "$DRY_RUN" = true ]; then
     say "[dry-run] estado quedaría: $1=$2 (no se escribe nada real)"
+    _gapssa_dry_vstate_set "$1" "$2"
     return 0
   fi
   gapssa_secrets_state_set "$STATUS_FILE" "$1" "$2"
 }
-state_get() { gapssa_secrets_state_get "$STATUS_FILE" "$1"; }
+state_get() {
+  if [ "$DRY_RUN" = true ]; then
+    _gapssa_dry_vstate_get "$1"
+    return 0
+  fi
+  gapssa_secrets_state_get "$STATUS_FILE" "$1"
+}
 gate_is_done() { [ "$(state_get "$1")" = "done" ]; }
 
 # Versión de esquema (lib/backupSchema.mjs) que describe la forma REAL
@@ -314,6 +385,15 @@ gate_is_done() { [ "$(state_get "$1")" = "done" ]; }
 # de ESTA función en el momento exacto de crearlo, nunca con un valor
 # fijo ni cacheado.
 current_secrets_schema_version() {
+  if [ "$DRY_RUN" = true ]; then
+    # Nunca se abre $SECRETS_FILE real (aunque exista físicamente en esta
+    # máquina) para detectar su esquema durante dry-run — un S1 fresco
+    # (el único que --dry-run simula) siempre produce esquema "active"
+    # (.env.example ya nace en forma plural/versionada), así que ese es
+    # el único valor consistente con el resto del estado virtual.
+    printf 'active'
+    return 0
+  fi
   [ -f "$SECRETS_FILE" ] || return 0
   node "$SCRIPT_DIR/lib/detectSecretsSchemaVersion.mjs" "$SECRETS_FILE"
 }
@@ -422,14 +502,20 @@ _backup_dir_has_enough_free_space() {
 # etiqueta.
 backup_secrets_file() {
   local gate="$1" schema_version="$2"
+  if [ "$DRY_RUN" = true ]; then
+    # Precondición VIRTUAL (¿ya hay un S1 simulado del que "habría" algo
+    # que respaldar?), nunca `-f "$SECRETS_FILE"` real — un almacén
+    # externo real preexistente en esta máquina nunca decide qué imprime
+    # una sesión de dry-run.
+    if [ "$(state_get S1)" = done ]; then
+      say "[dry-run] se crearía un backup cifrado (esquema '${schema_version:-active}') de $SECRETS_FILE antes de la puerta $gate"
+    fi
+    return 0
+  fi
   [ -f "$SECRETS_FILE" ] || return 0
   if [ -z "$schema_version" ]; then
     say "ERROR: backup_secrets_file requiere una versión de esquema explícita (uso interno incorrecto) — puerta $gate ABORTADA."
     return 1
-  fi
-  if [ "$DRY_RUN" = true ]; then
-    say "[dry-run] se crearía un backup cifrado (esquema '$schema_version') de $SECRETS_FILE antes de la puerta $gate"
-    return 0
   fi
 
   # Validar el contenido REAL de $SECRETS_FILE contra la versión de
@@ -1287,6 +1373,18 @@ confirm_gate() {
 }
 
 require_secrets_file() {
+  if [ "$DRY_RUN" = true ]; then
+    # Precondición VIRTUAL, nunca física — comprobar `-f "$SECRETS_FILE"`
+    # aquí adoptaría en silencio un almacén externo real preexistente en
+    # esta máquina como si esta sesión de dry-run lo hubiera producido
+    # (causa exacta del defecto original: S2 exigía el artefacto físico
+    # de S1 incluso en --dry-run, y S1 en --dry-run nunca lo crea).
+    if [ "$(state_get S1)" != done ]; then
+      say "ERROR: [dry-run] $SECRETS_FILE no existe (ni siquiera de forma simulada) todavía. Ejecuta primero la puerta S1."
+      return 1
+    fi
+    return 0
+  fi
   if [ ! -f "$SECRETS_FILE" ]; then
     say "ERROR: no existe $SECRETS_FILE todavía. Ejecuta primero la puerta S1."
     return 1
@@ -1391,7 +1489,14 @@ gate_s1() {
   fi
 
   if [ "$DRY_RUN" = true ]; then
-    say "[dry-run] no se copia .env todavía."
+    # Solo EXISTENCIA (nunca contenido) de $ENV_REPO -- una comprobación
+    # `-f` no abre ni lee el archivo, así que informar de esto no viola
+    # "nunca leer .env real".
+    if [ -f "$ENV_REPO" ]; then
+      say "[dry-run] would_copy_env=true (existe $ENV_REPO — no se abre, no se copia, no se lee su contenido)"
+    else
+      say "[dry-run] would_copy_env=false (no existe $ENV_REPO todavía — sin esta comprobación es solo informativa, S1 real fallaría aquí)"
+    fi
     leave_gate_done "S1"
     return 0
   fi
@@ -1552,6 +1657,20 @@ gate_s3() {
     return 1
   fi
 
+  # Corrección "dry-run fresco S1->S9": el healthcheck real
+  # (`_gapssa_wait_healthy`, vía `docker compose ps`/`docker inspect`
+  # reales) y el prompt de la contraseña ROOT actual vivían ANTES de esta
+  # comprobación — en dry-run, `docker compose up -d` de arriba nunca
+  # arrancó nada real (ver `run_cmd`), así que el healthcheck fallaba de
+  # verdad contra un contenedor inexistente y bloqueaba la puerta, y el
+  # prompt pedía una credencial real sin necesidad. Ambos deben quedar
+  # DESPUÉS del corte de dry-run, nunca antes.
+  if [ "$DRY_RUN" = true ]; then
+    say "[dry-run] no se comprueba salud real de espocrm-db, no se pide la contraseña ROOT actual, no se enumeran cuentas ni se aplica/verifica nada real."
+    leave_gate_done "S3"
+    return 0
+  fi
+
   say "Esperando a que espocrm-db confirme salud (healthcheck de compose.yml)..."
   if ! _gapssa_wait_healthy espocrm-db; then
     leave_gate_failed "S3" "espocrm-db no confirmó salud (healthcheck) tras arrancar — revisa 'docker compose logs espocrm-db'."
@@ -1565,13 +1684,6 @@ gate_s3() {
   local old_root_pw
   read -r -s -p "Contraseña ROOT actual de MariaDB: " old_root_pw
   echo
-
-  if [ "$DRY_RUN" = true ]; then
-    say "[dry-run] no se enumeran cuentas ni se aplica/verifica nada real."
-    leave_gate_done "S3"
-    unset old_root_pw
-    return 0
-  fi
 
   say "Enumerando cuentas/hosts reales de 'root' y 'espocrm' (nunca asumidos)..."
   local accounts
@@ -3106,6 +3218,43 @@ PYEOF
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
+# Resumen saneado de cierre de dry-run — nunca puede confundirse con un
+# informe de rotación real: cada línea lleva su propio calificador
+# ("simulated_*") y los contadores de actividad real son literales fijos
+# (0/false), nunca derivados de nada que este proceso haya tocado, porque
+# por diseño no ha tocado nada real. Recorre el estado VIRTUAL (nunca
+# $STATUS_FILE real) vía state_get, que en --dry-run ya sirve
+# exclusivamente ese estado virtual.
+gapssa_dry_print_summary() {
+  local gate st all_done=true pending_list=""
+  divider
+  say "RESUMEN DRY-RUN (saneado — ninguna línea de aquí abajo describe una ejecución real)"
+  say "dry_run=true"
+  for gate in S1 S2 S3 S4 S5 S6 S7 S8 S9; do
+    st="$(state_get "$gate")"
+    if [ "$st" = done ]; then
+      say "${gate}=simulated_ok"
+    else
+      say "${gate}=simulated_${st}"
+      all_done=false
+      pending_list="${pending_list}${pending_list:+, }${gate} (estado simulado: ${st})"
+    fi
+  done
+  say "real_writes=0"
+  say "real_services_touched=0"
+  say "real_secrets_generated=0"
+  say "real_secrets_read=0"
+  say "external_store_created=false"
+  if [ "$all_done" = true ]; then
+    say "ready_for_real_run=true"
+    say "precondiciones_reales_pendientes=ninguna detectada por este dry-run (repítelo sin --dry-run para verificar credenciales/servicios reales — este resumen nunca los sustituye)"
+  else
+    say "ready_for_real_run=false"
+    say "precondiciones_reales_pendientes=${pending_list}"
+  fi
+  divider
+}
+
 main() {
   divider
   say "Asistente de rotación global de secretos — GAPSSA (v3)"
@@ -3138,6 +3287,9 @@ main() {
       exit 1
     fi
     "gate_${ONLY_GATE}"
+    if [ "$DRY_RUN" = true ]; then
+      gapssa_dry_print_summary
+    fi
     divider
     say "Fin (puerta única)."
     exit 0
@@ -3153,6 +3305,10 @@ main() {
       fi
     fi
   done
+
+  if [ "$DRY_RUN" = true ]; then
+    gapssa_dry_print_summary
+  fi
 
   divider
   say "Fin del asistente de rotación."
