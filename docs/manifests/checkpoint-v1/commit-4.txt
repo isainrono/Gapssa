@@ -1,0 +1,13 @@
+extensions/espocrm-google-calendar-sync/build.sh
+extensions/espocrm-google-calendar-sync/docs/DECISIONS.md
+extensions/espocrm-google-calendar-sync/files/custom/Espo/Modules/GoogleCalendarSync/Classes/GoogleClientFactory.php
+extensions/espocrm-google-calendar-sync/files/custom/Espo/Modules/GoogleCalendarSync/Classes/SyncService.php
+extensions/espocrm-google-calendar-sync/files/custom/Espo/Modules/GoogleCalendarSync/Hooks/Contact/GcsContactRename.php
+extensions/espocrm-google-calendar-sync/files/custom/Espo/Modules/GoogleCalendarSync/Hooks/Meeting/GcsPush.php
+extensions/espocrm-google-calendar-sync/files/custom/Espo/Modules/GoogleCalendarSync/Resources/i18n/en_US/Meeting.json
+extensions/espocrm-google-calendar-sync/files/custom/Espo/Modules/GoogleCalendarSync/Resources/i18n/es_ES/Meeting.json
+extensions/espocrm-google-calendar-sync/files/custom/Espo/Modules/GoogleCalendarSync/Resources/metadata/entityDefs/Meeting.json
+extensions/espocrm-google-calendar-sync/manifest.json
+extensions/espocrm-google-calendar-sync/tests/contact_hook_test.php
+extensions/espocrm-google-calendar-sync/tests/exclusion_hook_test.php
+extensions/espocrm-google-calendar-sync/tests/exclusion_sync_service_test.php

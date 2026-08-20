@@ -2,7 +2,7 @@
 
 > Documento maestro de contexto funcional, operativo y técnico.
 >
-> Última actualización: 3 de agosto de 2026.
+> Última actualización: 6 de agosto de 2026 (revisión 2 de Fase 2: corrige el conteo del catálogo — §4 — y aclara el alcance de atención a domicilio/videollamada en la V1 del portal — §3.3 —, ambos ya vigentes en `PLAN_DESARROLLO_WEB_PORTAL.md` pero sin reflejar aquí). Redacción original: 3 de agosto de 2026.
 >
 > Este documento recoge las decisiones validadas durante la planificación inicial. Debe consultarse antes de diseñar, implementar o modificar cualquier parte del sistema. Si una decisión cambia, debe actualizarse este archivo y conservarse la trazabilidad del cambio en Git.
 
@@ -59,9 +59,11 @@ Google Calendar funcionará como agenda complementaria. **n8n Community Edition*
 - Se aplicará un suplemento de desplazamiento según la zona.
 - Las valoraciones podrán ser presenciales o por videollamada, según acuerdo entre profesional y cliente.
 
+> **Alcance de la V1 del portal web (revisión 2 de Fase 2):** la atención a domicilio o en ubicaciones externas y las valoraciones por videollamada son decisiones de negocio válidas a medio plazo, pero quedan **desactivadas en la V1** del portal (`PLAN_DESARROLLO_WEB_PORTAL.md` §3.2 y §7.2 — "Solo atención presencial en el centro en la V1"). No deben aparecer como secciones vacías ni como opciones seleccionables en la V1; se preparan arquitectónicamente y se activan después, cuando se configuren las zonas de cobertura y suplementos correspondientes (ver §19, "Zonas de cobertura a domicilio y suplementos", que sigue pendiente).
+
 ## 4. Catálogo inicial de servicios
 
-El catálogo de apertura contiene **55 conceptos**, antes de desglosar variantes de duración, método, zona, sesiones o complementos.
+El catálogo de apertura contiene **57 conceptos** (la enumeración completa de §4.1 a §4.6 suma 57; una redacción anterior de este documento decía "55 conceptos" de forma aproximada), antes de desglosar variantes de duración, método, zona, sesiones o complementos.
 
 ### 4.1 Masajes
 

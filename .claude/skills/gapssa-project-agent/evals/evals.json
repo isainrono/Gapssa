@@ -1,0 +1,125 @@
+{
+  "skill_name": "gapssa-project-agent",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Una empleada borró por error un evento directamente en el calendario Business de Google. ¿Se cancela la cita en EspoCRM? Y si no quiero que esto vuelva a pasar, ¿puedo hacer que los cambios en Google se reflejen en EspoCRM?",
+      "expected_output": "Explica que la extensión GCS está en fase 1 (solo salida, EspoCRM → Google): borrar el evento en Google no borra ni cancela la cita en EspoCRM, y ese evento se recreará en el próximo push de esa cita (barrido cada 5 min o siguiente modificación). Aclara que la sincronización Google → EspoCRM (pull bidireccional) es la fase 2, no construida/pendiente de aprobación, y que además, según PROJECT_CONTEXT.md, eliminar un evento en Google Calendar genera una cancelación pendiente de revisión, nunca un borrado silencioso, y una cita completada nunca puede cancelarse eliminando el evento.",
+      "files": [],
+      "assertions": [
+        "Identifica que la extensión GoogleCalendarSync está en fase 1: solo salida (EspoCRM -> Google)",
+        "Afirma que borrar el evento en Google Calendar NO cancela ni borra la cita en EspoCRM",
+        "Menciona que el evento se recrea/reexporta en el siguiente push porque EspoCRM tiene la última palabra (last-write-wins, sin If-Match)",
+        "Señala que la sincronizacion Google -> EspoCRM es la fase 2 y no esta implementada todavia",
+        "Cita la regla de negocio de que eliminar un evento en Google genera una cancelacion pendiente de revision, no un borrado directo",
+        "No afirma que hay una entidad 'Cita' separada; usa Meeting o aclara que Meeting se muestra como Cita",
+        "No inventa un mecanismo de pull que no existe en el codigo actual"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Estoy implementando el flujo de reserva como invitado del portal. Si el cliente rellena el formulario pero no hace clic en el enlace de verificación del correo, ¿durante cuánto tiempo queda bloqueado ese horario para otros clientes? ¿Y qué pasa si sí lo verifica pero Gapssa tarda en responder?",
+      "expected_output": "Explica que hay dos retenciones distintas y consecutivas: una retención provisional de 10 minutos mientras se verifica el correo (se libera automáticamente si no se verifica), y tras verificar, un bloqueo formal de hasta 5 horas mientras espera aprobación manual de Gapssa. Si no hay respuesta en esas 5 horas, la solicitud caduca, el horario se libera y se notifica al cliente. Debe dejar claro que esto es un plan (PLAN_DESARROLLO_WEB_PORTAL.md) todavía no implementado, ya que apps/web está vacío.",
+      "files": [],
+      "assertions": [
+        "Distingue la retencion de invitado no verificado (10 minutos) del bloqueo formal tras verificar (hasta 5 horas)",
+        "Indica que la retencion de 10 minutos se libera automaticamente si no se verifica el correo",
+        "Indica que sin respuesta de Gapssa en 5 horas la solicitud caduca y el horario se libera, notificando al cliente",
+        "Menciona el limite de maximo dos solicitudes pendientes simultaneas por cliente o correo",
+        "Aclara que este flujo de reservas es un plan documentado y que apps/web todavia no tiene codigo implementado",
+        "No confunde la ventana de reserva (antelacion minima 2 horas, maxima 60 dias) con los tiempos de bloqueo",
+        "No inventa penalizaciones por no presentarse, ya que esa regla esta explicitamente pendiente de decidir"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Tengo dos síntomas a la vez: las citas nuevas no aparecen en Google Calendar desde ayer, y además `make health` me da un fallo de conexión. ¿Cómo lo diagnostico?",
+      "expected_output": "Debe separar los dos síntomas: primero verificar la salud general de EspoCRM (`make health` / `docker compose ps` / `docker compose logs espocrm espocrm-db`) porque si EspoCRM no está sano nada se sincroniza; luego, una vez EspoCRM esté sano, comprobar específicamente el estado de la extensión con `make gcs-status` (cuenta, scheduled job GcsPushSweep, últimos jobs GcsPush) y los logs del contenedor `espocrm-daemon`, que es el que procesa la cola gcs-push. Debe mencionar la latencia esperable (~1 minuto cola normal, ~5 minutos por el barrido) antes de asumir que algo está roto.",
+      "files": [],
+      "assertions": [
+        "Recomienda diagnosticar primero la salud general de EspoCRM (docker compose ps/logs, make health) antes que la extension especifica",
+        "Menciona make gcs-status como comando para ver cuenta, scheduled job y ultimos jobs de push",
+        "Identifica que espocrm-daemon es el contenedor que procesa la cola gcs-push y hay que revisar sus logs",
+        "Menciona la latencia normal (~1 minuto por cola, hasta ~5 minutos por el barrido de reintentos) antes de calificarlo de fallo",
+        "No mezcla los dos sintomas como si tuvieran necesariamente la misma causa sin verificarlo",
+        "No propone docker compose down --volumes ni ninguna accion destructiva como paso de diagnostico",
+        "Sugiere revisar el campo last_error de gcs_account o el log de la extension si el problema persiste"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Quiero automatizar el envío de un WhatsApp de confirmación cada vez que se aprueba una cita en EspoCRM. ¿Lo programo directamente en EspoCRM con un webhook a la API de WhatsApp, o cómo lo monto?",
+      "expected_output": "Debe indicar que la automatización va vía n8n (orquestador central de integraciones, EspoCRM no debe llamar directamente a servicios externos), y que WhatsApp Business Platform es una fase posterior inmediata todavía no activada/integrada -no confirmar que ya se puede montar hoy-. Debe recordar que n8n es de uso exclusivamente interno de Gapssa (no se expone a clientes ni terceros) y que las automatizaciones deben ser idempotentes y auditables, con reintentos y separación entre mensajes operativos y comerciales/consentimiento expreso para estos últimos.",
+      "files": [],
+      "assertions": [
+        "Identifica a n8n como el orquestador que debe mediar la integracion, no un webhook directo desde EspoCRM al proveedor de WhatsApp",
+        "Señala que WhatsApp Business Platform es fase posterior inmediata y todavia no esta integrada en el proyecto",
+        "Aclara que integrations/n8n esta vacio en el repo actualmente (no hay automatizacion desplegada)",
+        "Menciona que n8n es de uso exclusivamente interno, sin exponer su panel a clientes ni terceros",
+        "Aplica las reglas de integracion: idempotencia, auditoria y reintentos sin duplicar",
+        "Distingue mensajes operativos (confirmacion de cita) de mensajes comerciales, que requieren consentimiento expreso separado",
+        "No inventa un endpoint o SDK concreto de WhatsApp que no este documentado en el proyecto"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Voy a dar de alta el precio de la nueva 'Sesión de Dermapen' en el catálogo. ¿En qué sistema lo guardo, EspoCRM o Payload?",
+      "expected_output": "Ninguno de los dos para el precio en sí: EspoCRM guarda la definición operativa del tratamiento (nombre, familia, duracionMinutos, activo/description como CTratamiento) y Payload guardaría la descripción comercial/SEO de la ficha pública; pero el precio, impuestos y dimensión económica pertenecen a FacturaScripts, que todavía no está integrado en el proyecto. Debe señalar que el precio concreto es además una decisión de negocio explícitamente pendiente (no debe inventarse un valor).",
+      "files": [],
+      "assertions": [
+        "Identifica que EspoCRM guarda la definicion operativa del tratamiento (CTratamiento: name, familia, duracionMinutos, activo, description)",
+        "Identifica que Payload guardaria la descripcion comercial/SEO de la ficha publica, no el precio",
+        "Afirma que el precio, impuestos y dimension economica pertenecen a FacturaScripts como fuente de verdad futura",
+        "Señala que FacturaScripts no esta integrado todavia en el repositorio",
+        "Advierte que los precios concretos son una decision de negocio pendiente y no deben inventarse ni fijarse arbitrariamente",
+        "No propone guardar el precio como campo nuevo en CTratamiento de EspoCRM",
+        "Menciona la formula validada precio final = importe base + suplementos - descuentos si aporta contexto"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Para que la profesional pueda llamar rápido al cliente desde el móvil, quiero añadir el teléfono del contacto en el título o la descripción del evento que se manda a Google Calendar. ¿Cómo lo hago en EventMapper?",
+      "expected_output": "Debe advertir que esto contradice una decisión de diseño explícita y validada de la extensión: solo se envía el nombre del cliente a Google, nunca teléfono, correo ni otros identificadores del contacto (decisión 25 de DECISIONS.md), y que EventMapper es puro y ContactNameResolver solo resuelve nombres. Debe señalar el riesgo de privacidad de exponer datos personales adicionales en un calendario compartido y recomendar no implementarlo sin validación explícita del propietario del proyecto, ya que contradice PROJECT_CONTEXT.md/LIMITATIONS.md.",
+      "files": [],
+      "assertions": [
+        "Identifica que la decision de diseño actual es enviar solo el nombre del cliente a Google, nunca telefono ni correo",
+        "Referencia que esto esta documentado como decision validada (DECISIONS.md) y como limitacion deliberada (LIMITATIONS.md)",
+        "Advierte sobre el riesgo de privacidad de exponer datos personales en el calendario Business compartido",
+        "Recomienda no implementar el cambio sin aprobacion/validacion explicita del propietario del proyecto por contradecir una regla documentada",
+        "Menciona correctamente que EventMapper es puro (no consulta el ORM) y que ContactNameResolver es quien resuelve nombres",
+        "No proporciona directamente el codigo para añadir el telefono sin antes plantear la objecion de privacidad",
+        "No confunde esta extension con acceso a Contact.phoneNumber como si fuera trivial y sin consecuencias"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Añadí `guzzlehttp/guzzle` como nueva dependencia en el composer.json de la extensión Google Calendar Sync y ahora `make gcs-deps` me falla con un error de que el lock no coincide. ¿Qué hago?",
+      "expected_output": "Debe explicar que make gcs-deps valida estrictamente que composer.lock coincida con composer.json (composer validate --strict) y aborta si no coincide, por diseño, para nunca instalar algo distinto de lo registrado. Como se cambió una dependencia real (no solo metadatos), la solución es ejecutar `make gcs-lock` (requiere red) para regenerar el lock, y no `make gcs-relock` (que solo sirve para cambios de metadatos como name/description sin mover versiones). Después sí puede ejecutar `make gcs-deps` y seguir con `make gcs-build`.",
+      "files": [],
+      "assertions": [
+        "Explica que make gcs-deps falla a proposito si composer.lock no coincide con composer.json, por diseño",
+        "Distingue correctamente make gcs-lock (para cambios reales de dependencias) de make gcs-relock (solo para metadatos)",
+        "Recomienda make gcs-lock como el comando correcto en este caso porque se añadio una dependencia nueva",
+        "Menciona que make gcs-lock requiere red porque descarga paquetes",
+        "Indica el orden correcto: gcs-lock -> gcs-deps -> gcs-build (o gcs-install que encadena deps+build)",
+        "Menciona que composer.lock se versiona en git pero vendor/ no",
+        "No sugiere editar vendor/ o composer.lock a mano como solucion"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Implementa ya el login con WhatsApp para el portal de clientes en /mi-cuenta, quiero probarlo esta tarde.",
+      "expected_output": "Debe frenar la petición: primero porque WhatsApp Business Platform es una fase posterior inmediata, no parte de los métodos de acceso de la V1 (correo+contraseña, o enlace/código temporal por correo), y segundo porque apps/web está vacío en el repositorio -no hay un portal Next.js sobre el que añadir nada todavía-. Debe señalar que antes de implementar reservas/auth hace falta pasar por la Fase 0 (descubrimiento técnico y contratos) del plan, y sugerir los métodos de acceso realmente definidos para la V1 si el usuario quiere avanzar hoy.",
+      "files": [],
+      "assertions": [
+        "Señala que login con WhatsApp no es un metodo de acceso contemplado para la V1 (los metodos son correo+contraseña y enlace/codigo por correo)",
+        "Identifica que WhatsApp Business Platform es fase posterior inmediata, no V1",
+        "Verifica y menciona que apps/web esta vacio (solo .gitkeep), por lo que no existe todavia un portal Next.js sobre el que implementar esto",
+        "Menciona la Fase 0 (descubrimiento tecnico y contratos) como paso previo obligatorio antes de construir flujos de autenticacion",
+        "No empieza a generar codigo de un backend de autenticacion por WhatsApp inexistente en el plan",
+        "Ofrece alternativa realista: implementar o planificar los metodos de acceso si realmente definidos para la V1",
+        "Transmite que no se debe prometer una demo funcional 'esta tarde' dado el estado real del repositorio"
+      ]
+    }
+  ]
+}

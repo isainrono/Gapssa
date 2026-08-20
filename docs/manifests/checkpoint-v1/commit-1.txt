@@ -1,0 +1,14 @@
+.env.example
+.gitignore
+compose.yml
+infra/facturascripts/.env.example
+infra/facturascripts/README.md
+infra/facturascripts/compose.yml
+infra/postgres/README.md
+infra/postgres/init/001-create-databases.sh
+integrations/n8n/.env.example
+integrations/n8n/.gitkeep
+integrations/n8n/README.md
+integrations/n8n/compose.yml
+package-lock.json
+package.json
