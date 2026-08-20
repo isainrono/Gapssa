@@ -443,7 +443,7 @@ Pendientes, no resueltas por mi cuenta:
 - **`apps/web/src/server/booking/guestFlow.ts`**,
   **`authenticatedFlow.ts`**: propagan el nuevo outcome
   `contact_review_pending`.
-- **`apps/web/src/app/api/booking/v1/**/route.ts`** (7 ficheros: 
+- **`apps/web/src/app/api/booking/v1/**/route.ts`** (7 ficheros:
   `availability`, `treatments`, `requests`, `requests/[id]/verify`,
   `requests/authenticated`, `internal/decisions`, `internal/sweep`): usan
   `getEspoBookingAdapter()` en vez de instanciar

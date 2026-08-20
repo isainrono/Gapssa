@@ -42,7 +42,7 @@ async function main(): Promise<void> {
     )
   }
   await runAuthMigrations(connectionString)
-   
+
   console.log('gapssa_auth: migraciones aplicadas.')
 }
 

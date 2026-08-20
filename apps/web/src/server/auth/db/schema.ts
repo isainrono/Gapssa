@@ -386,4 +386,3 @@ export const outboxJobs = pgTable(
       .where(sql`${table.status} in ('pending', 'failed_retryable')`),
   ],
 )
-

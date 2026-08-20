@@ -2,13 +2,15 @@
 
 ## Propósito
 
-Estos seis ficheros (`commit-1.txt` … `commit-6.txt`) son la lista exacta,
-revisable y versionable de qué ruta va en cada uno de los seis commits
-acordados para cerrar el trabajo pendiente en el árbol de trabajo a fecha
-de este checkpoint. Sustituyen a cualquier plan de commits que solo
-existiera en el contexto de una conversación anterior — la clasificación
-vive en disco, se puede auditar con herramientas de línea de comandos y
-no depende de la memoria de ninguna sesión.
+Estos siete ficheros (`commit-1.txt` … `commit-7.txt`) son la lista
+exacta, revisable y versionable de qué ruta va en cada uno de los siete
+commits del checkpoint: los seis commits funcionales acordados
+(`commit-1.txt` … `commit-6.txt`) más un séptimo commit exclusivamente
+correctivo (`commit-7.txt`, ver "Commit 7 — correctivo" más abajo).
+Sustituyen a cualquier plan de commits que solo existiera en el contexto
+de una conversación anterior — la clasificación vive en disco, se puede
+auditar con herramientas de línea de comandos y no depende de la memoria
+de ninguna sesión.
 
 Cada `.txt` contiene una ruta relativa a la raíz del repositorio por
 línea, ordenada alfabéticamente, sin patrones glob ni comodines — cada
@@ -17,15 +19,24 @@ línea es una ruta de fichero exacta (o, en el caso de
 intencional: el fichero ya no existe en el árbol de trabajo porque su
 directorio pasó a tener contenido real).
 
-**Revisión 2026-08-20**: reclasificación completa a petición explícita
-del propietario del proyecto — la primera versión de este checkpoint
-metía 29 documentos de `docs/` dentro de Commit 2 y dejaba Commit 6 con
-solo 15 rutas. La separación quedó corregida (ver tabla más abajo) y se
-añadieron tres piezas nuevas de tooling (generador de entorno sintético,
-comprobador de longitud de socket, runner Node oficial de Commit 5) tras
-un incidente de lectura indebida de `.env` real durante la validación
-aislada anterior — ver
+**Revisión 2026-08-20 (reclasificación)**: reclasificación completa a
+petición explícita del propietario del proyecto — la primera versión de
+este checkpoint metía 29 documentos de `docs/` dentro de Commit 2 y
+dejaba Commit 6 con solo 15 rutas. La separación quedó corregida (ver
+tabla más abajo) y se añadieron tres piezas nuevas de tooling (generador
+de entorno sintético, comprobador de longitud de socket, runner Node
+oficial de Commit 5) tras un incidente de lectura indebida de `.env`
+real durante la validación aislada anterior — ver
 `docs/incidente-lectura-env-validacion-manifiestos-2026-08-19.md`.
+
+**Revisión 2026-08-20 (Commit 7 — correctivo)**: tras crear los seis
+commits funcionales sobre el HEAD `6bd2111`, una revisión de
+`git diff 6bd2111..HEAD --check` confirmó 5 incidencias reales de
+espacio en blanco (el informe de entrega inicial dijo erróneamente "4",
+aunque ya las había listado las 5) — ver "Commit 7 — correctivo" más
+abajo. `commit-7.txt` documenta ese séptimo commit, puramente mecánico,
+que no reescribe ni hace `amend` de ninguno de los seis commits
+anteriores.
 
 ## HEAD base
 
@@ -50,13 +61,16 @@ misma sesión de checkpoint).
 | **4 — Google Calendar Sync** | La extensión reutilizable de sincronización de calendario | `extensions/espocrm-google-calendar-sync/**`. Sin `build/` ni ZIP (ignorados por Git, nunca candidatos) |
 | **5 — Asistente seguro de rotación S1–S9** | Herramienta de rotación de secretos, su documentación operativa estricta, y el cierre documental del incidente de esta misma validación | `scripts/secrets-rotation/**` (incluye `run-node-tests.sh`, el runner oficial nuevo), `docs/runbook-rotacion-secretos-externa.md`, `docs/plan-rotacion-secretos-gapssa-2026-08-13.md`, `docs/incidente-*-2026-08-13.md` (los 3 incidentes previos), `docs/incidente-lectura-env-validacion-manifiestos-2026-08-19.md` (el nuevo) |
 | **6 — Documentación y tooling del proyecto** | Configuración de asistencia IA, tooling de validación de checkpoints, estos manifiestos, y el resto de `docs/**` | `.claude/**` (excepto lo ignorado), `scripts/checkpoint-validation/**` (generador de entorno sintético, guard, comprobador de socket), `docs/manifests/checkpoint-v1/**`, `README.md` raíz, `PROJECT_CONTEXT.md`, y todo `docs/**` que no esté explícitamente en Commit 5 (incluye `docs/espocrm-modelo-inicial.md`, `docs/contratos-portal-v1.md`, `docs/dependencias-vulnerabilidad-undici.md`, `docs/deuda-imagenes-stock.md`, `docs/deuda-tecnica-orden-tests-integracion.md`, `docs/fase3-*.md`, `docs/fase4a-*.md`, `docs/fase4b-*.md`) |
+| **7 — Correctivo (formato)** | Nada semántico. Únicamente los 5 ficheros con incidencias de espacio en blanco detectadas por `git diff 6bd2111..HEAD --check` tras crear los commits 1–6, más la actualización de estos manifiestos para documentarlo | `apps/web/src/lib/auth/redirectSafety.ts`, `apps/web/src/server/auth/db/migrate.ts`, `apps/web/src/server/auth/db/schema.ts`, `docs/fase4b-integracion-http.md`, `scripts/secrets-rotation/tests/probes_real_execution.sh`, `docs/manifests/checkpoint-v1/README.md`, `docs/manifests/checkpoint-v1/commit-7.txt` |
 
-Verificado programáticamente: las 578 rutas candidatas (todo lo
-modificado/eliminado respecto a HEAD, más todo lo nuevo no ignorado) se
-reparten en exactamente un commit cada una — 0 sin clasificar, 0
-duplicadas entre ficheros.
+Verificado programáticamente: las 578 rutas candidatas de los commits
+1–6 (todo lo modificado/eliminado respecto a HEAD, más todo lo nuevo no
+ignorado, en el momento de crear esos seis commits) se reparten en
+exactamente un commit cada una — 0 sin clasificar, 0 duplicadas entre
+ficheros. Commit 7 se generó en una pasada posterior, exclusivamente
+para las 5 rutas con incidencias de formato más los propios manifiestos.
 
-### Conteo por commit (revisión 2026-08-20)
+### Conteo por commit
 
 | Commit | Rutas |
 |---|---|
@@ -66,7 +80,8 @@ duplicadas entre ficheros.
 | 4 — Google Calendar Sync | 13 |
 | 5 — Asistente rotación S1–S9 | 81 |
 | 6 — Documentación y tooling | 50 |
-| **Total** | **578** |
+| 7 — Correctivo (formato) | 7 |
+| **Total** | **585** |
 
 ## Archivos ignorados
 
@@ -75,7 +90,7 @@ construcción de la lista ya parte de `git ls-files --others
 --exclude-standard`, que respeta el `.gitignore` vigente (incluida la
 corrección de este checkpoint para `apps/web/src/seed/data/` y la
 exclusión exacta de `apps/web/public/images/equipo/diana.jpg`).
-Comprobado explícitamente que ninguna línea de los seis `.txt` coincide
+Comprobado explícitamente que ninguna línea de los siete `.txt` coincide
 con: `.env`, `.claude/settings.local.json`, `.claude/scheduled_tasks.lock`,
 `backups/`, `node_modules/`, `.next/`, `coverage/`, `test-results/`,
 `*.zip`, `__pycache__/`, `*.pyc`, `gapssa1/`, `apps/web/media/`
@@ -85,7 +100,7 @@ con: `.env`, `.claude/settings.local.json`, `.claude/scheduled_tasks.lock`,
 ## Secretos
 
 Estos manifiestos son listas de **rutas**, nunca de contenido. Ninguno de
-los seis `.txt` ni este `README.md` contiene valores de variables de
+los siete `.txt` ni este `README.md` contiene valores de variables de
 entorno, claves, contraseñas ni tokens. El `.env` real del repositorio no
 se lee ni se modifica para generar ni validar este checkpoint — la
 validación aislada usa exclusivamente
@@ -139,6 +154,43 @@ fuera del alcance de este checkpoint.
 - **Commit 1 y 6**: validación de existencia/eliminación intencional y
   ausencia de solapamientos, sin ejecución de build (son configuración,
   infraestructura declarativa y documentación, no código de aplicación).
+- **Commit 7**: al ser puramente mecánico (espacio en blanco, sin cambio
+  semántico), no repite seed/build/EspoCRM/GCS — solo typecheck, lint,
+  tests unitarios, `bash -n` sobre el `.sh` tocado, y la suite de
+  integración completa (`test:integration` + `test:rotation-integration`)
+  como cierre final de todo el checkpoint (commits 1–7 juntos).
+
+## Commit 7 — correctivo
+
+**Causa**: `git diff 6bd2111..HEAD --check` tras crear los commits 1–6
+señaló 5 incidencias reales de espacio en blanco/EOF (3 espacios finales
+en una línea en blanco, o una línea en blanco adicional al final de
+fichero) en código y documentación ya existentes, no introducidos por
+este checkpoint pero nunca antes commiteados:
+
+- `apps/web/src/lib/auth/redirectSafety.ts:27`
+- `apps/web/src/server/auth/db/migrate.ts:45`
+- `apps/web/src/server/auth/db/schema.ts:389`
+- `docs/fase4b-integracion-http.md:446`
+- `scripts/secrets-rotation/tests/probes_real_execution.sh:268`
+
+**Ninguna modificación semántica**: cada cambio es mecánico — se retiran
+espacios finales o una línea en blanco sobrante al final de fichero,
+nunca se toca lógica, texto ni comportamiento. Verificado con
+`git diff` fichero a fichero (solo líneas `-`/`+` de espacio en blanco)
+antes de confirmar el commit.
+
+**No es un `amend`**: es un commit nuevo, séptimo, sobre los seis
+commits funcionales ya creados — ninguno de esos seis se reescribe,
+se rebasea ni se fuerza.
+
+**Suite de integración final**: a diferencia de los commits 1–6 (donde
+cada uno se validó en aislamiento con su propio manifiesto), Commit 7 se
+cierra con la suite de integración normal completa
+(`npm run test:integration -w @gapssa/web`) y `test:rotation-integration`
+ejecutadas sobre el HEAD final (commits 1–7 aplicados), como cierre
+integral de todo el checkpoint — ver resultados en el informe de entrega
+de esa sesión.
 
 ## Orden de aplicación
 
@@ -147,9 +199,11 @@ fuera del alcance de este checkpoint.
 3. Commit 3 — Integración EspoCRM GAPSSA.
 4. Commit 4 — Google Calendar Sync.
 5. Commit 5 — Asistente seguro de rotación S1–S9.
-6. Commit 6 — Documentación y tooling del proyecto (incluye estos
-   manifiestos, que por tanto solo pueden aplicarse al final, una vez
-   existen).
+6. Commit 6 — Documentación y tooling del proyecto (incluye los
+   manifiestos originales `commit-1.txt`…`commit-6.txt`).
+7. Commit 7 — Correctivo de formato (incluye `commit-7.txt` y la
+   actualización de este mismo `README.md`, que por tanto solo puede
+   aplicarse al final, una vez existen).
 
 ## Alcance
 

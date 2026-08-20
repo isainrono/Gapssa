@@ -24,7 +24,6 @@ export function sanitizeRedirectTarget(candidate: string | null | undefined, fal
     return fallback
   }
 
-   
   if (/[\x00-\x1f]/.test(candidate)) {
     return fallback
   }

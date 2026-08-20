@@ -265,4 +265,3 @@ if [ -z "$orphans" ]; then
 else
   fail "aparecieron artefactos en apps/web: $orphans"
 fi
-

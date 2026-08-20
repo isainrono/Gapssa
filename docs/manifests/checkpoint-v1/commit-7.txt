@@ -1,0 +1,7 @@
+apps/web/src/lib/auth/redirectSafety.ts
+apps/web/src/server/auth/db/migrate.ts
+apps/web/src/server/auth/db/schema.ts
+docs/fase4b-integracion-http.md
+docs/manifests/checkpoint-v1/README.md
+docs/manifests/checkpoint-v1/commit-7.txt
+scripts/secrets-rotation/tests/probes_real_execution.sh
