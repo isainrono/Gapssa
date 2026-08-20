@@ -34,16 +34,30 @@ function nextBusinessDayAt10Utc(n: number): string {
   return date.toISOString()
 }
 
-// Franja horaria EXCLUSIVA de este archivo para uno de los tests de este
-// fichero — todo `treatment-masaje-relajante-60`/`professional-owner`/
-// `zone-cabina-1` a las 10:00 UTC ya está repartido, sin ningún hueco de
+// Franja horaria compartida por varios ficheros de la suite para el mismo
+// trío `treatment-masaje-relajante-60`/`professional-owner`/
+// `zone-cabina-1` — a las 10:00 UTC ya está repartido, sin ningún hueco de
 // día hábil libre por debajo del horizonte máximo
 // (`MAX_LEAD_TIME_DAYS = 60`, packages/contracts/src/booking.ts) entre
-// TODOS los ficheros que comparten ese trío (offsets 1-51 todos ya en
-// uso). 11:00 UTC no se usa en ningún fichero de la suite (verificado por
-// grep) — evita la colisión sin tocar ningún offset ajeno.
-function nextBusinessDayAt11Utc(n: number): string {
-  const date = new Date()
+// TODOS los ficheros que comparten ese trío (offsets 1-50 en uso a las
+// 10:00 en este fichero y en booking.{approvalSweep,authenticatedFlow,
+// concurrency,otpOutbox,auditAtomicity,guestFlow,outboxLease,
+// decisionRecovery}.int.test.ts — offset 51 NO se reutiliza: contando
+// "día hábil" como cualquier día salvo domingo (bucle de abajo), 51 días
+// hábiles puede superar los 60 días naturales de `MAX_LEAD_TIME_DAYS`
+// según qué día de la semana caiga "hoy" al ejecutar la suite —
+// `horizon_violation` intermitente, dependiente de la fecha real,
+// corregido moviendo el único test que lo usaba a 11:00 UTC/offset 23).
+// 11:00 UTC es la franja alternativa de este trío, con reservas
+// explícitas por offset — verificado por grep antes de añadir cada una:
+// 20 y 22 en `booking.otpOutbox.int.test.ts`; 21 y 23 en este fichero.
+// offset 23 a las 11:00 queda holgadamente dentro del horizonte de 60
+// días naturales para cualquier día de la semana en que arranque la
+// suite (peor caso probado exhaustivamente para los 7 días de inicio
+// posibles: ver el bloque "nextBusinessDayAt11Utc(23) — prueba pura" al
+// final de este fichero, ≤ 27 días naturales).
+function nextBusinessDayAt11Utc(n: number, from: Date = new Date()): string {
+  const date = new Date(from)
   date.setUTCHours(11, 0, 0, 0)
   let remaining = n
   while (remaining > 0) {
@@ -238,7 +252,13 @@ describe('sweep recovery — an unsafe-to-interpret Meeting state is counted for
 
 describe('sweep recovery — concurrent sweep passes converge on a single coherent resolution', () => {
   it('two concurrent sweep runs over the same expired+already-canceled request never double-resolve or crash', async () => {
-    const { requestId, meetingId } = await createVerifiedAndExpiredBooking(51)
+    // offset 23 a las 11:00 UTC (nextBusinessDayAt11Utc), no 51 a las
+    // 10:00: 51 días *hábiles* podía superar los 60 días naturales de
+    // `MAX_LEAD_TIME_DAYS` según qué día de la semana cayera "hoy",
+    // produciendo un `horizon_violation` intermitente en este test — ver
+    // el comentario de `nextBusinessDayAt11Utc` más arriba. 23 queda
+    // holgadamente dentro del horizonte para cualquier día de inicio.
+    const { requestId, meetingId } = await createVerifiedAndExpiredBooking(23, nextBusinessDayAt11Utc)
     await decideSimEspoMeetingForTesting(meetingId, 'Canceled', 'system:approval-sweep', 'ApprovalExpired')
 
     const [first, second] = await Promise.all([runSweep(), runSweep()])
@@ -247,4 +267,51 @@ describe('sweep recovery — concurrent sweep passes converge on a single cohere
     const record = await findBookingRequestRow(requestId)
     expect(record).toMatchObject({ status: 'resolved', resolution: 'approval_expired' })
   })
+})
+
+describe('nextBusinessDayAt11Utc(23) — prueba pura', () => {
+  // Prueba puramente matemática del helper de arriba, sin Postgres/red ni
+  // `inject()` — vive en este fichero (no en `src/`, que es lo único que
+  // recoge `vitest.config.ts` para la suite unitaria) porque solo prueba
+  // una función local de este archivo, nunca código de producción.
+  //
+  // Recorre los 7 posibles días de la semana en que podría arrancar la
+  // suite (domingo..sábado) usando fechas ancla FIJAS, nunca `Date.now()`
+  // — 2000-01-02 fue domingo, así que `Date.UTC(2000, 0, 2 + i)` para
+  // i=0..6 cubre domingo..sábado exactamente una vez cada uno, sin
+  // depender de qué día sea "hoy" de verdad al ejecutar la prueba.
+  const MAX_LEAD_TIME_DAYS = 60 // packages/contracts/src/booking.ts — no importado a propósito, para que esta prueba no dependa de producción.
+  const WEEKDAY_LABELS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
+
+  for (let i = 0; i < 7; i++) {
+    const from = new Date(Date.UTC(2000, 0, 2 + i))
+    const label = WEEKDAY_LABELS[from.getUTCDay()]
+
+    it(`arrancando en ${label} (${from.toISOString().slice(0, 10)}): resultado no dominical, 11:00 UTC exactas, dentro del horizonte de ${MAX_LEAD_TIME_DAYS} días`, () => {
+      const resultIso = nextBusinessDayAt11Utc(23, from)
+      const result = new Date(resultIso)
+
+      // Nunca domingo.
+      expect(result.getUTCDay()).not.toBe(0)
+
+      // Conserva exactamente las 11:00:00.000 UTC.
+      expect(result.getUTCHours()).toBe(11)
+      expect(result.getUTCMinutes()).toBe(0)
+      expect(result.getUTCSeconds()).toBe(0)
+      expect(result.getUTCMilliseconds()).toBe(0)
+
+      // Dentro del horizonte máximo, con margen — nunca calculado contra
+      // el reloj real: `from` es la fecha ancla fija de este caso, no
+      // `new Date()`.
+      const calendarDaysAhead = Math.round((result.getTime() - from.getTime()) / (24 * 60 * 60 * 1000))
+      expect(calendarDaysAhead).toBeGreaterThan(0)
+      expect(calendarDaysAhead).toBeLessThanOrEqual(MAX_LEAD_TIME_DAYS)
+      // Cota más ajustada, documentada también en el comentario de
+      // `nextBusinessDayAt11Utc`: 23 días hábiles (saltando solo
+      // domingos) nunca ocupan más de 27 días naturales, sea cual sea el
+      // día de la semana de partida — holgura de 33 días respecto al
+      // horizonte real de 60.
+      expect(calendarDaysAhead).toBeLessThanOrEqual(27)
+    })
+  }
 })

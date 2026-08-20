@@ -2,15 +2,17 @@
 
 ## Propósito
 
-Estos siete ficheros (`commit-1.txt` … `commit-7.txt`) son la lista
-exacta, revisable y versionable de qué ruta va en cada uno de los siete
+Estos ocho ficheros (`commit-1.txt` … `commit-8.txt`) son la lista
+exacta, revisable y versionable de qué ruta va en cada uno de los ocho
 commits del checkpoint: los seis commits funcionales acordados
-(`commit-1.txt` … `commit-6.txt`) más un séptimo commit exclusivamente
-correctivo (`commit-7.txt`, ver "Commit 7 — correctivo" más abajo).
-Sustituyen a cualquier plan de commits que solo existiera en el contexto
-de una conversación anterior — la clasificación vive en disco, se puede
-auditar con herramientas de línea de comandos y no depende de la memoria
-de ninguna sesión.
+(`commit-1.txt` … `commit-6.txt`), un séptimo commit exclusivamente
+correctivo de formato (`commit-7.txt`, ver "Commit 7 — correctivo" más
+abajo) y un octavo commit correctivo de una dependencia temporal
+detectada al validar el séptimo (`commit-8.txt`, ver "Commit 8 —
+correctivo" más abajo). Sustituyen a cualquier plan de commits que solo
+existiera en el contexto de una conversación anterior — la clasificación
+vive en disco, se puede auditar con herramientas de línea de comandos y
+no depende de la memoria de ninguna sesión.
 
 Cada `.txt` contiene una ruta relativa a la raíz del repositorio por
 línea, ordenada alfabéticamente, sin patrones glob ni comodines — cada
@@ -38,6 +40,16 @@ abajo. `commit-7.txt` documenta ese séptimo commit, puramente mecánico,
 que no reescribe ni hace `amend` de ninguno de los seis commits
 anteriores.
 
+**Revisión 2026-08-20 (Commit 8 — correctivo)**: al validar el Commit 7
+con la suite de integración completa, un test de
+`booking.sweepRecovery.int.test.ts` resultó ser sensible a la fecha real
+del sistema (un offset de días *hábiles* fijo podía superar el horizonte
+de reserva de 60 días naturales según qué día de la semana cayera "hoy")
+— ver "Commit 8 — correctivo" más abajo. `commit-8.txt` documenta ese
+octavo commit, limitado al fixture del test y a la prueba matemática que
+demuestra la corrección, sin tocar código de producción ni ningún commit
+anterior.
+
 ## HEAD base
 
 `6bd2111ad72bdff57b3f8b6fc48231bad3b50a58` ("Amplía tratamientos y zonas
@@ -62,13 +74,15 @@ misma sesión de checkpoint).
 | **5 — Asistente seguro de rotación S1–S9** | Herramienta de rotación de secretos, su documentación operativa estricta, y el cierre documental del incidente de esta misma validación | `scripts/secrets-rotation/**` (incluye `run-node-tests.sh`, el runner oficial nuevo), `docs/runbook-rotacion-secretos-externa.md`, `docs/plan-rotacion-secretos-gapssa-2026-08-13.md`, `docs/incidente-*-2026-08-13.md` (los 3 incidentes previos), `docs/incidente-lectura-env-validacion-manifiestos-2026-08-19.md` (el nuevo) |
 | **6 — Documentación y tooling del proyecto** | Configuración de asistencia IA, tooling de validación de checkpoints, estos manifiestos, y el resto de `docs/**` | `.claude/**` (excepto lo ignorado), `scripts/checkpoint-validation/**` (generador de entorno sintético, guard, comprobador de socket), `docs/manifests/checkpoint-v1/**`, `README.md` raíz, `PROJECT_CONTEXT.md`, y todo `docs/**` que no esté explícitamente en Commit 5 (incluye `docs/espocrm-modelo-inicial.md`, `docs/contratos-portal-v1.md`, `docs/dependencias-vulnerabilidad-undici.md`, `docs/deuda-imagenes-stock.md`, `docs/deuda-tecnica-orden-tests-integracion.md`, `docs/fase3-*.md`, `docs/fase4a-*.md`, `docs/fase4b-*.md`) |
 | **7 — Correctivo (formato)** | Nada semántico. Únicamente los 5 ficheros con incidencias de espacio en blanco detectadas por `git diff 6bd2111..HEAD --check` tras crear los commits 1–6, más la actualización de estos manifiestos para documentarlo | `apps/web/src/lib/auth/redirectSafety.ts`, `apps/web/src/server/auth/db/migrate.ts`, `apps/web/src/server/auth/db/schema.ts`, `docs/fase4b-integracion-http.md`, `scripts/secrets-rotation/tests/probes_real_execution.sh`, `docs/manifests/checkpoint-v1/README.md`, `docs/manifests/checkpoint-v1/commit-7.txt` |
+| **8 — Correctivo (fixture temporal)** | Nada de negocio. Un único fixture de test con dependencia temporal (offset relativo al reloj real que podía violar el horizonte de reserva según el día de la semana), más la prueba matemática que lo demuestra y la actualización de estos manifiestos | `apps/web/tests/integration/booking.sweepRecovery.int.test.ts`, `docs/manifests/checkpoint-v1/README.md`, `docs/manifests/checkpoint-v1/commit-8.txt` |
 
 Verificado programáticamente: las 578 rutas candidatas de los commits
 1–6 (todo lo modificado/eliminado respecto a HEAD, más todo lo nuevo no
 ignorado, en el momento de crear esos seis commits) se reparten en
 exactamente un commit cada una — 0 sin clasificar, 0 duplicadas entre
-ficheros. Commit 7 se generó en una pasada posterior, exclusivamente
-para las 5 rutas con incidencias de formato más los propios manifiestos.
+ficheros. Commits 7 y 8 se generaron en pasadas posteriores, cada uno
+exclusivamente para las rutas de su propia corrección más los propios
+manifiestos.
 
 ### Conteo por commit
 
@@ -81,7 +95,8 @@ para las 5 rutas con incidencias de formato más los propios manifiestos.
 | 5 — Asistente rotación S1–S9 | 81 |
 | 6 — Documentación y tooling | 50 |
 | 7 — Correctivo (formato) | 7 |
-| **Total** | **585** |
+| 8 — Correctivo (fixture temporal) | 3 |
+| **Total** | **588** |
 
 ## Archivos ignorados
 
@@ -90,7 +105,7 @@ construcción de la lista ya parte de `git ls-files --others
 --exclude-standard`, que respeta el `.gitignore` vigente (incluida la
 corrección de este checkpoint para `apps/web/src/seed/data/` y la
 exclusión exacta de `apps/web/public/images/equipo/diana.jpg`).
-Comprobado explícitamente que ninguna línea de los siete `.txt` coincide
+Comprobado explícitamente que ninguna línea de los ocho `.txt` coincide
 con: `.env`, `.claude/settings.local.json`, `.claude/scheduled_tasks.lock`,
 `backups/`, `node_modules/`, `.next/`, `coverage/`, `test-results/`,
 `*.zip`, `__pycache__/`, `*.pyc`, `gapssa1/`, `apps/web/media/`
@@ -100,7 +115,7 @@ con: `.env`, `.claude/settings.local.json`, `.claude/scheduled_tasks.lock`,
 ## Secretos
 
 Estos manifiestos son listas de **rutas**, nunca de contenido. Ninguno de
-los siete `.txt` ni este `README.md` contiene valores de variables de
+los ocho `.txt` ni este `README.md` contiene valores de variables de
 entorno, claves, contraseñas ni tokens. El `.env` real del repositorio no
 se lee ni se modifica para generar ni validar este checkpoint — la
 validación aislada usa exclusivamente
@@ -159,6 +174,12 @@ fuera del alcance de este checkpoint.
   tests unitarios, `bash -n` sobre el `.sh` tocado, y la suite de
   integración completa (`test:integration` + `test:rotation-integration`)
   como cierre final de todo el checkpoint (commits 1–7 juntos).
+- **Commit 8**: tampoco toca producción — typecheck, lint, tests
+  unitarios, el fichero de test aislado ejecutado 10 veces, la suite de
+  integración completa ejecutada 3 veces (con `--maxWorkers=1` y con
+  paralelismo por defecto) exigiendo el mismo total en las tres,
+  `test:rotation-integration`, y la prueba matemática pura de los 7 días
+  de inicio posibles.
 
 ## Commit 7 — correctivo
 
@@ -192,6 +213,59 @@ ejecutadas sobre el HEAD final (commits 1–7 aplicados), como cierre
 integral de todo el checkpoint — ver resultados en el informe de entrega
 de esa sesión.
 
+## Commit 8 — correctivo
+
+**Causa (dependencia temporal)**: el test "two concurrent sweep runs
+over the same expired+already-canceled request never double-resolve or
+crash" (`booking.sweepRecovery.int.test.ts`) creaba su reserva con
+`createVerifiedAndExpiredBooking(51)` — 51 días *hábiles* después de
+"hoy" (`new Date()` real, contando cualquier día salvo domingo como
+hábil). `MAX_LEAD_TIME_DAYS = 60` (días naturales,
+`packages/contracts/src/booking.ts`) es un valor de negocio fijo, no
+tocado por esta corrección. Según qué día de la semana cayera "hoy" al
+ejecutar la suite, 51 días hábiles podían caer justo por encima o por
+debajo de esos 60 días naturales — el test pasaba la mayoría de los días
+y fallaba de forma intermitente, dependiente de la fecha real del
+sistema, con `400 horizon_violation`. Confirmado en la sesión de este
+checkpoint: 320/321 con la fecha del 2026-08-20.
+
+**Corrección**: se sustituye el offset por
+`createVerifiedAndExpiredBooking(23, nextBusinessDayAt11Utc)` —
+verificado por búsqueda antes de aplicarlo que ningún otro fichero de la
+suite de integración usa el offset 23 a las 11:00 UTC con el mismo trío
+`treatment-masaje-relajante-60`/`professional-owner`/`zone-cabina-1`
+(20 y 22 están reservados en `booking.otpOutbox.int.test.ts`; 21 en este
+mismo fichero). 23 días hábiles caben, en el peor caso posible para
+cualquier día de arranque de la semana, en 27 días naturales — 33 días
+de margen respecto al horizonte de 60, demostrado exhaustivamente por
+una prueba pura nueva que recorre los 7 días de inicio posibles sin
+depender del reloj real (`describe('nextBusinessDayAt11Utc(23) — prueba
+pura', …)`, mismo fichero).
+
+**Ausencia de cambios de negocio**: `MAX_LEAD_TIME_DAYS`, el código de
+producción (`src/server/booking/**`), la lógica del barrido
+(`reconciliation.ts::sweepExpiredApprovals`), las aserciones del test, y
+el treatment/professional/zone del fixture quedan exactamente iguales.
+El único cambio es el offset/franja horaria de un fixture de test y los
+comentarios que documentan las franjas reservadas — nunca se reutiliza
+ni se toca ningún otro offset que ya pasaba.
+
+**Resultados finales**: `test:integration` — **338/338** (no 321/321;
+la cifra "321" citada en el informe de la sesión anterior corresponde al
+recuento antes de añadir la prueba matemática de 7 casos de este mismo
+commit — 321 + 7 = 328, y el recuento real observado tras la corrección
+es 338; la suite entera se reejecutó 3 veces con resultado idéntico,
+incluida una pasada con `--maxWorkers=1` y dos con paralelismo por
+defecto, así que el número es estable y reproducible aunque no coincida
+con la cifra citada anteriormente — diferencia no atribuible a este
+fixture, que por sí solo aporta exactamente los 7 casos nuevos previstos
+más el que ya existía). `test:rotation-integration` — **55/55**, sin
+cambios.
+
+**No es un `amend`**: es un commit nuevo, octavo, posterior al
+checkpoint — ninguno de los siete commits anteriores se reescribe, se
+rebasea ni se fuerza.
+
 ## Orden de aplicación
 
 1. Commit 1 — Higiene, workspace e infraestructura base.
@@ -201,8 +275,9 @@ de esa sesión.
 5. Commit 5 — Asistente seguro de rotación S1–S9.
 6. Commit 6 — Documentación y tooling del proyecto (incluye los
    manifiestos originales `commit-1.txt`…`commit-6.txt`).
-7. Commit 7 — Correctivo de formato (incluye `commit-7.txt` y la
-   actualización de este mismo `README.md`, que por tanto solo puede
+7. Commit 7 — Correctivo de formato (incluye `commit-7.txt`).
+8. Commit 8 — Correctivo de fixture temporal (incluye `commit-8.txt` y
+   la actualización de este mismo `README.md`, que por tanto solo puede
    aplicarse al final, una vez existen).
 
 ## Alcance
