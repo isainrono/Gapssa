@@ -673,6 +673,103 @@ fuerte llega a ser necesaria.
 contra el script real, todas con código de salida 0 y sin crear
 `~/.gapssa-secrets`.
 
+## S3A — recuperación de ROOT de MariaDB (subpuerta separada)
+
+Existe para un caso concreto y real (no hipotético — motivado por una
+ejecución real de S3 que falló en su primera autenticación root con
+`ERROR 1045`, antes de generar/aplicar ninguna contraseña nueva): el
+valor de `ESPOCRM_DB_ROOT_PASSWORD` en el almacén externo NO coincide
+con la contraseña EFECTIVA del volumen real de `espocrm-db`.
+
+**Causa raíz** (confirmada leyendo el ENTRYPOINT REAL de la imagen local
+`mariadb:11.4`, nunca inventada): `docker-entrypoint.sh` solo aplica
+`MARIADB_ROOT_PASSWORD` al volumen la PRIMERA vez que arranca contra un
+`$DATADIR` vacío (`DATABASE_ALREADY_EXISTS` se fija únicamente por
+`[ -d "$DATADIR/mysql" ]`). En cualquier arranque posterior contra un
+volumen YA inicializado esa variable se IGNORA por completo — si el
+valor almacenado cambió alguna vez sin que un `ALTER USER` equivalente
+llegara a aplicarse con éxito contra el volumen real (rotación
+interrumpida, restauración de un backup más antiguo, edición manual), el
+volumen y el almacén quedan desincronizados de forma silenciosa, y
+ningún arranque de `docker compose up` lo detecta ni lo corrige. `gate_s3`
+por sí solo NO puede recuperarse de esto: MariaDB nunca ofrece una vía
+administrativa sin contraseña (a diferencia de Postgres — ver
+`lib/dbRecovery.sh`), así que sin NINGUNA credencial que autentique como
+root, ningún `ALTER USER` autenticado es posible.
+
+**Mecanismo de recuperación** (`--only S3A`, nunca parte del recorrido
+normal S1→S9, autorización explícita e independiente de la de S3): usa
+el mecanismo OFICIAL de MariaDB para pérdida de contraseña root
+(`--skip-grant-tables --skip-networking`, KB oficial) contra un
+contenedor DESECHABLE separado que monta el MISMO volumen — nunca el
+contenedor real, nunca reinicializa ni recrea el volumen. Ver
+`lib/dbRootRecovery.sh` para la implementación completa y comentada, y
+`tests/s3a_root_recovery_rehearsal.sh` para el ensayo desechable que la
+valida contra MariaDB 11.4 real (34/34 aserciones, dos ejecuciones
+consecutivas reproducibles, ver "Ensayo de recuperación root de S3A"
+abajo).
+
+Pasos, en orden, cada uno con su propia condición de parada (si
+cualquiera falla, la puerta ABORTA sin continuar al siguiente):
+
+1. Para `espocrm-db` LIMPIAMENTE (`docker compose stop` — nunca
+   kill/rm), confirma la parada real (`State.Running=false`), y
+   comprueba que NINGÚN OTRO contenedor (de cualquier proyecto Compose,
+   no solo el nuestro — Docker no lo impide por defecto) tiene el mismo
+   volumen montado — aborta sin tocar nada si encuentra alguno.
+2. Backup CIFRADO (mismo algoritmo AES-256-CBC+PBKDF2 que los backups del
+   almacén externo) del volumen YA PARADO, en streaming, verificado con
+   DOS comprobaciones independientes: estructural (`tar -tf` tras
+   descifrar) Y de contenido (digest SHA-256 del flujo original,
+   comparado contra el digest del flujo descifrado — necesario porque un
+   tar plano con bytes de CONTENIDO corrompidos supera `tar -tf` sin
+   error alguno; hallazgo real del ensayo desechable). Si cualquiera de
+   las dos falla, la puerta aborta SIN tocar ninguna contraseña.
+3. Arranca un contenedor DESECHABLE (`--network none`, cero variables de
+   entorno de contraseña, cero puertos) con el mismo volumen, en modo
+   `--skip-grant-tables --skip-networking` — solo alcanzable por socket
+   local dentro de ese contenedor.
+4. Enumera TODAS las filas `root@host` reales (solo lectura,
+   `mysql.user`) — nunca asume `root@'%'` como la única.
+5. Aplica la MISMA contraseña nueva a TODAS las filas enumeradas, EN UNA
+   ÚNICA sesión/conexión (`FLUSH PRIVILEGES` una vez, todos los
+   `ALTER USER`, `FLUSH PRIVILEGES` una vez). Esto es obligatorio, no
+   cosmético — hallazgo real del ensayo desechable: bajo
+   `--skip-grant-tables`, cualquier `FLUSH PRIVILEGES` reactiva la
+   comprobación real de autenticación para toda conexión NUEVA a partir
+   de ese momento (documentado como advertencia en el KB oficial de
+   MariaDB) — abrir una conexión nueva por cada fila (y hacer
+   `FLUSH PRIVILEGES` antes/después de cada una, como haría el patrón ya
+   usado por `gate_s3` con credenciales reales) rompe la segunda fila en
+   adelante con `Access denied ... (using password: NO)`, porque el
+   `FLUSH` de la primera fila ya reactivó la autenticación real contra la
+   cuenta que ACABABA de cambiar.
+6. Retira el contenedor desechable (apagado limpio + `docker rm -f`
+   siempre, pase lo que pase).
+7. Arranca `espocrm-db` normal y verifica por TCP REAL (nunca solo por
+   socket) que la contraseña nueva autentica.
+8. Solo ENTONCES actualiza `ESPOCRM_DB_ROOT_PASSWORD` en el almacén
+   externo de forma atómica y MÍNIMA (un único campo, el resto del
+   documento intacto byte a byte) — la ÚLTIMA acción de la puerta, nunca
+   la primera. Si esta escritura falla tras la contraseña YA verificada
+   por TCP, la puerta queda `blocked` (nunca reintenta S3A a ciegas, que
+   volvería a cambiar la contraseña root sin necesidad) con instrucciones
+   explícitas.
+
+**S3 mejorado** (mismo cierre): antes de pedir la contraseña root a mano,
+`gate_s3` ahora prueba PRIMERO, en silencio (nunca la imprime, vía
+fichero de opciones 600 — el mismo mecanismo que ya usa `mariadb_capture`
+para todo lo demás), la contraseña ya almacenada en el archivo externo.
+Solo si esa prueba silenciosa falla se pide la contraseña a mano, con un
+aviso explícito que apunta a S3A si el problema persiste.
+
+**Nunca hace**: crear/borrar cuentas, tocar `ESPOCRM_DB_PASSWORD` (la
+cuenta `espocrm`, que sigue siendo responsabilidad exclusiva de S3),
+tocar ninguna base de datos ni tabla de aplicación, ni reinicializar el
+volumen. S3A recupera EXCLUSIVAMENTE el acceso root — tras completarse,
+sigue haciendo falta volver a lanzar S3 (recorrido completo o
+`--only S3`) para la rotación normal de `espocrm`.
+
 ## Archivos
 
 - `lib.sh` — funciones compartidas: guardas de ruta/harness/permisos,
@@ -725,6 +822,13 @@ contra el script real, todas con código de salida 0 y sin crear
   salto de línea embebido y Unicode. Fichero compartido, única fuente de
   verdad, entre `gate_s2`/`gate_s3` y `tests/s2_s5_recovery_rehearsal.sh`
   (Bloque 5).
+- `lib/dbRootRecovery.sh` — subpuerta S3A: recuperación del acceso ROOT
+  de MariaDB por el mecanismo OFICIAL (`--skip-grant-tables
+  --skip-networking`) contra un contenedor DESECHABLE separado, cuando
+  NINGUNA credencial conocida autentica. Ver la sección "S3A" arriba
+  para el detalle completo (causa raíz real, pasos, hallazgos empíricos).
+  Fichero compartido, única fuente de verdad, entre `gate_s3a` (en
+  `rotate-all-interactive.sh`) y `tests/s3a_root_recovery_rehearsal.sh`.
 - `lib/espoRecovery.sh` — recuperación de EspoCRM (S4): contraseña de
   admin (REVERSIBLE, `bin/command set-password` nunca exige la anterior)
   y API Key (IRREVERSIBLE — nunca se reaplica un valor antiguo, solo
@@ -756,6 +860,10 @@ contra el script real, todas con código de salida 0 y sin crear
   abajo), `s2_s5_recovery_rehearsal.sh` (ensayo desechable y reproducible
   de la recuperación real de S2-S5 — PostgreSQL+MariaDB+Redis+EspoCRM
   reales y desechables, ver "Ensayo de recuperación de S2-S5" abajo),
+  `s3a_root_recovery_rehearsal.sh` (ensayo desechable y reproducible de la
+  subpuerta S3A — MariaDB 11.4 real y desechable, drift real
+  volumen≠almacén reproducido, recuperación oficial, interrupción,
+  backup inválido, reejecución/idempotencia — ver "S3A" arriba),
   `s1_s9_full_rehearsal.py` (ensayo integral S1→S9 completo, camino
   feliz, contra infraestructura real desechable — ver "Bloque 6 — cierre
   integral" arriba), `s9_env_example_failure_rehearsal.py` (mismo

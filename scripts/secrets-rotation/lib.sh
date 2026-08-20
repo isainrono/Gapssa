@@ -981,6 +981,16 @@ _gapssa_cleanup_run_one() {
     # contenedor ya no existe.
     _gapssa_compose exec -T "$a1" rm -f "$a2" >/dev/null 2>&1 || true
     ;;
+  docker_rm_standalone_container)
+    # S3A (lib/dbRootRecovery.sh) — retirada del contenedor DESECHABLE de
+    # recuperación (a1=nombre), creado con `docker run` directo (nunca
+    # `docker compose`, así que NO depende de `_gapssa_compose`). Mejor
+    # esfuerzo: nunca bloquea la salida del proceso ni falla si el
+    # contenedor ya no existe. Ante una interrupción mid-S3A, esta es la
+    # única vía que garantiza que el contenedor con --skip-grant-tables
+    # activo no siga corriendo indefinidamente tras salir del script.
+    docker rm -f "$a1" >/dev/null 2>&1 || true
+    ;;
   *)
     return 1
     ;;

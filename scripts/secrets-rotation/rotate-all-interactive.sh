@@ -110,6 +110,8 @@ source "$SCRIPT_DIR/lib/dbRecovery.sh"
 source "$SCRIPT_DIR/lib/espoRecovery.sh"
 # shellcheck source=lib/recoveryEvidence.sh
 source "$SCRIPT_DIR/lib/recoveryEvidence.sh"
+# shellcheck source=lib/dbRootRecovery.sh
+source "$SCRIPT_DIR/lib/dbRootRecovery.sh"
 
 DRY_RUN=false
 ONLY_GATE=""
@@ -120,8 +122,14 @@ Uso: rotate-all-interactive.sh [--dry-run] [--only Sx] [-h|--help]
 
   --dry-run     Muestra qué haría cada puerta sin escribir ni ejecutar nada
                 real.
-  --only Sx     Ejecuta solo la puerta indicada (S1..S9).
+  --only Sx     Ejecuta solo la puerta indicada (S1..S9, o S3A).
   -h, --help    Muestra esta ayuda.
+
+S3A ('--only S3A') es una subpuerta de recuperación SEPARADA — nunca forma
+parte del recorrido normal S1..S9, solo alcanzable explícitamente. Recupera
+el acceso ROOT de MariaDB cuando NINGUNA credencial conocida autentica
+(almacén y volumen real desincronizados) — ver la cabecera de
+lib/dbRootRecovery.sh y README.md.
 
 Antes de ejecutar, exporta en tu propia terminal:
   export ROTACION_GAPSSA_FUERA_DEL_HARNESS=SI
@@ -1678,19 +1686,33 @@ gate_s3() {
   fi
 
   say ""
-  say "Para poder rotar hace falta la contraseña ROOT ACTUAL de MariaDB (la que"
-  say "tenía antes de esta rotación) — no se mostrará, no se guarda, se olvida"
-  say "en cuanto termine este paso."
-  local old_root_pw
-  read -r -s -p "Contraseña ROOT actual de MariaDB: " old_root_pw
-  echo
+  say "Probando primero, EN SILENCIO, la contraseña ROOT ya almacenada en el"
+  say "almacén externo (nunca se imprime, nunca por argv — por fichero de opciones"
+  say "600, igual que el resto de este script) antes de pedir nada a mano..."
+  local old_root_pw accounts
+  old_root_pw="$(field_from_secrets_file ESPOCRM_DB_ROOT_PASSWORD)"
+  if [ -n "$old_root_pw" ] && accounts="$(mariadb_capture "SELECT User, Host FROM mysql.user WHERE User IN ('root','espocrm');" root "$old_root_pw")" && [ -n "$accounts" ]; then
+    say "  OK — la contraseña ROOT almacenada autentica. No hace falta pedirla a mano."
+  else
+    say "  La contraseña ROOT almacenada NO autentica (o el almacén no tenía ninguna"
+    say "  todavía) — se pedirá a mano a continuación. Si esto se repite tras"
+    say "  introducirla correctamente, el almacén y el volumen real de MariaDB"
+    say "  pueden haber quedado desincronizados — no reintentes S3 en bucle: usa la"
+    say "  puerta separada S3A ('--only S3A', ver README.md) para recuperar acceso"
+    say "  root de forma segura y verificable antes de volver a intentar S3."
+    say ""
+    say "Para poder rotar hace falta la contraseña ROOT ACTUAL de MariaDB (la que"
+    say "tenía antes de esta rotación) — no se mostrará, no se guarda, se olvida"
+    say "en cuanto termine este paso."
+    read -r -s -p "Contraseña ROOT actual de MariaDB: " old_root_pw
+    echo
 
-  say "Enumerando cuentas/hosts reales de 'root' y 'espocrm' (nunca asumidos)..."
-  local accounts
-  if ! accounts="$(mariadb_capture "SELECT User, Host FROM mysql.user WHERE User IN ('root','espocrm');" root "$old_root_pw")"; then
-    leave_gate_failed "S3" "no se pudo autenticar como root con la contraseña proporcionada — revisa que sea la correcta."
-    unset old_root_pw
-    return 1
+    say "Enumerando cuentas/hosts reales de 'root' y 'espocrm' (nunca asumidos)..."
+    if ! accounts="$(mariadb_capture "SELECT User, Host FROM mysql.user WHERE User IN ('root','espocrm');" root "$old_root_pw")"; then
+      leave_gate_failed "S3" "no se pudo autenticar como root con la contraseña proporcionada — revisa que sea la correcta. Si el almacén y el volumen real están desincronizados, usa la puerta S3A ('--only S3A') para recuperar acceso root de forma segura antes de reintentar S3."
+      unset old_root_pw
+      return 1
+    fi
   fi
   if [ -z "$accounts" ]; then
     leave_gate_failed "S3" "la consulta de cuentas no devolvió ninguna fila — ¿usuarios 'root'/'espocrm' con otro nombre?"
@@ -1834,6 +1856,291 @@ EOF
 
   unset old_root_pw new_db_pw new_root_pw
   leave_gate_done "S3"
+}
+
+# ---------------------------------------------------------------------------
+# S3A — recuperación de ROOT de MariaDB (subpuerta SEPARADA, NUNCA parte
+# del recorrido S1-S9, NUNCA alcanzable salvo con '--only S3A' explícito)
+#
+# Existe para exactamente un caso: NINGUNA credencial conocida (ni la
+# almacenada, ni ninguna introducida a mano) autentica como root contra
+# el volumen real de espocrm-db — la vía normal de S3 (aplicar un ALTER
+# USER autenticado con la contraseña ANTERIOR) es entonces imposible por
+# construcción (lib/dbRecovery.sh lo documenta: MariaDB nunca ofrece una
+# vía administrativa sin contraseña, a diferencia de Postgres). Ver la
+# cabecera de lib/dbRootRecovery.sh para la causa raíz real que motivó
+# esta puerta (confirmada leyendo el entrypoint REAL de la imagen
+# mariadb:11.4, nunca inventada) y el informe de entrega de la sesión que
+# la escribió para la traza exacta de un fallo real de S3 que NUNCA llegó
+# a escribir nada — ni en MariaDB ni en el almacén externo — antes de
+# abortar.
+#
+# Autorización INDEPENDIENTE de confirm_gate/enter_gate (además de
+# ellas, no en sustitución): esta puerta va a parar espocrm-db (corte de
+# servicio real, aunque breve) y a sobrescribir la contraseña root real
+# del volumen — nunca debe activarse por el mismo "si/no" rutinario que
+# el resto de puertas.
+# ---------------------------------------------------------------------------
+gate_s3a() {
+  divider
+  say "Puerta S3A — recuperación de ROOT de MariaDB (mecanismo OFICIAL"
+  say "--skip-grant-tables, subpuerta separada — solo con '--only S3A')"
+  say ""
+  say "SOLO para cuando NINGUNA credencial conocida (almacenada ni introducida a"
+  say "mano) autentica como root — nunca para uso rutinario ni como sustituto de S3."
+  say "Esta puerta:"
+  say "  1. Para espocrm-db LIMPIAMENTE (docker compose stop — nunca kill/rm) y"
+  say "     comprueba que NINGÚN otro contenedor tiene el volumen montado."
+  say "  2. Toma un backup CIFRADO y verificado (estructura + digest) del volumen,"
+  say "     YA parado, ANTES de tocar nada."
+  say "  3. Arranca un contenedor DESECHABLE separado (nunca el real) con el MISMO"
+  say "     volumen, en modo --skip-grant-tables --skip-networking (mecanismo"
+  say "     oficial de MariaDB para pérdida de contraseña root — sin red, sin"
+  say "     puertos, solo alcanzable por socket local dentro de ese contenedor)."
+  say "  4. Enumera TODAS las filas root@host reales (solo lectura) y reconcilia"
+  say "     CADA UNA con la misma contraseña nueva — ninguna otra cuenta, ninguna"
+  say "     base de datos ni permiso se toca."
+  say "  5. Retira el contenedor desechable, arranca espocrm-db de nuevo y verifica"
+  say "     por TCP real (vía no privilegiada) que la contraseña nueva autentica."
+  say "  6. Solo ENTONCES actualiza ESPOCRM_DB_ROOT_PASSWORD en el almacén externo"
+  say "     de forma atómica — la última acción de la puerta, nunca la primera."
+  say ""
+
+  local s3_state
+  s3_state="$(state_get S3)"
+  if [ "$s3_state" = done ]; then
+    say "AVISO: la puerta S3 ya está 'done' — no hay nada que recuperar. S3A rechaza ejecutarse."
+    return 1
+  fi
+  say "Estado actual de S3: $s3_state"
+
+  say ""
+  say "Autorización EXPLÍCITA e INDEPENDIENTE de la de S3: S3A va a parar espocrm-db"
+  say "brevemente y a sobrescribir la contraseña root real del volumen."
+  if ! ask_yes_no "¿Confirmas que quieres iniciar la recuperación S3A ahora?"; then
+    say "S3A cancelada por decisión tuya."
+    return 1
+  fi
+  local s3a_reply
+  read -r -p "Escribe exactamente 'confirmo recuperacion root S3A' para continuar: " s3a_reply
+  if [ "$s3a_reply" != "confirmo recuperacion root S3A" ]; then
+    say "ABORTADO: frase de confirmación no coincide. Nada se ha tocado."
+    return 1
+  fi
+  unset s3a_reply
+
+  require_secrets_file || return 1
+  enter_gate "S3A" || return 1
+
+  if [ "$DRY_RUN" = true ]; then
+    say "[dry-run] no se para espocrm-db, no se hace backup de volumen, no se arranca"
+    say "ningún contenedor de recuperación, no se toca ninguna cuenta ni el almacén externo."
+    leave_gate_done "S3A"
+    return 0
+  fi
+
+  local project image volume_name
+  project="$(field_from_secrets_file COMPOSE_PROJECT_NAME)"
+  project="${project:-gapssa}"
+  image="$(field_from_secrets_file ESPOCRM_DB_IMAGE)"
+
+  local svc_cid
+  svc_cid="$(_gapssa_compose ps -q espocrm-db 2>/dev/null || true)"
+  if [ -z "$svc_cid" ]; then
+    leave_gate_failed "S3A" "espocrm-db no existe todavía (nunca se creó el contenedor) — ejecuta S3 primero (creará el contenedor aunque falle después)."
+    return 1
+  fi
+
+  volume_name="$(_s3a_resolve_compose_volume_name "$project" espocrm-db)"
+  if [ -z "$volume_name" ]; then
+    leave_gate_failed "S3A" "no se pudo resolver de forma inequívoca (por label de Compose, project=$project) el volumen real de espocrm-db — abortada antes de tocar nada."
+    return 1
+  fi
+  say "Volumen real identificado: $volume_name"
+
+  say "Parando espocrm-db limpiamente (esto interrumpe brevemente el servicio real)..."
+  if ! _gapssa_compose stop espocrm-db >/dev/null 2>&1; then
+    leave_gate_failed "S3A" "no se pudo parar espocrm-db limpiamente — abortada, el volumen no se ha tocado."
+    return 1
+  fi
+  if ! _s3a_wait_container_stopped "$svc_cid" 60; then
+    leave_gate_failed "S3A" "espocrm-db no confirmó parada tras 'docker compose stop' — abortada por seguridad, revisa manualmente antes de reintentar."
+    return 1
+  fi
+  say "  OK — espocrm-db parado limpiamente."
+
+  say "Comprobando que ningún OTRO contenedor (de cualquier proyecto) tiene el"
+  say "volumen montado (Docker no lo impide por defecto — un segundo montador"
+  say "simultáneo invalidaría el backup y la reconciliación)..."
+  local other_mounters
+  other_mounters="$(_s3a_other_running_containers_using_volume "$volume_name")"
+  if [ -n "$other_mounters" ]; then
+    leave_gate_failed "S3A" "otro(s) contenedor(es) en marcha tienen montado '$volume_name': $other_mounters — abortada SIN tocar nada (ni backup ni recuperación). espocrm-db sigue parado; para ese/esos contenedor(es) primero, confirma que nada más depende de este volumen y vuelve a lanzar '--only S3A'."
+    return 1
+  fi
+  say "  OK — ningún otro contenedor tiene el volumen montado."
+
+  ensure_backup_passphrase_known
+  mkdir -p "$SECRETS_DIR/s3a-volume-backups"
+  chmod 700 "$SECRETS_DIR/s3a-volume-backups"
+  if ! _s3a_backup_volume_has_space "$SECRETS_DIR/s3a-volume-backups" 51200; then
+    leave_gate_failed "S3A" "espacio libre insuficiente para el backup del volumen — abortada antes de arrancar el contenedor de recuperación. espocrm-db sigue parado a propósito; arráncalo tú mismo con 'docker compose up -d espocrm-db' si necesitas disponibilidad ya, o libera espacio y vuelve a lanzar '--only S3A'."
+    return 1
+  fi
+
+  _s3a_backup_reserve_candidate() {
+    printf 'S3A-volume-%s-%s.tar.gz.enc' "$(date -u +%Y%m%dT%H%M%SZ)" "$(_gapssa_secrets_random_suffix_hex 4)"
+  }
+  local reserve_lines reserve_rc
+  reserve_lines="$(gapssa_secrets_reserve_with_retry "$SECRETS_DIR/s3a-volume-backups" _s3a_backup_reserve_candidate 8)"
+  reserve_rc=$?
+  unset -f _s3a_backup_reserve_candidate
+  if [ "$reserve_rc" != 0 ]; then
+    leave_gate_failed "S3A" "no se pudo reservar atómicamente un nombre de backup del volumen — abortada. espocrm-db sigue parado; arráncalo tú mismo si necesitas disponibilidad ya."
+    return 1
+  fi
+  local vol_out vol_out_dir vol_dev vol_ino vol_uid vol_mode
+  { read -r vol_out; read -r vol_out_dir; read -r vol_dev vol_ino vol_uid vol_mode; } <<<"$reserve_lines"
+  unset reserve_lines vol_out_dir vol_dev vol_ino vol_uid vol_mode
+
+  say "Creando backup cifrado del volumen (streaming, sin texto plano en disco)..."
+  local passfile
+  passfile="$(_backup_passfile)"
+  gapssa_cleanup_push shred_plain "$passfile"
+  local backup_ok
+  backup_ok="$(_s3a_backup_volume_encrypted "$image" "$volume_name" "$vol_out" "$passfile")"
+  if [ "$backup_ok" != true ]; then
+    gapssa_secrets_shred "$passfile"
+    gapssa_cleanup_pop_matching shred_plain "$passfile"
+    rm -f -- "$vol_out"
+    leave_gate_failed "S3A" "no se pudo crear el backup del volumen — abortada, ningún contenedor de recuperación se ha arrancado. espocrm-db sigue parado; arráncalo tú mismo con 'docker compose up -d espocrm-db' si necesitas disponibilidad ya."
+    return 1
+  fi
+  say "  OK — backup cifrado escrito: $vol_out"
+
+  say "Verificando que el backup descifra a un archivo tar estructuralmente válido..."
+  local verify_ok
+  verify_ok="$(_s3a_verify_backup_structural "$image" "$vol_out" "$passfile")"
+  gapssa_secrets_shred "$passfile"
+  gapssa_cleanup_pop_matching shred_plain "$passfile"
+  if [ "$verify_ok" != true ]; then
+    leave_gate_failed "S3A" "el backup del volumen no superó su propia verificación estructural — abortada por seguridad ANTES de tocar ninguna contraseña. espocrm-db sigue parado; arráncalo tú mismo con 'docker compose up -d espocrm-db' si necesitas disponibilidad ya. Backup descartable en $vol_out."
+    return 1
+  fi
+  say "  OK — backup verificado (descifra y estructura tar válida)."
+
+  local recovery_name recovery_socket
+  recovery_name="gapssa-s3a-recovery-${RUN_ID}-$(_gapssa_secrets_random_suffix_hex 4)"
+  recovery_socket="/tmp/.gapssa-s3a-$(_gapssa_secrets_random_suffix_hex 6).sock"
+
+  say "Arrancando contenedor DESECHABLE de recuperación (mismo volumen, --skip-grant-tables --skip-networking, sin red, sin puertos)..."
+  local start_ok
+  start_ok="$(_s3a_start_recovery_container "$image" "$volume_name" "$recovery_name" "$recovery_socket")"
+  if [ "$start_ok" != true ]; then
+    docker rm -f "$recovery_name" >/dev/null 2>&1 || true
+    leave_gate_failed "S3A" "no se pudo arrancar el contenedor desechable de recuperación — abortada. El volumen no se ha modificado (el backup ya tomado sigue disponible en $vol_out). espocrm-db sigue parado; arráncalo tú mismo si necesitas disponibilidad ya."
+    return 1
+  fi
+  gapssa_cleanup_push docker_rm_standalone_container "$recovery_name"
+
+  if ! _s3a_wait_recovery_ready "$recovery_name" "$recovery_socket" 60; then
+    docker rm -f "$recovery_name" >/dev/null 2>&1 || true
+    gapssa_cleanup_pop_matching docker_rm_standalone_container "$recovery_name"
+    leave_gate_failed "S3A" "el contenedor de recuperación no respondió por socket tras arrancar — abortada. El volumen no se ha modificado. espocrm-db sigue parado; arráncalo tú mismo si necesitas disponibilidad ya."
+    return 1
+  fi
+  say "  OK — mariadbd de recuperación operativo (solo alcanzable por socket local)."
+
+  local root_hosts
+  root_hosts="$(_s3a_enumerate_root_hosts "$recovery_name" "$recovery_socket")"
+  if [ -z "$root_hosts" ]; then
+    _s3a_stop_recovery_container "$recovery_name" "$recovery_socket"
+    gapssa_cleanup_pop_matching docker_rm_standalone_container "$recovery_name"
+    leave_gate_failed "S3A" "la enumeración de cuentas root no devolvió ninguna fila — inesperado, abortada por seguridad sin tocar nada. El volumen no se ha modificado."
+    return 1
+  fi
+  say "Cuentas root@host encontradas (enumeradas ANTES de tocar nada):"
+  say "$root_hosts"
+
+  local new_root_pw
+  new_root_pw="$(openssl rand -hex 32)"
+  if ! gapssa_secrets_validate_value "$new_root_pw" --generated; then
+    unset new_root_pw
+    _s3a_stop_recovery_container "$recovery_name" "$recovery_socket"
+    gapssa_cleanup_pop_matching docker_rm_standalone_container "$recovery_name"
+    leave_gate_failed "S3A" "el valor generado para la contraseña root no cumplió su propio contrato — abortada sin tocar nada (no debería ocurrir nunca)."
+    return 1
+  fi
+
+  say "Aplicando la contraseña nueva a TODAS las filas root@host enumeradas, EN UNA"
+  say "ÚNICA sesión (FLUSH PRIVILEGES una vez, todos los ALTER USER, FLUSH PRIVILEGES"
+  say "una vez — mecanismo oficial; nunca una conexión nueva por fila, ver el porqué"
+  say "empírico en lib/dbRootRecovery.sh::_s3a_apply_root_password_all)..."
+  local host_array=()
+  while IFS= read -r host; do
+    [ -n "$host" ] || continue
+    host_array+=("$host")
+  done <<EOF
+$root_hosts
+EOF
+
+  if [ "$(printf '%s' "$new_root_pw" | _s3a_apply_root_password_all "$recovery_name" "$recovery_socket" "${host_array[@]}")" != true ]; then
+    unset new_root_pw
+    _s3a_stop_recovery_container "$recovery_name" "$recovery_socket"
+    gapssa_cleanup_pop_matching docker_rm_standalone_container "$recovery_name"
+    leave_gate_failed "S3A" "no se pudo reconciliar alguna fila root@host — abortada. espocrm-db SIGUE PARADO a propósito (nunca se arranca con una reconciliación parcial de root) — corrige y vuelve a lanzar '--only S3A' (es idempotente: reintenta todas las filas desde cero con una contraseña nueva)."
+    return 1
+  fi
+  say "  OK — todas las filas root@host reconciliadas con la misma contraseña nueva."
+
+  _s3a_stop_recovery_container "$recovery_name" "$recovery_socket"
+  gapssa_cleanup_pop_matching docker_rm_standalone_container "$recovery_name"
+  say "  OK — contenedor de recuperación retirado."
+
+  say "Arrancando espocrm-db normal (sin --skip-grant-tables)..."
+  if ! _gapssa_compose up -d espocrm-db >/dev/null 2>&1; then
+    unset new_root_pw
+    leave_gate_failed "S3A" "no se pudo volver a arrancar espocrm-db tras la recuperación — la contraseña root YA se cambió en el volumen (valor nuevo solo en memoria de este proceso, nunca escrito en ningún fichero) pero el servicio no está arriba. Backup disponible en $vol_out. Revisa 'docker compose logs espocrm-db' y arráncalo tú mismo."
+    return 1
+  fi
+  if ! _gapssa_wait_healthy espocrm-db; then
+    unset new_root_pw
+    leave_gate_failed "S3A" "espocrm-db no confirmó salud tras la recuperación — la contraseña root YA se cambió en el volumen pero el healthcheck no pasa. Backup disponible en $vol_out. Revisa 'docker compose logs espocrm-db'."
+    return 1
+  fi
+  say "  OK — espocrm-db sano de nuevo."
+
+  say "Verificando por TCP real (red privada de compose) que la contraseña nueva autentica..."
+  if ! mariadb_capture "SELECT 1;" root "$new_root_pw" >/dev/null; then
+    unset new_root_pw
+    leave_gate_failed "S3A" "la contraseña root nueva no autentica por TCP tras reconciliar — estado inesperado, revisa manualmente. Backup disponible en $vol_out."
+    return 1
+  fi
+  say "  OK — root autentica con la contraseña nueva por TCP."
+
+  say "Actualizando ESPOCRM_DB_ROOT_PASSWORD en el almacén externo (escritura atómica de un único campo)..."
+  local write_ok write_attempt
+  write_ok=false
+  for write_attempt in 1 2 3; do
+    if [ "$(printf '%s' "$new_root_pw" | _gapssa_write_secret_field "$SECRETS_FILE" "$(current_secrets_schema_version)" ESPOCRM_DB_ROOT_PASSWORD)" = true ]; then
+      write_ok=true
+      break
+    fi
+    sleep 1
+  done
+  unset new_root_pw
+  if [ "$write_ok" != true ]; then
+    leave_gate_blocked "S3A" "la contraseña root YA se reconcilió y verifica por TCP contra el servicio real, pero la actualización atómica del almacén externo falló tras 3 intentos — el SERVIDOR y el ALMACÉN vuelven a estar en dos valores distintos (situación inversa a la que motivó S3A). NO reintentes S3A (volvería a cambiar la contraseña root sin necesidad) — corrige manualmente por qué falla la escritura en $SECRETS_FILE (permisos/espacio/inventario de esquema) antes de continuar con S3."
+    return 1
+  fi
+  say "  OK — almacén externo actualizado."
+
+  leave_gate_done "S3A"
+  say ""
+  say "S3A completada. Vuelve a lanzar S3 (recorrido completo o '--only S3'):"
+  say "  S3A SOLO recuperó el acceso root — S3 sigue haciendo falta para generar y"
+  say "  aplicar una ESPOCRM_DB_PASSWORD nueva al usuario 'espocrm' y sincronizar"
+  say "  EspoCRM. S3A nunca sustituye una rotación completa de S3."
 }
 
 # ---------------------------------------------------------------------------
