@@ -1,4 +1,12 @@
 {
+    "fields": {
+        "cExcluirGoogleCalendarSync": {
+            "type": "bool",
+            "default": false,
+            "required": false,
+            "isCustom": false
+        }
+    },
     "links": {
         "gcsEventLinks": {
             "type": "hasMany",

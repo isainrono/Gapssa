@@ -1,13 +1,13 @@
 {
     "name": "Google Calendar Sync",
-    "version": "1.1.1",
+    "version": "1.2.0",
     "acceptableVersions": [
         ">=10.0.0 <11.0.0"
     ],
     "php": [
         ">=8.3.0"
     ],
-    "releaseDate": "2026-08-05",
+    "releaseDate": "2026-08-12",
     "author": "Isain Rodríguez",
     "description": "Syncs EspoCRM meetings to Google Calendar. Phase 1: one-way mirror to a single Business calendar managed by the administrator."
 }

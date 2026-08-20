@@ -1,5 +1,65 @@
 # Decisiones de diseño — Fase 1
 
+## Exclusión explícita por Meeting (v1.2.0, 12/8/2026)
+
+29. **Campo propio de la extensión, no del módulo Gapssa.**
+    `cExcluirGoogleCalendarSync` (`bool`, `default: false`) se define en el
+    `entityDefs/Meeting.json` de esta extensión, junto a `gcsEventLinks` —
+    nunca en el módulo custom de Gapssa. Es un mecanismo genérico de GCS
+    (excluir un `Meeting` cualquiera de la sincronización), reutilizable en
+    cualquier instalación de la extensión, no una regla de negocio de Gapssa.
+
+30. **Un único punto de aplicación real: `SyncService::pushMeeting()`.**
+    Todo lo que puede terminar sincronizando un `Meeting` —el hook de
+    `Meeting` (`AfterSave`/`AfterRemove`/`AfterRelate`/`AfterUnrelate`), el
+    hook de renombrado de `Contact`, el barrido programado (`sweep()`) y
+    cualquier ruta futura— llama, directa o indirectamente, a
+    `pushMeeting()`. Comprobar la exclusión ahí, con el estado vivo de la
+    cita (nunca con un valor capturado al encolar el trabajo), es lo único
+    que garantiza que ninguna ruta pueda saltársela — ni las ya existentes
+    ni las que se añadan después. Los hooks además evitan encolar el
+    trabajo desde el origen cuando pueden (más limpio), pero esa
+    optimización nunca es la única barrera.
+
+31. **Los `DELETE` y las citas canceladas nunca se bloquean.** Si una cita
+    se excluye (`false→true`) después de haber sincronizado ya un evento
+    real, alguien tiene que poder borrarlo — bloquear el `DELETE` dejaría
+    un evento huérfano en Google para siempre. `isExcludedFromSync()`
+    devuelve `false` sin más comprobación cuando `action=delete` o cuando
+    la cita está cancelada (`EventMapper::isCanceled()`), exactamente igual
+    que ya hacía `processPush()` para decidir `$mustDelete`.
+
+32. **`false→true` con vínculo existente: `DELETE` inmediato, no diferido.**
+    `GcsPush::afterSave()` detecta el cambio del campo y encola un
+    `ACTION_DELETE` de una vez, en vez de esperar al siguiente barrido.
+    `deleteByLinks()` ya es idempotente (0 filas `GcsEventLink` = 0
+    llamadas a Google) así que no hace falta comprobar antes si existe un
+    vínculo. Si ese `DELETE` fallara (red, cuota, OAuth), el `sweep()`
+    ahora también reintenta la limpieza de cualquier cita excluida que
+    todavía tenga un vínculo — sin este refuerzo, una cita excluida nunca
+    vuelve a aparecer en el camino normal del barrido (que solo emite
+    `UPSERT`), y un fallo puntual dejaría el evento huérfano
+    indefinidamente.
+
+33. **`true→false`: `UPSERT` inmediato, idempotente.** Igual razonamiento
+    que el punto 22: un `UPSERT` de más nunca duplica (protegido por
+    `GcsEventLink` + búsqueda por `espoMeetingId`), así que exportar de
+    inmediato es más simple y más rápido que esperar a que cambie algo
+    más.
+
+34. **`isActive`/creación con `true`: cero jobs desde el origen**, no solo
+    cero llamadas a Google. El hook comprueba el campo antes de encolar
+    nada en `afterSave` cuando la cita es nueva — optimización sobre la
+    garantía real (punto 30), no un segundo mecanismo independiente.
+
+35. **Transporte HTTP inyectable, exclusivo de ensayos.**
+    `GoogleClientFactory::setHttpClientOverride()` sustituye el cliente
+    Guzzle de `google/apiclient` — cubre tanto las llamadas a la API de
+    Calendar como la renovación OAuth de `TokenService` (mismo cliente
+    HTTP subyacente), así que un ensayo puede interceptar *todo* el
+    tráfico saliente sin tocar credenciales reales. Por defecto es `null`
+    y ningún código de producción lo invoca.
+
 ## Título con el cliente (v1.1.1, 4/8/2026)
 
 20. **El nombre del cliente se toma de la relación `contacts`**, la misma que

@@ -61,8 +61,33 @@ class SyncService
             return;
         }
 
+        $meeting = $this->entityManager->getEntityById('Meeting', $meetingId);
+
+        if ($this->isExcludedFromSync($meeting, $action)) {
+            // cExcluirGoogleCalendarSync=true: cero jobs, cero llamadas a
+            // Google, cero efecto en GcsEventLink ni en la cuenta. Este es el
+            // único punto de aplicación real de la exclusión — todo lo demás
+            // (hooks de Meeting, hook de renombrado de Contact, barrido)
+            // termina llamando aquí, así que basta con comprobarlo una vez,
+            // con el estado vivo de la cita, sin depender de que cada
+            // llamador lo compruebe por separado. Los DELETE explícitos y
+            // las citas canceladas se dejan pasar a propósito: son rutas de
+            // limpieza, y bloquearlas dejaría huérfano un evento que ya
+            // existiera en Google desde antes de excluir la cita.
+            return;
+        }
+
         try {
-            $this->processPush($account, $meetingId, $action);
+            $touchedGoogle = $this->processPush($account, $meetingId, $action);
+
+            if (!$touchedGoogle) {
+                // DELETE sin ningún GcsEventLink que borrar: processPush()
+                // no ha creado ningún cliente ni tocado OAuth (ver
+                // processDelete()). No hay nada que registrar como
+                // sincronización exitosa — dejar la cuenta exactamente como
+                // estaba.
+                return;
+            }
 
             $account->set('lastSyncAt', gmdate('Y-m-d H:i:s'));
             $account->set('status', 'Active');
@@ -74,6 +99,30 @@ class SyncService
 
             throw $e;
         }
+    }
+
+    /**
+     * Cero jobs, cero llamadas a Google, cero efecto en GcsEventLink: una
+     * cita marcada `cExcluirGoogleCalendarSync=true` se ignora por completo,
+     * salvo en sus rutas de limpieza (DELETE explícito o cancelación), que
+     * sí deben ejecutarse para no dejar huérfano un evento ya sincronizado
+     * antes de excluir la cita.
+     */
+    private function isExcludedFromSync(?Entity $meeting, string $action): bool
+    {
+        if ($action === self::ACTION_DELETE) {
+            return false;
+        }
+
+        if (!$meeting) {
+            return false;
+        }
+
+        if ($this->eventMapper->isCanceled($meeting)) {
+            return false;
+        }
+
+        return (bool) $meeting->get('cExcluirGoogleCalendarSync');
     }
 
     /**
@@ -111,6 +160,31 @@ class SyncService
             $link = $this->findLink($meeting->getId(), $account->getId());
 
             $isCanceled = $this->eventMapper->isCanceled($meeting);
+            $isExcluded = (bool) $meeting->get('cExcluirGoogleCalendarSync');
+
+            if ($isExcluded && !$isCanceled) {
+                if (!$link) {
+                    // Nunca se sincronizó, o ya se limpió: nada que hacer.
+                    continue;
+                }
+
+                // Vínculo heredado de antes de excluir la cita (p. ej. el
+                // DELETE de limpieza del cambio false→true falló la primera
+                // vez): reintentar su limpieza aquí, con la misma red de
+                // seguridad idempotente que ya usa el resto del barrido, en
+                // vez de dejarlo huérfano para siempre — `pushMeeting` con
+                // `action=delete` nunca queda bloqueado por la exclusión.
+                try {
+                    $this->pushMeeting($meeting->getId(), self::ACTION_DELETE);
+                } catch (Throwable $e) {
+                    $this->log->error(
+                        'GoogleCalendarSync sweep: failed to clean up excluded meeting ' .
+                        $meeting->getId() . ': ' . $e->getMessage()
+                    );
+                }
+
+                continue;
+            }
 
             if ($isCanceled && !$link) {
                 continue;
@@ -139,9 +213,12 @@ class SyncService
     }
 
     /**
+     * @return bool Si se ha llegado a tocar Google (cliente creado). `false`
+     *   en el no-op local de un DELETE sin ningún vínculo — ver
+     *   processDelete().
      * @throws Throwable
      */
-    private function processPush(Entity $account, string $meetingId, string $action): void
+    private function processPush(Entity $account, string $meetingId, string $action): bool
     {
         $meeting = $this->entityManager->getEntityById('Meeting', $meetingId);
 
@@ -149,13 +226,11 @@ class SyncService
             !$meeting ||
             $this->eventMapper->isCanceled($meeting);
 
-        $service = $this->clientFactory->createCalendarService($account);
-
         if ($mustDelete) {
-            $this->deleteByLinks($service, $account, $meetingId);
-
-            return;
+            return $this->processDelete($account, $meetingId);
         }
+
+        $service = $this->clientFactory->createCalendarService($account);
 
         $calendarId = $account->get('calendarId');
 
@@ -170,7 +245,7 @@ class SyncService
         if ($link) {
             $this->updateExisting($service, $account, $link, $calendarId, $event, $meetingId);
 
-            return;
+            return true;
         }
 
         // Sin vínculo: comprobar si el evento ya existe (red anti-duplicados
@@ -182,12 +257,57 @@ class SyncService
 
             $this->saveLink($meetingId, $account->getId(), $calendarId, $updated);
 
-            return;
+            return true;
         }
 
         $created = $service->events->insert($calendarId, $event);
 
         $this->saveLink($meetingId, $account->getId(), $calendarId, $created);
+
+        return true;
+    }
+
+    /**
+     * Punto central de control para CUALQUIER acción DELETE (soft-delete,
+     * cancelación, exclusión false→true, barrido, o un job antiguo/manual
+     * que llegue aquí sin haber pasado por ningún filtro previo): consulta
+     * localmente los `GcsEventLink` del Meeting ANTES de crear el cliente de
+     * Google o tocar OAuth. Sin ningún vínculo, no hay nada que borrar en
+     * Google — no-op local puro: cero cliente, cero renovación OAuth, cero
+     * cambio en `GcsAccount`, cero llamada a Calendar. Con uno o más
+     * vínculos, se conserva el comportamiento exacto de siempre
+     * (`deleteByLinksCollection()`).
+     *
+     * Antes de este método, `processPush()` creaba el cliente de forma
+     * incondicional también para el caso DELETE, lo que disparaba un
+     * intento real de renovación OAuth aunque no hubiera ningún vínculo que
+     * borrar — incidente documentado en
+     * `docs/fase4b-puerta5a-limpieza-propuesta.md` §12 y
+     * `docs/fase4b-puerta6c-correccion-oauth-delete.md`.
+     *
+     * @return bool `true` si se ha creado un cliente y tocado Google/OAuth
+     *   (había al menos un vínculo); `false` en el no-op local.
+     * @throws Throwable
+     */
+    private function processDelete(Entity $account, string $meetingId): bool
+    {
+        $links = $this->entityManager
+            ->getRDBRepository('GcsEventLink')
+            ->where([
+                'meetingId' => $meetingId,
+                'accountId' => $account->getId(),
+            ])
+            ->find();
+
+        if (!count($links)) {
+            return false;
+        }
+
+        $service = $this->clientFactory->createCalendarService($account);
+
+        $this->deleteByLinksCollection($service, $account, $links);
+
+        return true;
     }
 
     /**
@@ -230,22 +350,18 @@ class SyncService
     /**
      * Elimina de Google los eventos vinculados a la cita (política: al cancelar
      * o borrar una cita, el evento se elimina del calendario Business).
+     * Recibe la colección ya consultada por `processDelete()` — nunca vuelve
+     * a consultar `GcsEventLink` — para que exista una única lectura local
+     * por cada DELETE, hecha siempre antes de crear el cliente de Google.
      *
+     * @param iterable<Entity> $links
      * @throws Throwable
      */
-    private function deleteByLinks(
+    private function deleteByLinksCollection(
         CalendarService $service,
         Entity $account,
-        string $meetingId
+        iterable $links
     ): void {
-
-        $links = $this->entityManager
-            ->getRDBRepository('GcsEventLink')
-            ->where([
-                'meetingId' => $meetingId,
-                'accountId' => $account->getId(),
-            ])
-            ->find();
 
         foreach ($links as $link) {
             try {

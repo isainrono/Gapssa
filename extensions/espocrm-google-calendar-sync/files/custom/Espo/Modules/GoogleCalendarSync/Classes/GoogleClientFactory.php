@@ -8,6 +8,7 @@ use Espo\Core\Utils\Log;
 use Espo\ORM\Entity;
 use Google\Client as GoogleClient;
 use Google\Service\Calendar as CalendarService;
+use GuzzleHttp\ClientInterface as GuzzleClientInterface;
 
 /**
  * Construye clientes autenticados de la librería oficial google/apiclient.
@@ -22,12 +23,33 @@ class GoogleClientFactory
         CalendarService::CALENDAR_CALENDARLIST_READONLY,
     ];
 
+    /**
+     * Transporte HTTP alternativo — SOLO para ensayos desechables. Cuando se
+     * inyecta (vía `setHttpClientOverride()`), sustituye el cliente Guzzle
+     * por defecto de google/apiclient, así que TODO el tráfico saliente de
+     * la librería —incluida la renovación OAuth en `TokenService`, no solo
+     * las llamadas a la API de Calendar— se dirige hacia el servidor que
+     * indique el ensayo, nunca hacia Google real. Ningún código de
+     * producción llama a `setHttpClientOverride()`; por defecto queda en
+     * `null` y `createBare()` no cambia de comportamiento.
+     */
+    private ?GuzzleClientInterface $httpClientOverride = null;
+
     public function __construct(
         private Config $config,
         private Log $log,
         private TokenService $tokenService,
         private Messages $messages
     ) {}
+
+    /**
+     * Solo para ensayos desechables (ver `$httpClientOverride`). Nunca
+     * invocar desde código de producción.
+     */
+    public function setHttpClientOverride(GuzzleClientInterface $httpClient): void
+    {
+        $this->httpClientOverride = $httpClient;
+    }
 
     /**
      * Cliente sin tokens, listo para el flujo de autorización.
@@ -58,6 +80,12 @@ class GoogleClientFactory
         $client->setPrompt('consent');
         $client->setIncludeGrantedScopes(true);
         $client->setLogger($this->log);
+
+        if ($this->httpClientOverride) {
+            // Solo en ensayos desechables: ver el docblock de
+            // `$httpClientOverride`. En producción esto nunca se ejecuta.
+            $client->setHttpClient($this->httpClientOverride);
+        }
 
         return $client;
     }

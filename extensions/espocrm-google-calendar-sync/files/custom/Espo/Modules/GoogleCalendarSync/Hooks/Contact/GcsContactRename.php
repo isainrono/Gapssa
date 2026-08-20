@@ -104,20 +104,34 @@ class GcsContactRename implements AfterSave
         $meetings = $this->entityManager
             ->getRDBRepository(Contact::ENTITY_TYPE)
             ->getRelation($contact, self::LINK_MEETINGS)
-            ->select(['id'])
+            ->select(['id', 'cExcluirGoogleCalendarSync'])
             ->order('dateStart', 'DESC')
             ->limit(0, self::MAX_MEETINGS)
             ->find();
 
+        $fetched = 0;
         $count = 0;
 
         foreach ($meetings as $meeting) {
+            $fetched++;
+
+            if ($meeting->get('cExcluirGoogleCalendarSync')) {
+                // Excluida: un renombrado de contacto no debe reexportarla.
+                // SyncService también lo bloquearía, pero evitamos encolar
+                // el trabajo desde el origen.
+                continue;
+            }
+
             $this->schedule($meeting->getId());
 
             $count++;
         }
 
-        if ($count === self::MAX_MEETINGS) {
+        // El aviso depende de cuántas citas se leyeron (¿se llegó al tope de
+        // la consulta?), no de cuántas se encolaron — una cita excluida no
+        // debe ocultar que puede haber más citas sin exportar más allá del
+        // límite.
+        if ($fetched === self::MAX_MEETINGS) {
             $this->log->warning(
                 'GoogleCalendarSync: contact ' . $contact->getId() . ' was renamed and has at ' .
                 'least ' . self::MAX_MEETINGS . ' meetings; only the most recent ones were ' .

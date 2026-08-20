@@ -163,8 +163,13 @@ namespace {
 
     class FakeMeeting
     {
-        public function __construct(private string $id) {}
+        public function __construct(private string $id, private bool $excluded = false) {}
         public function getId(): string { return $this->id; }
+
+        public function get(string $key): mixed
+        {
+            return $key === 'cExcluirGoogleCalendarSync' ? $this->excluded : null;
+        }
     }
 
     $assertions = 0;
@@ -184,10 +189,19 @@ namespace {
     /** @param string[] $meetingIds */
     function newHook(array $meetingIds, array $config = ['gcsSyncStartAt' => '2026-08-01 00:00:00']): object
     {
+        return newHookWithMeetings(
+            array_map(fn($id) => new FakeMeeting($id), $meetingIds),
+            $config
+        );
+    }
+
+    /** @param FakeMeeting[] $meetings */
+    function newHookWithMeetings(array $meetings, array $config = ['gcsSyncStartAt' => '2026-08-01 00:00:00']): object
+    {
         JobScheduler::$scheduled = [];
         Log::$warnings = [];
         FakeRelationBuilder::$calls = [];
-        FakeRelationBuilder::$result = array_map(fn($id) => new FakeMeeting($id), $meetingIds);
+        FakeRelationBuilder::$result = $meetings;
 
         return new \Espo\Modules\GoogleCalendarSync\Hooks\Contact\GcsContactRename(
             new JobSchedulerFactory(),
@@ -209,8 +223,8 @@ namespace {
     check('consulta la relación meetings de Contact',
         (FakeRelationBuilder::$calls['link'] ?? null) === 'meetings' &&
         (FakeRelationBuilder::$calls['entityType'] ?? null) === 'Contact');
-    check('la consulta acota columnas y aplica límite',
-        (FakeRelationBuilder::$calls['select'] ?? null) === ['id'] &&
+    check('la consulta acota columnas (incluida la exclusión) y aplica límite',
+        (FakeRelationBuilder::$calls['select'] ?? null) === ['id', 'cExcluirGoogleCalendarSync'] &&
         (FakeRelationBuilder::$calls['limit'][1] ?? null) === 200);
 
     // ---- Cambio de lastName ----
@@ -280,6 +294,30 @@ namespace {
 
     check('el tope de 200 se respeta', count(JobScheduler::$scheduled) === 200);
     check('al alcanzar el tope se registra un aviso', count(Log::$warnings) === 1);
+
+    // ---- Citas excluidas: no se reexportan al renombrar el contacto ----
+    $hook = newHookWithMeetings([
+        new FakeMeeting('m1', excluded: false),
+        new FakeMeeting('m2', excluded: true),
+        new FakeMeeting('m3', excluded: false),
+    ]);
+    $hook->afterSave(new FakeContact('c1', ['firstName']), new SaveOptions());
+
+    check('una cita excluida entre varias no se encola', count(JobScheduler::$scheduled) === 2);
+    $scheduledIds = array_column(array_column(JobScheduler::$scheduled, 'data'), 'meetingId');
+    check('las no excluidas sí se encolan', $scheduledIds === ['m1', 'm3']);
+
+    // ---- El aviso de tope se basa en lo leído, no en lo encolado ----
+    // Si las 200 citas leídas estuvieran todas excluidas, seguiría habiendo
+    // aviso (podría haber más allá del límite), aunque no se encole ninguna.
+    $hook = newHookWithMeetings(
+        array_map(fn($i) => new FakeMeeting("m$i", excluded: true), range(1, 200))
+    );
+    $hook->afterSave(new FakeContact('c1', ['firstName']), new SaveOptions());
+
+    check('200 citas excluidas: cero jobs', JobScheduler::$scheduled === []);
+    check('pero el aviso de tope se basa en lo leído, no en lo encolado',
+        count(Log::$warnings) === 1);
 
     // ---- El hook no llama a Google ----
     $source = (string) file_get_contents($root . '/Hooks/Contact/GcsContactRename.php');

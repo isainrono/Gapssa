@@ -65,7 +65,43 @@ class GcsPush implements AfterSave, AfterRemove, AfterRelate, AfterUnrelate
             return;
         }
 
-        if (!$entity->isNew() && !$this->hasRelevantChange($entity)) {
+        if ($entity->isNew()) {
+            if ($entity->get('cExcluirGoogleCalendarSync')) {
+                // Excluida desde la creación: cero jobs desde el origen, no
+                // solo cero llamadas a Google (SyncService también lo
+                // garantizaría, pero aquí evitamos encolar nada).
+                return;
+            }
+
+            $this->schedule($entity->getId(), SyncService::ACTION_UPSERT);
+
+            return;
+        }
+
+        if ($entity->isAttributeChanged('cExcluirGoogleCalendarSync')) {
+            $excludedNow = (bool) $entity->get('cExcluirGoogleCalendarSync');
+
+            // false→true: limpia cualquier vínculo heredado (no-op si nunca
+            // se sincronizó — `deleteByLinks` no itera nada) y a partir de
+            // aquí la cita queda excluida. true→false: exporta de inmediato;
+            // es idempotente (si ya existiera un evento, `processPush` lo
+            // encuentra por `espoMeetingId` y lo actualiza en vez de
+            // duplicarlo), así que no hace falta esperar a otro cambio.
+            $this->schedule(
+                $entity->getId(),
+                $excludedNow ? SyncService::ACTION_DELETE : SyncService::ACTION_UPSERT
+            );
+
+            return;
+        }
+
+        if ($entity->get('cExcluirGoogleCalendarSync')) {
+            // Excluida y sin cambio en la exclusión: no reaccionar a ningún
+            // otro cambio (fecha, nombre, assignedUser...).
+            return;
+        }
+
+        if (!$this->hasRelevantChange($entity)) {
             return;
         }
 
@@ -144,6 +180,11 @@ class GcsPush implements AfterSave, AfterRemove, AfterRelate, AfterUnrelate
         }
 
         if (!$this->config->get('gcsSyncStartAt')) {
+            return;
+        }
+
+        if ($entity->get('cExcluirGoogleCalendarSync')) {
+            // Excluida: un cambio de contactos no debe reexportarla.
             return;
         }
 
