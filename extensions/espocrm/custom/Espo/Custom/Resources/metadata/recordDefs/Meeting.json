@@ -1,4 +1,13 @@
 {
+    "beforeCreateHookClassNameList": [
+        "Espo\\Custom\\Classes\\RecordHooks\\Meeting\\GuardMeetingResolutionReasonConsistency",
+        "Espo\\Custom\\Classes\\RecordHooks\\Meeting\\SyncEstadoReservaToStatus"
+    ],
+    "beforeUpdateHookClassNameList": [
+        "Espo\\Custom\\Classes\\RecordHooks\\Meeting\\GuardMeetingDecisionTransition",
+        "Espo\\Custom\\Classes\\RecordHooks\\Meeting\\GuardMeetingResolutionReasonConsistency",
+        "Espo\\Custom\\Classes\\RecordHooks\\Meeting\\SyncEstadoReservaToStatus"
+    ],
     "afterCreateHookClassNameList": [
         "Espo\\Custom\\Classes\\RecordHooks\\Meeting\\SendInvitationsAfterCreate"
     ],

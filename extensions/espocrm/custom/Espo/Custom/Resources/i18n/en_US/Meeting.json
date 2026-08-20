@@ -1,10 +1,44 @@
 {
     "fields": {
         "cTratamiento": "Tratamiento",
-        "cZonaAtencion": "Zona Atencion"
+        "cZonaAtencion": "Zona Atencion",
+        "cEstadoReserva": "Booking status",
+        "cMotivoResolucionReserva": "Resolution reason"
     },
     "links": {
         "cTratamiento": "Tratamiento",
         "cZonaAtencion": "Zona Atencion"
+    },
+    "labels": {
+        "Aprobar reserva": "Approve booking",
+        "Rechazar reserva": "Reject booking",
+        "Motivo del rechazo": "Rejection reason"
+    },
+    "messages": {
+        "gapssaConfirmApprove": "Confirm approval of this booking?",
+        "gapssaDecisionConflict": "This booking is no longer pending approval — it may have already been decided by someone else, or it may have expired. It has been refreshed with its real status.",
+        "gapssaDecisionError": "The decision could not be completed. Please try again; contact support if the problem persists.",
+        "gapssaNoteRequired": "The rejection reason is required and cannot be empty."
+    },
+    "options": {
+        "cEstadoReserva": {
+            "RequestReceived": "Request received",
+            "PendingGuardianAuthorization": "Pending guardian authorization",
+            "PendingAssessment": "Pending assessment",
+            "PendingCenterApproval": "Pending center approval",
+            "Confirmed": "Confirmed",
+            "ClientArrived": "Client arrived",
+            "InTreatment": "In treatment",
+            "Completed": "Completed",
+            "Canceled": "Canceled",
+            "NoShow": "No show",
+            "RescheduleRequested": "Reschedule requested",
+            "ScheduleConflict": "Schedule conflict"
+        },
+        "cMotivoResolucionReserva": {
+            "Approved": "Approved by staff",
+            "RejectedByStaff": "Rejected by staff",
+            "ApprovalExpired": "Expired without response"
+        }
     }
 }

@@ -1,13 +1,45 @@
 {
     "fields": {
         "cTratamiento": "Tratamiento",
-        "cZonaAtencion": "Zona Atencion"
+        "cZonaAtencion": "Zona Atencion",
+        "cEstadoReserva": "Estado de la reserva",
+        "cMotivoResolucionReserva": "Motivo de la resolución"
     },
     "links": {
         "cTratamiento": "Tratamiento",
         "cZonaAtencion": "Zona Atencion"
     },
     "labels": {
-        "Create Meeting": "Crear Cita"
+        "Create Meeting": "Crear Cita",
+        "Aprobar reserva": "Aprobar reserva",
+        "Rechazar reserva": "Rechazar reserva",
+        "Motivo del rechazo": "Motivo del rechazo"
+    },
+    "messages": {
+        "gapssaConfirmApprove": "¿Confirmar la aprobación de esta reserva?",
+        "gapssaDecisionConflict": "Esta reserva ya no está pendiente de aprobación — puede que otra persona ya la haya decidido, o que haya caducado. Se ha actualizado con el estado real.",
+        "gapssaDecisionError": "No se pudo completar la decisión. Inténtalo de nuevo; si el problema persiste, contacta con soporte.",
+        "gapssaNoteRequired": "El motivo del rechazo es obligatorio y no puede estar vacío."
+    },
+    "options": {
+        "cEstadoReserva": {
+            "RequestReceived": "Solicitud recibida",
+            "PendingGuardianAuthorization": "Pendiente de autorización del tutor",
+            "PendingAssessment": "Pendiente de valoración",
+            "PendingCenterApproval": "Pendiente de aprobación del centro",
+            "Confirmed": "Confirmada",
+            "ClientArrived": "Cliente llegado",
+            "InTreatment": "En tratamiento",
+            "Completed": "Completada",
+            "Canceled": "Cancelada",
+            "NoShow": "No presentado",
+            "RescheduleRequested": "Reprogramación solicitada",
+            "ScheduleConflict": "Conflicto de agenda"
+        },
+        "cMotivoResolucionReserva": {
+            "Approved": "Aprobada por el centro",
+            "RejectedByStaff": "Rechazada por el centro",
+            "ApprovalExpired": "Caducada sin respuesta"
+        }
     }
 }

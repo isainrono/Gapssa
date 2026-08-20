@@ -1,4 +1,7 @@
 {
+    "recordViews": {
+        "detail": "custom:views/meeting/record/detail"
+    },
     "relationshipPanels": {
         "tratamiento": {
             "layout": null,

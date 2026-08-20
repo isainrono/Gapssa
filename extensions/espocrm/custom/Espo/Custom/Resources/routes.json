@@ -1,0 +1,7 @@
+[
+    {
+        "route": "/GapssaMeetingDecision/:id",
+        "method": "put",
+        "actionClassName": "Espo\\Custom\\Classes\\Api\\GapssaMeetingDecision\\PutDecide"
+    }
+]

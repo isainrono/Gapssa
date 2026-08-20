@@ -1,10 +1,51 @@
 {
     "fields": {
+        "cBookingRequestId": {
+            "type": "varchar",
+            "required": false,
+            "maxLength": 36,
+            "isCustom": true
+        },
         "cTratamiento": {
             "type": "link"
         },
         "cZonaAtencion": {
             "type": "link"
+        },
+        "cEstadoReserva": {
+            "type": "enum",
+            "required": false,
+            "audited": true,
+            "options": [
+                "RequestReceived",
+                "PendingGuardianAuthorization",
+                "PendingAssessment",
+                "PendingCenterApproval",
+                "Confirmed",
+                "ClientArrived",
+                "InTreatment",
+                "Completed",
+                "Canceled",
+                "NoShow",
+                "RescheduleRequested",
+                "ScheduleConflict"
+            ],
+            "style": [],
+            "maxLength": 100,
+            "isCustom": true
+        },
+        "cMotivoResolucionReserva": {
+            "type": "enum",
+            "required": false,
+            "audited": true,
+            "options": [
+                "Approved",
+                "RejectedByStaff",
+                "ApprovalExpired"
+            ],
+            "style": [],
+            "maxLength": 32,
+            "isCustom": true
         }
     },
     "links": {
@@ -31,6 +72,12 @@
         ],
         "fullTextSearch": false,
         "countDisabled": false
+    },
+    "indexes": {
+        "cBookingRequestId": {
+            "unique": true,
+            "columns": ["cBookingRequestId"]
+        }
     },
     "optimisticConcurrencyControl": false,
     "transactionalSave": false

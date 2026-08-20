@@ -13,6 +13,14 @@
                 {
                     "name": "status"
                 },
+                {
+                    "name": "cEstadoReserva"
+                }
+            ],
+            [
+                {
+                    "name": "cMotivoResolucionReserva"
+                },
                 false
             ],
             [

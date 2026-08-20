@@ -1,0 +1,16 @@
+{
+    "fields": {
+        "cGapssaAccountId": {
+            "type": "varchar",
+            "required": false,
+            "maxLength": 36,
+            "isCustom": true
+        }
+    },
+    "indexes": {
+        "cGapssaAccountId": {
+            "unique": true,
+            "columns": ["cGapssaAccountId"]
+        }
+    }
+}
