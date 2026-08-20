@@ -770,6 +770,82 @@ volumen. S3A recupera EXCLUSIVAMENTE el acceso root — tras completarse,
 sigue haciendo falta volver a lanzar S3 (recorrido completo o
 `--only S3`) para la rotación normal de `espocrm`.
 
+## S3B — reconciliación de data/config-internal.php (subpuerta separada)
+
+Existe para un caso concreto y real (no hipotético — detectado con
+`probes/dbConfigLayerProbe.sh` contra un despliegue real: `S3` llegó hasta
+"sincronizó config-internal.php" y solo falló en el `app-check` final, pero
+`data/config-internal.php` se quedó con un valor DISTINTO del que ya
+comparten MariaDB y el almacén externo).
+
+**Causa raíz** (confirmada leyendo el código, nunca inventada):
+`_espo_sync_config_password` (`lib/dbRecovery.sh`) aceptaba `rename()` como
+éxito sin ninguna relectura posterior que confirmara el valor REALMENTE
+escrito — ya corregido ahí (fsync antes de rename + relectura obligatoria),
+pero un fichero que quedó desincronizado ANTES de ese arreglo no se corrige
+solo. S3B existe para reconciliar exactamente ese fichero, sin volver a
+rotar ninguna credencial.
+
+**Precondiciones duras** (`--only S3B`, nunca parte del recorrido normal
+S1→S9): `S3=failed` y `S3A=done` — S3B se niega a ejecutarse si cualquiera
+de las dos no se cumple. La sonda debe además confirmar
+`stored_credential_authenticates=true` ANTES de tocar nada: si el almacén
+externo tampoco autentica contra MariaDB real, el problema no es de
+`config-internal.php` y S3B se niega a escribir.
+
+**Mecanismo** (ver `lib/espoConfigReconcile.sh` para la implementación
+completa y comentada): ninguna operación de fichero usa `docker compose
+exec` contra el contenedor real de `espocrm` (que puede estar en bucle de
+reinicio — un `exec` contra un contenedor que se reinicia cada pocos
+segundos es frágil por construcción). Todas las lecturas/escrituras pasan
+por un contenedor DESECHABLE de la MISMA imagen que monta el volumen real
+`espocrm-data` directamente — el mismo patrón, ya endurecido y probado, que
+usa la propia sonda.
+
+Pasos, en orden, cada uno con su propia condición de parada:
+
+1. Verifica con la sonda que la credencial almacenada autentica.
+2. Backup CIFRADO byte a byte de `config-internal.php` (AES-256-CBC+PBKDF2,
+   mismo algoritmo que el resto del toolkit), con propietario, grupo, modo,
+   tamaño y digest SHA-256 capturados ANTES de tocar nada, y un ensayo de
+   restauración en streaming que compara el digest descifrado contra el
+   original antes de continuar.
+3. Para `espocrm`/`espocrm-daemon`/`espocrm-websocket` LIMPIAMENTE
+   (`docker compose stop`) — corta el bucle de reinicio ANTES de escribir.
+4. Reescribe SOLO `database.password`, vía el contenedor desechable:
+   escritura atómica (`O_CREAT|O_EXCL`, nunca sigue un symlink/fichero
+   existente; `fstat` verifica un único hard link), `fsync` antes de
+   `rename`, y una RELECTURA posterior que compara el valor realmente
+   escrito byte a byte — nunca se informa éxito solo porque `rename()` no
+   falló. Restaura el propietario/modo originales.
+5. `php -l`.
+6. Vuelve a ejecutar la sonda y exige `config_internal_matches_store=true`,
+   `effective_config_matches_store=true` (verificado con
+   `Espo\Core\Utils\Config` REAL, nunca una reimplementación) Y
+   `effective_config_authenticates=true` — los tres, ANTES de arrancar nada.
+7. Arranca `espocrm` y exige `app-check` verde SOSTENIDO (3 comprobaciones
+   consecutivas, no una sola) antes de continuar.
+8. Solo ENTONCES arranca `espocrm-daemon`/`espocrm-websocket`, y confirma
+   los TRES contenedores sanos.
+9. Marca `S3=done` (refleja el estado real) y `S3B=done`.
+
+**Si cualquier paso falla**: restaura `config-internal.php` desde el backup
+byte a byte, deja `espocrm` PARADO a propósito (nunca en bucle de reinicio
+sin atender), y deja un estado explícito (`failed` si la restauración
+funcionó, `blocked` si la restauración TAMBIÉN falló — nunca reintenta
+automáticamente).
+
+**Nunca hace**: generar ni aplicar ninguna credencial nueva, tocar MariaDB,
+tocar `ESPOCRM_DB_PASSWORD`/`ESPOCRM_DB_ROOT_PASSWORD` en el almacén
+externo, ni ejecutar S2 ni S4–S9.
+
+**S3 mejorado** (mismo cierre): `gate_s3` ahora exige una comparación
+posterior a la escritura antes de continuar hacia `docker compose up`
+(nunca acepta la escritura como éxito solo por su código de salida), y si
+el `app-check` final no queda verde, para `espocrm`/`daemon`/`websocket`
+limpiamente en vez de dejarlos en un bucle de reinicio indefinido — con un
+aviso explícito que apunta a S3B si el fichero quedó desincronizado.
+
 ## Archivos
 
 - `lib.sh` — funciones compartidas: guardas de ruta/harness/permisos,
@@ -827,6 +903,24 @@ sigue haciendo falta volver a lanzar S3 (recorrido completo o
   --skip-networking`) contra un contenedor DESECHABLE separado, cuando
   NINGUNA credencial conocida autentica. Ver la sección "S3A" arriba
   para el detalle completo (causa raíz real, pasos, hallazgos empíricos).
+- `lib/espoConfigReconcile.sh` — subpuerta S3B: reconciliación de
+  `data/config-internal.php` cuando MariaDB y el almacén externo YA
+  coinciden pero ese fichero se quedó con un valor distinto. Nunca rota
+  credenciales; todas las operaciones de fichero pasan por un contenedor
+  desechable que monta `espocrm-data` directamente (nunca `docker compose
+  exec` contra el `espocrm` real, que puede estar en bucle de reinicio).
+  Ver la sección "S3B" arriba para el detalle completo.
+- `probes/dbConfigLayerProbe.sh` / `probes/dbConfigLayerProbe.php` — sonda
+  de solo lectura, cerrada y no sensible (9 líneas `key=value` exactas,
+  nunca un valor/DSN/excepción cruda) que determina qué capa de
+  configuración de EspoCRM (de las 6 fuentes reales de
+  `Espo\Core\Utils\Config`, en su orden real de fusión) alimenta la
+  credencial de base de datos que usa la app, y si esa credencial
+  autentica. Bootstrapea el `Espo\Core\Utils\Config` REAL vía el
+  `vendor/autoload.php` de la propia app cuando está disponible — nunca
+  una reimplementación, salvo como fallback si el autoloader no está.
+  Nunca toca los contenedores reales: monta el volumen real `:ro` dentro
+  de un contenedor desechable de la misma imagen.
   Fichero compartido, única fuente de verdad, entre `gate_s3a` (en
   `rotate-all-interactive.sh`) y `tests/s3a_root_recovery_rehearsal.sh`.
 - `lib/espoRecovery.sh` — recuperación de EspoCRM (S4): contraseña de

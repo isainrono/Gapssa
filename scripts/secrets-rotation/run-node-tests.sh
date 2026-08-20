@@ -27,6 +27,7 @@ FILES="lib/backupSchema.test.mjs
 lib/decideRecoveryPlan.test.mjs
 lib/digestStream.test.mjs
 lib/extractEnvValueFromStdin.test.mjs
+lib/extractLiveEnvValueFromStdin.test.mjs
 lib/fsyncPath.test.mjs
 lib/orphanRestoreTmp.test.mjs
 lib/recoverOldSecretValue.test.mjs

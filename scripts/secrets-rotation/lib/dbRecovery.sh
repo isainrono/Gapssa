@@ -289,7 +289,7 @@ _espo_sync_config_password() {
   fi
   local ok=false
   if printf '%s' "$pw" | _gapssa_compose exec -T "$service" php -r '
-$new = trim(stream_get_contents(STDIN));
+$new = stream_get_contents(STDIN);
 $path = "/var/www/html/data/config-internal.php";
 $config = include $path;
 if (!is_array($config) || !isset($config["database"]) || !is_array($config["database"])) {
@@ -299,14 +299,77 @@ if (!is_array($config) || !isset($config["database"]) || !is_array($config["data
 $config["database"]["password"] = $new;
 $out = "<?php\nreturn " . var_export($config, true) . ";\n";
 $tmp = $path . ".tmp." . getmypid();
-if (file_put_contents($tmp, $out, LOCK_EX) === false) { fwrite(STDERR, "write failed\n"); exit(1); }
+$fh = fopen($tmp, "x");
+if ($fh === false) { fwrite(STDERR, "open failed\n"); exit(1); }
+if (flock($fh, LOCK_EX) === false) { fclose($fh); @unlink($tmp); fwrite(STDERR, "lock failed\n"); exit(1); }
+if (fwrite($fh, $out) === false) { fclose($fh); @unlink($tmp); fwrite(STDERR, "write failed\n"); exit(1); }
+fflush($fh);
+fsync($fh);
+flock($fh, LOCK_UN);
+fclose($fh);
 chmod($tmp, 0664);
 @chown($tmp, "www-data");
 @chgrp($tmp, "www-data");
 if (!rename($tmp, $path)) { fwrite(STDERR, "rename failed\n"); @unlink($tmp); exit(1); }
+$verify = include $path;
+if (!is_array($verify) || !isset($verify["database"]["password"]) || $verify["database"]["password"] !== $new) {
+    fwrite(STDERR, "post-write readback mismatch\n");
+    exit(1);
+}
 ' >/dev/null 2>&1; then
     ok=true
   fi
   unset pw
   printf '%s' "$ok"
+}
+
+# _espo_config_password_matches <espocrm_service>
+# Lee la contraseña ESPERADA por STDIN completo y compara (en PHP, sin
+# imprimirla nunca) contra el valor REAL de
+# data/config-internal.php['database']['password'] dentro del contenedor
+# EN MARCHA de <espocrm_service> en este instante. Verificación
+# INDEPENDIENTE de la relectura que ya hace _espo_sync_config_password
+# (Bloque S3B): existe para que gate_s3 pueda comprobar, por su cuenta,
+# tanto justo después de sincronizar (antes de reiniciar nada) como justo
+# después de reiniciar (para detectar si el entrypoint u otra cosa
+# reescribió el fichero durante la recreación del contenedor).
+#
+# Imprime "true" (coincide), "false" (NO coincide — se pudo comparar) o
+# "unreachable" (el contenedor no respondió al exec, p.ej. a mitad de un
+# reinicio, o el fichero no tiene la forma esperada — la comparación no
+# se pudo hacer en absoluto). "unreachable" NUNCA debe tratarse como
+# "false": el llamador decide si reintentar o tratarlo como inconcluyente.
+_espo_config_password_matches() {
+  local service="$1"
+  local pw
+  IFS= read -r -d '' pw || true
+  if ! gapssa_secrets_validate_value "$pw"; then
+    unset pw
+    printf 'unreachable'
+    return
+  fi
+  local out
+  if ! out="$(printf '%s' "$pw" | _gapssa_compose exec -T "$service" php -r '
+$expected = stream_get_contents(STDIN);
+$path = "/var/www/html/data/config-internal.php";
+if (!is_file($path)) { echo "unreachable"; exit(0); }
+try {
+    $config = include $path;
+} catch (\Throwable $e) {
+    echo "unreachable";
+    exit(0);
+}
+if (!is_array($config) || !isset($config["database"]["password"]) || !is_string($config["database"]["password"])) {
+    echo "unreachable";
+    exit(0);
+}
+echo ($config["database"]["password"] === $expected) ? "true" : "false";
+' 2>/dev/null)"; then
+    out="unreachable"
+  fi
+  unset pw
+  case "$out" in
+  true | false) printf '%s' "$out" ;;
+  *) printf 'unreachable' ;;
+  esac
 }

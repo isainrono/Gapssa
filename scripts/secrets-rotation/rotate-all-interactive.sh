@@ -112,6 +112,8 @@ source "$SCRIPT_DIR/lib/espoRecovery.sh"
 source "$SCRIPT_DIR/lib/recoveryEvidence.sh"
 # shellcheck source=lib/dbRootRecovery.sh
 source "$SCRIPT_DIR/lib/dbRootRecovery.sh"
+# shellcheck source=lib/espoConfigReconcile.sh
+source "$SCRIPT_DIR/lib/espoConfigReconcile.sh"
 
 DRY_RUN=false
 ONLY_GATE=""
@@ -122,7 +124,7 @@ Uso: rotate-all-interactive.sh [--dry-run] [--only Sx] [-h|--help]
 
   --dry-run     Muestra qué haría cada puerta sin escribir ni ejecutar nada
                 real.
-  --only Sx     Ejecuta solo la puerta indicada (S1..S9, o S3A).
+  --only Sx     Ejecuta solo la puerta indicada (S1..S9, o S3A/S3B).
   -h, --help    Muestra esta ayuda.
 
 S3A ('--only S3A') es una subpuerta de recuperación SEPARADA — nunca forma
@@ -130,6 +132,13 @@ parte del recorrido normal S1..S9, solo alcanzable explícitamente. Recupera
 el acceso ROOT de MariaDB cuando NINGUNA credencial conocida autentica
 (almacén y volumen real desincronizados) — ver la cabecera de
 lib/dbRootRecovery.sh y README.md.
+
+S3B ('--only S3B') es otra subpuerta de recuperación SEPARADA — nunca forma
+parte del recorrido normal S1..S9, exige S3=failed y S3A=done. Reconcilia
+data/config-internal.php cuando MariaDB y el almacén externo YA coinciden en
+ESPOCRM_DB_PASSWORD pero ese fichero se quedó con un valor distinto — nunca
+genera ni rota ninguna credencial. Ver la cabecera de
+lib/espoConfigReconcile.sh y README.md.
 
 Antes de ejecutar, exporta en tu propia terminal:
   export ROTACION_GAPSSA_FUERA_DEL_HARNESS=SI
@@ -1831,11 +1840,51 @@ EOF
     return 1
   fi
 
+  # Verificación INDEPENDIENTE, propia de gate_s3 (no solo la relectura
+  # interna de _espo_sync_config_password): confirma que el fichero
+  # realmente quedó con la contraseña nueva ANTES de reiniciar nada. Un
+  # "unreachable" (contenedor no respondió) no bloquea aquí — la propia
+  # sincronización ya verificó internamente; esto es defensa adicional,
+  # nunca sustituye esa verificación.
+  if [ "$DRY_RUN" != true ]; then
+    local verify_before
+    verify_before="$(printf '%s' "$new_db_pw" | _espo_config_password_matches espocrm)"
+    if [ "$verify_before" = false ]; then
+      leave_gate_failed "S3" "config-internal.php NO tiene la contraseña nueva pese a que la sincronización informó éxito — no se reinician los contenedores con una configuración que no funcionaría. Nunca se repite la sincronización a ciegas: revisa manualmente, o usa la puerta S3B ('--only S3B', exige S3A=done) para reconciliar el fichero sin volver a rotar nada."
+      unset old_root_pw new_db_pw new_root_pw
+      return 1
+    fi
+  fi
+
   say "Reiniciando espocrm, espocrm-daemon y espocrm-websocket con las credenciales nuevas..."
   if ! run_cmd docker compose --env-file "$SECRETS_FILE" up -d espocrm espocrm-daemon espocrm-websocket; then
     leave_gate_failed "S3" "no se pudieron reiniciar los contenedores de EspoCRM."
     unset old_root_pw new_db_pw new_root_pw
     return 1
+  fi
+
+  # Detección de una reescritura POSTERIOR al reinicio (p.ej. si el
+  # entrypoint de la imagen alguna vez deja de comportarse como en el
+  # Bloque 6 y vuelve a tocar el fichero al recrear el contenedor):
+  # mejor esfuerzo, con reintentos cortos — un contenedor recién
+  # recreado puede tardar un instante en responder a `exec`, así que un
+  # "unreachable" aquí no es concluyente y se reintenta antes de darlo
+  # por perdido; solo un "false" confirmado (comparación real, no
+  # coincide) aborta.
+  if [ "$DRY_RUN" != true ]; then
+    local verify_after attempt_va
+    verify_after=unreachable
+    for attempt_va in 1 2 3; do
+      verify_after="$(printf '%s' "$new_db_pw" | _espo_config_password_matches espocrm)"
+      [ "$verify_after" != unreachable ] && break
+      sleep 2
+    done
+    if [ "$verify_after" = false ]; then
+      run_cmd docker compose --env-file "$SECRETS_FILE" stop espocrm espocrm-daemon espocrm-websocket >/dev/null 2>&1 || true
+      leave_gate_failed "S3" "tras reiniciar, config-internal.php YA NO tiene la contraseña que se acababa de confirmar — algo (posiblemente el entrypoint de la imagen) lo reescribió durante el reinicio. Contenedores parados a propósito para no dejar un bucle de reinicio indefinido. Usa la puerta S3B ('--only S3B', exige S3A=done) para reconciliarlo sin volver a rotar nada."
+      unset old_root_pw new_db_pw new_root_pw
+      return 1
+    fi
   fi
 
   say "Esperando a que EspoCRM confirme salud (bin/command app-check)..."
@@ -1848,7 +1897,9 @@ EOF
     sleep 5
   done
   if [ "$ok" != true ] && [ "$DRY_RUN" != true ]; then
-    leave_gate_failed "S3" "EspoCRM no confirmó salud (app-check) tras la rotación — revisa 'docker compose logs espocrm'."
+    say "Parando espocrm/espocrm-daemon/espocrm-websocket para no dejar un bucle de reinicio indefinido..."
+    run_cmd docker compose --env-file "$SECRETS_FILE" stop espocrm espocrm-daemon espocrm-websocket >/dev/null 2>&1 || true
+    leave_gate_failed "S3" "EspoCRM no confirmó salud (app-check) tras la rotación — contenedores parados (revisa 'docker compose logs espocrm'; si config-internal.php quedó desincronizado pese a las verificaciones anteriores, usa la puerta S3B '--only S3B', exige S3A=done)."
     unset old_root_pw new_db_pw new_root_pw
     return 1
   fi
@@ -2141,6 +2192,349 @@ EOF
   say "  S3A SOLO recuperó el acceso root — S3 sigue haciendo falta para generar y"
   say "  aplicar una ESPOCRM_DB_PASSWORD nueva al usuario 'espocrm' y sincronizar"
   say "  EspoCRM. S3A nunca sustituye una rotación completa de S3."
+}
+
+# ---------------------------------------------------------------------------
+# S3B — reconciliación de data/config-internal.php (subpuerta SEPARADA,
+# NUNCA parte del recorrido S1-S9, NUNCA alcanzable salvo con '--only S3B'
+# explícito)
+#
+# Existe para exactamente un caso: MariaDB y el almacén externo YA están
+# de acuerdo (verificado, nunca asumido) sobre ESPOCRM_DB_PASSWORD, pero
+# data/config-internal.php se quedó con un valor distinto — típicamente
+# tras una ejecución de S3 que llegó a sincronizarlo pero falló después
+# (ver la cabecera de lib/espoConfigReconcile.sh para la causa raíz real
+# que motivó esta puerta: `_espo_sync_config_password` aceptaba `rename()`
+# como éxito sin relectura posterior — ya corregido en lib/dbRecovery.sh,
+# pero S3B existe para reconciliar un fichero que YA quedó desincronizado
+# antes de ese arreglo, sin tener que volver a rotar nada).
+#
+# S3B NUNCA genera ni aplica una credencial nueva — ni contra MariaDB ni
+# contra el almacén externo. Su única escritura real es el campo
+# 'password' de data/config-internal.php, con el valor que el almacén YA
+# tiene. Si esa premisa no se cumple (el almacén no autentica, o S3/S3A
+# no están en el estado exigido), S3B se niega a tocar nada.
+# ---------------------------------------------------------------------------
+gate_s3b() {
+  divider
+  say "Puerta S3B — reconciliación de data/config-internal.php (subpuerta"
+  say "separada, solo con '--only S3B')"
+  say ""
+  say "SOLO para cuando MariaDB y el almacén externo YA coinciden en"
+  say "ESPOCRM_DB_PASSWORD pero data/config-internal.php se quedó con un valor"
+  say "distinto. NUNCA rota ni genera ninguna credencial — reescribe únicamente"
+  say "el campo 'password' de ese fichero con el valor que el almacén YA tiene."
+  say "Esta puerta:"
+  say "  1. Exige S3=failed y S3A=done (defensa en profundidad: nunca toca nada"
+  say "     si la capa de MariaDB no está en el estado exacto que esta puerta"
+  say "     asume)."
+  say "  2. Verifica PRIMERO, con probes/dbConfigLayerProbe.sh, que la"
+  say "     credencial almacenada autentica de verdad contra MariaDB real."
+  say "  3. Backup cifrado byte a byte de config-internal.php (propietario,"
+  say "     grupo, modo, tamaño y digest SHA-256 capturados ANTES de tocar nada)."
+  say "  4. Para espocrm/daemon/websocket LIMPIAMENTE (corta el bucle de"
+  say "     reinicio) antes de escribir nada."
+  say "  5. Reescribe SOLO el campo 'password', vía un contenedor DESECHABLE"
+  say "     que monta el volumen real — nunca 'docker compose exec' contra un"
+  say "     contenedor que puede estar reiniciándose."
+  say "  6. Verifica con la sonda (Espo\\Core\\Utils\\Config REAL, nunca una"
+  say "     reimplementación) que el fichero, la config efectiva Y la"
+  say "     autenticación real quedan correctos ANTES de arrancar nada."
+  say "  7. Arranca espocrm y exige app-check verde SOSTENIDO, luego"
+  say "     daemon/websocket, y confirma los tres sanos."
+  say "  8. Cualquier fallo restaura el backup byte a byte y deja espocrm"
+  say "     parado — nunca un bucle de reinicio sin atender."
+  say ""
+
+  local s3_state s3a_state
+  s3_state="$(state_get S3)"
+  s3a_state="$(state_get S3A)"
+  if [ "$s3_state" != failed ]; then
+    say "AVISO: S3B exige S3=failed (estado actual: '$s3_state'). Si S3 nunca se"
+    say "ejecutó o ya está 'done', no hay nada que reconciliar — S3B rechaza"
+    say "ejecutarse."
+    return 1
+  fi
+  if [ "$s3a_state" != done ]; then
+    say "AVISO: S3B exige S3A=done (estado actual: '$s3a_state') — defensa en"
+    say "profundidad: antes de tocar la capa de configuración de EspoCRM, esta"
+    say "puerta exige una confirmación explícita, ya completada, de que el"
+    say "acceso a MariaDB está verificado. Ejecuta '--only S3A' primero (incluso"
+    say "si la contraseña root actual ya autentica, S3A lo confirma y lo deja"
+    say "registrado) y vuelve a lanzar '--only S3B'."
+    return 1
+  fi
+
+  say ""
+  say "Autorización EXPLÍCITA e INDEPENDIENTE de la de S3/S3A: S3B va a parar"
+  say "espocrm/daemon/websocket brevemente y a reescribir data/config-internal.php."
+  if ! ask_yes_no "¿Confirmas que quieres iniciar la reconciliación S3B ahora?"; then
+    say "S3B cancelada por decisión tuya."
+    return 1
+  fi
+  local s3b_reply
+  read -r -p "Escribe exactamente 'confirmo reconciliacion config S3B' para continuar: " s3b_reply
+  if [ "$s3b_reply" != "confirmo reconciliacion config S3B" ]; then
+    say "ABORTADO: frase de confirmación no coincide. Nada se ha tocado."
+    return 1
+  fi
+  unset s3b_reply
+
+  require_secrets_file || return 1
+  enter_gate "S3B" || return 1
+
+  if [ "$DRY_RUN" = true ]; then
+    say "[dry-run] no se verifica ninguna credencial real, no se hace backup, no se"
+    say "para ni arranca ningún contenedor, no se escribe nada real."
+    leave_gate_done "S3B"
+    return 0
+  fi
+
+  local project image net_name volume_name espocrm_cid
+  project="$(field_from_secrets_file COMPOSE_PROJECT_NAME)"
+  project="${project:-gapssa}"
+  image="$(field_from_secrets_file ESPOCRM_IMAGE)"
+  net_name="$(compose_network_name private)"
+
+  volume_name="$(_s3a_resolve_compose_volume_name "$project" espocrm-data)"
+  if [ -z "$volume_name" ]; then
+    leave_gate_failed "S3B" "no se pudo resolver de forma inequívoca (por label de Compose, project=$project) el volumen 'espocrm-data' — abortada antes de tocar nada. Nunca se asume el nombre por convención (evita confundirlo con 'espocrm-db')."
+    return 1
+  fi
+  say "Volumen real identificado: $volume_name (espocrm-data — nunca espocrm-db)"
+
+  espocrm_cid="$(_gapssa_compose ps -a -q espocrm 2>/dev/null || true)"
+
+  local probe_sh="$SCRIPT_DIR/probes/dbConfigLayerProbe.sh"
+  _s3b_run_probe() {
+    "$probe_sh" \
+      --secrets-file "$SECRETS_FILE" \
+      --network "$net_name" \
+      --data-volume "$volume_name" \
+      --image "$image" \
+      --project "$project" \
+      --container "${espocrm_cid:-gapssa-espocrm-1}" 2>/dev/null
+  }
+  _s3b_probe_field() {
+    printf '%s\n' "$1" | grep "^$2=" | cut -d= -f2-
+  }
+
+  say "Paso 2/8 — verificando con la sonda que la credencial almacenada autentica..."
+  local probe_before
+  probe_before="$(_s3b_run_probe)" || {
+    leave_gate_failed "S3B" "la sonda de diagnóstico no se pudo ejecutar (o violó su propio contrato de salida) — abortada antes de tocar nada. Revisa 'probes/dbConfigLayerProbe.sh' manualmente."
+    return 1
+  }
+  if [ "$(_s3b_probe_field "$probe_before" stored_credential_authenticates)" != true ]; then
+    leave_gate_failed "S3B" "la credencial almacenada NO autentica contra MariaDB real (stored_credential_authenticates=false) — la premisa de S3B (MariaDB y almacén ya coordinados) no se cumple. Nunca se toca config-internal.php sin esto confirmado. Revisa MariaDB/almacén (S3A) antes de reintentar S3B."
+    return 1
+  fi
+  say "  OK — la credencial almacenada autentica contra MariaDB real."
+
+  say "Paso 3/8 — backup cifrado de config-internal.php (byte a byte)..."
+  local stat_before
+  stat_before="$(_s3b_stat_and_digest "$image" "$volume_name")" || {
+    leave_gate_failed "S3B" "no se pudo leer propietario/grupo/modo/tamaño/digest de config-internal.php — abortada antes de tocar nada."
+    return 1
+  }
+  local orig_owner orig_group orig_mode orig_size orig_digest
+  read -r orig_owner orig_group orig_mode orig_size orig_digest <<EOF
+$stat_before
+EOF
+  say "  Capturado: propietario=$orig_owner grupo=$orig_group modo=$orig_mode tamaño=${orig_size}B (digest no impreso)."
+
+  mkdir -p "$SECRETS_DIR/s3b-config-backups"
+  chmod 700 "$SECRETS_DIR/s3b-config-backups"
+  if ! _backup_dir_has_enough_free_space; then
+    leave_gate_failed "S3B" "espacio libre insuficiente para el backup — abortada antes de tocar nada."
+    return 1
+  fi
+  ensure_backup_passphrase_known
+
+  _s3b_backup_reserve_candidate() {
+    printf 'S3B-config-internal-%s-%s.php.enc' "$(date -u +%Y%m%dT%H%M%SZ)" "$(_gapssa_secrets_random_suffix_hex 4)"
+  }
+  local reserve_lines reserve_rc
+  reserve_lines="$(gapssa_secrets_reserve_with_retry "$SECRETS_DIR/s3b-config-backups" _s3b_backup_reserve_candidate 8)"
+  reserve_rc=$?
+  unset -f _s3b_backup_reserve_candidate
+  if [ "$reserve_rc" != 0 ]; then
+    leave_gate_failed "S3B" "no se pudo reservar atómicamente un nombre de backup — abortada antes de tocar nada."
+    return 1
+  fi
+  local backup_path
+  backup_path="$(printf '%s\n' "$reserve_lines" | sed -n '1p')"
+  unset reserve_lines
+
+  local passfile backup_ok
+  passfile="$(_backup_passfile)"
+  gapssa_cleanup_push shred_plain "$passfile"
+  backup_ok="$(_s3b_backup_encrypted "$image" "$volume_name" "$backup_path" "$passfile")"
+  if [ "$backup_ok" != true ]; then
+    gapssa_secrets_shred "$passfile"
+    gapssa_cleanup_pop_matching shred_plain "$passfile"
+    leave_gate_failed "S3B" "no se pudo cifrar el backup de config-internal.php — abortada antes de tocar nada."
+    return 1
+  fi
+  local restored_digest
+  restored_digest="$(_s3b_backup_digest "$backup_path" "$passfile")"
+  gapssa_secrets_shred "$passfile"
+  gapssa_cleanup_pop_matching shred_plain "$passfile"
+  if [ "$restored_digest" != "$orig_digest" ]; then
+    rm -f -- "$backup_path"
+    leave_gate_failed "S3B" "el ensayo de restauración del backup no reprodujo el digest original — backup descartado, abortada antes de tocar nada."
+    return 1
+  fi
+  say "  OK — backup cifrado y verificado: $backup_path"
+
+  # A partir de aquí CUALQUIER fallo restaura este backup y deja espocrm
+  # parado — nunca un bucle de reinicio sin atender, nunca una credencial
+  # nueva como "solución".
+  _s3b_rollback() {
+    local reason="$1"
+    say "Restaurando config-internal.php desde el backup ($backup_path)..."
+    local pf restore_ok
+    pf="$(_backup_passfile)"
+    gapssa_cleanup_push shred_plain "$pf"
+    restore_ok="$(_s3b_restore_from_backup "$image" "$volume_name" "$backup_path" "$pf" "$orig_owner" "$orig_group" "$orig_mode")"
+    gapssa_secrets_shred "$pf"
+    gapssa_cleanup_pop_matching shred_plain "$pf"
+    if [ "$restore_ok" = true ]; then
+      leave_gate_failed "S3B" "$reason — config-internal.php restaurado byte a byte desde el backup. espocrm queda PARADO a propósito (nunca en bucle de reinicio) — arráncalo tú mismo cuando hayas revisado la causa, o repara y vuelve a lanzar '--only S3B'."
+    else
+      state_set "S3B" blocked
+      say "Puerta S3B: BLOQUEADA — $reason, Y ADEMÁS la restauración del backup FALLÓ. config-internal.php puede estar en un estado intermedio. NO reintentes automáticamente — revisa manualmente contra el backup cifrado en $backup_path antes de tocar nada más. espocrm queda parado."
+    fi
+    CURRENT_GATE=""
+  }
+
+  say "Paso 4/8 — parando espocrm/espocrm-daemon/espocrm-websocket limpiamente..."
+  if [ "$(_s3b_stop_service_stack espocrm espocrm-daemon espocrm-websocket 60)" != true ]; then
+    _s3b_rollback "no se pudo parar espocrm/daemon/websocket limpiamente"
+    return 1
+  fi
+  say "  OK — los tres contenedores están parados."
+
+  say "Paso 5/8 — reescribiendo SOLO el campo 'password' (contenedor desechable, nunca exec contra el real)..."
+  local write_ok
+  write_ok="$(printf '%s' "$(field_from_secrets_file ESPOCRM_DB_PASSWORD)" | _s3b_write_password_only "$image" "$volume_name" "$orig_owner" "$orig_group" "$orig_mode")"
+  if [ "$write_ok" != true ]; then
+    _s3b_rollback "la escritura atómica de config-internal.php falló (o su relectura posterior no confirmó el valor escrito)"
+    return 1
+  fi
+  say "  OK — escritura confirmada por relectura posterior (nunca solo por que 'rename()' no fallara)."
+
+  say "Paso 6/8 — php -l..."
+  if [ "$(_s3b_php_lint "$image" "$volume_name")" != true ]; then
+    _s3b_rollback "config-internal.php no pasa 'php -l' tras la escritura"
+    return 1
+  fi
+  say "  OK — sintaxis PHP válida."
+
+  say "Verificando con la sonda (Espo\\Core\\Utils\\Config REAL) que el fichero, la"
+  say "configuración efectiva y la autenticación real quedan correctos..."
+  local probe_after
+  probe_after="$(_s3b_run_probe)" || {
+    _s3b_rollback "la sonda de verificación posterior a la escritura no se pudo ejecutar (o violó su propio contrato de salida)"
+    return 1
+  }
+  if [ "$(_s3b_probe_field "$probe_after" config_internal_matches_store)" != true ]; then
+    _s3b_rollback "tras escribir, config_internal_matches_store sigue en false — el fichero no quedó como se esperaba"
+    return 1
+  fi
+  if [ "$(_s3b_probe_field "$probe_after" effective_config_matches_store)" != true ]; then
+    _s3b_rollback "tras escribir, effective_config_matches_store sigue en false (verificado con Espo\\Core\\Utils\\Config real) — algo más en la cadena de precedencia sigue anulando el valor"
+    return 1
+  fi
+  if [ "$(_s3b_probe_field "$probe_after" effective_config_authenticates)" != true ]; then
+    _s3b_rollback "tras escribir, la configuración EFECTIVA no autentica contra MariaDB real — no se arranca espocrm con una config que no funciona"
+    return 1
+  fi
+  say "  OK — fichero, configuración efectiva (Config real) y autenticación real, los tres correctos."
+
+  say "Paso 7/8 — arrancando espocrm y exigiendo app-check verde SOSTENIDO..."
+  if ! _gapssa_compose up -d espocrm >/dev/null 2>&1; then
+    _s3b_rollback "no se pudo arrancar espocrm tras la reconciliación"
+    return 1
+  fi
+
+  # Detección de una reescritura POSTERIOR al arranque/recreación del
+  # contenedor (mismo motivo que en gate_s3): mejor esfuerzo, con
+  # reintentos cortos — un contenedor recién (re)creado puede tardar un
+  # instante en responder a `exec`, así que "unreachable" no es
+  # concluyente; solo un "false" confirmado (comparación real, no
+  # coincide) para y hace rollback.
+  local verify_after_start attempt_vas
+  verify_after_start=unreachable
+  for attempt_vas in 1 2 3 4 5; do
+    verify_after_start="$(field_from_secrets_file ESPOCRM_DB_PASSWORD | _espo_config_password_matches espocrm)"
+    [ "$verify_after_start" != unreachable ] && break
+    sleep 2
+  done
+  if [ "$verify_after_start" = false ]; then
+    _gapssa_compose stop espocrm >/dev/null 2>&1 || true
+    _s3b_rollback "tras arrancar espocrm, config-internal.php YA NO tiene la contraseña reconciliada — algo (posiblemente el entrypoint de la imagen) lo reescribió durante el arranque"
+    return 1
+  fi
+
+  local sustained_ok=true attempt consecutive=0
+  for attempt in $(seq 1 20); do
+    if _gapssa_compose exec -T espocrm bin/command app-check >/dev/null 2>&1; then
+      consecutive=$((consecutive + 1))
+      if [ "$consecutive" -ge 3 ]; then
+        break
+      fi
+    else
+      consecutive=0
+    fi
+    if [ "$attempt" -eq 20 ]; then
+      sustained_ok=false
+    fi
+    sleep 5
+  done
+  if [ "$sustained_ok" != true ] || [ "$consecutive" -lt 3 ]; then
+    _gapssa_compose stop espocrm >/dev/null 2>&1 || true
+    _s3b_rollback "espocrm no sostuvo 3 app-check verdes consecutivos tras arrancar — se paró de nuevo, nunca se dejó en bucle de reinicio"
+    return 1
+  fi
+  say "  OK — app-check verde sostenido (3 comprobaciones consecutivas)."
+
+  say "Paso 8/8 — arrancando espocrm-daemon y espocrm-websocket, y confirmando los tres..."
+  # A partir de aquí, config-internal.php YA ha quedado correcto Y espocrm
+  # YA arrancó sano (Paso 7) — la reconciliación en sí ya tuvo éxito. Un
+  # fallo de aquí en adelante NUNCA debe deshacer ese trabajo (nunca
+  # restaurar el backup sobre una configuración que ya se demostró
+  # válida, nunca parar espocrm si sigue sano) — solo lo hace un fallo
+  # ANTERIOR a que espocrm arrancara sano.
+  if ! _gapssa_compose up -d espocrm-daemon espocrm-websocket >/dev/null 2>&1; then
+    leave_gate_failed "S3B" "espocrm ya está sano con la configuración reconciliada (config-internal.php NO se ha tocado ni restaurado — sigue correcto) pero no se pudieron arrancar espocrm-daemon/espocrm-websocket. Arráncalos tú mismo ('docker compose up -d espocrm-daemon espocrm-websocket') y confírmalo antes de marcar S3 como resuelto; S3B puede volver a lanzarse después si hace falta, detectará que ya no hay nada que reconciliar en el fichero."
+    return 1
+  fi
+  sleep 5
+  local espocrm_health daemon_running websocket_running
+  espocrm_health="$(docker inspect --format '{{.State.Health.Status}}' "$(_gapssa_compose ps -q espocrm)" 2>/dev/null || true)"
+  daemon_running="$(docker inspect --format '{{.State.Running}}' "$(_gapssa_compose ps -q espocrm-daemon)" 2>/dev/null || true)"
+  websocket_running="$(docker inspect --format '{{.State.Running}}' "$(_gapssa_compose ps -q espocrm-websocket)" 2>/dev/null || true)"
+  if [ "$espocrm_health" != healthy ]; then
+    # Caso distinto y más grave: espocrm mismo regresó de sano a no sano
+    # tras arrancar daemon/websocket — aquí sí puede tener sentido
+    # desconfiar de la reconciliación y rehacer el camino de fallo
+    # estándar (para + restaura + estado explícito).
+    _s3b_rollback "espocrm estaba sano pero dejó de estarlo tras arrancar daemon/websocket (health=$espocrm_health)"
+    return 1
+  fi
+  if [ "$daemon_running" != true ] || [ "$websocket_running" != true ]; then
+    leave_gate_failed "S3B" "espocrm sigue sano con la configuración reconciliada (config-internal.php NO se ha tocado ni restaurado — sigue correcto) pero daemon/websocket no quedaron en marcha (daemon running=$daemon_running, websocket running=$websocket_running). Revisa 'docker compose logs espocrm-daemon espocrm-websocket' y arráncalos tú mismo; no hace falta repetir la reconciliación del fichero."
+    return 1
+  fi
+  say "  OK — espocrm sano, espocrm-daemon y espocrm-websocket en marcha."
+
+  unset -f _s3b_run_probe _s3b_probe_field _s3b_rollback
+  state_set "S3" done
+  leave_gate_done "S3B"
+  say ""
+  say "S3B completada. S3 se marca 'done' (refleja el estado real: MariaDB, almacén"
+  say "y config-internal.php ahora coinciden, y los tres contenedores están sanos)."
 }
 
 # ---------------------------------------------------------------------------
