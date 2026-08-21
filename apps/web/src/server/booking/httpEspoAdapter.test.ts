@@ -5,6 +5,7 @@ import {
   HttpEspoBookingAdapter,
   ControlledTestExclusionUnverifiedError,
   EspoApiError,
+  formatEspoDateTime,
   isIdempotencyKeyReusedConflict,
   MEETING_SELECT_FIELDS,
   PORTAL_MEETING_NAME,
@@ -64,6 +65,46 @@ describe('autenticación', () => {
       expect(message).not.toContain('wrong-key')
       expect(message).not.toContain(server.apiKey)
     }
+  })
+})
+
+describe('catálogos booleanos de EspoCRM 10', () => {
+  it('usa isTrue para activo/activa; nunca equals=true, que MariaDB no resuelve como booleano', async () => {
+    server.treatments.push({ id: 't1', name: 'Masaje', familia: 'Masajes', duracionMinutos: 60, activo: 'true' })
+    server.zones.push({ id: 'z1', name: 'Cabina', capacidadSimultanea: 1, activa: 'true' })
+
+    await adapter.listTreatments()
+    await adapter.listZones()
+
+    const treatmentQuery = new URLSearchParams(server.requestLog.find((entry) => entry.path === '/api/v1/CTratamiento')?.query)
+    const zoneQuery = new URLSearchParams(server.requestLog.find((entry) => entry.path === '/api/v1/CZonaAtencion')?.query)
+    expect(treatmentQuery.get('where[0][type]')).toBe('isTrue')
+    expect(treatmentQuery.has('where[0][value]')).toBe(false)
+    expect(zoneQuery.get('where[0][type]')).toBe('isTrue')
+    expect(zoneQuery.has('where[0][value]')).toBe(false)
+  })
+})
+
+describe('DateTime de EspoCRM 10', () => {
+  it('serializa UTC sin T, milisegundos ni Z al crear un Meeting', async () => {
+    const restrictedAdapter = new HttpEspoBookingAdapter(config({ professionalUserIds: ['u1'] }))
+    server.contacts.push({ id: 'c1', firstName: 'A', lastName: 'B', emailAddress: 'a@example.test', phoneNumber: '+447700900123' })
+    const input = {
+      bookingRequestId: 'req-datetime-1',
+      contactId: 'c1',
+      treatmentId: 't1',
+      professionalId: 'u1',
+      zoneId: 'z1',
+      startAt: new Date('2026-09-01T09:00:00.123Z'),
+      endAt: new Date('2026-09-01T10:00:00.456Z'),
+    }
+
+    await restrictedAdapter.createMeeting(input)
+
+    const stored = server.meetings.find((meeting) => meeting.cBookingRequestId === input.bookingRequestId)
+    expect(stored?.dateStart).toBe('2026-09-01 09:00:00')
+    expect(stored?.dateEnd).toBe('2026-09-01 10:00:00')
+    expect(formatEspoDateTime(input.startAt)).toBe('2026-09-01 09:00:00')
   })
 })
 
@@ -374,6 +415,8 @@ describe('Puerta 5B-2A — modo de ensayo controlado', () => {
     const stored = server.meetings.filter((m) => m.cBookingRequestId === input.bookingRequestId)
     expect(stored).toHaveLength(1)
     expect(stored[0]?.cExcluirGoogleCalendarSync).toBeUndefined()
+    expect(stored[0]?.contactsIds).toBeUndefined()
+    expect(server.requestLog.some((entry) => entry.path === `/api/v1/Meeting/${stored[0]?.id}/contacts`)).toBe(false)
 
     server.blockGcsExclusionFieldWrites = false
     // Un reintento del adaptador encuentra el Meeting YA CREADO por

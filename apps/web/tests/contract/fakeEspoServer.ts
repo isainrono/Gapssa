@@ -28,6 +28,7 @@ export interface Fault {
 interface RequestLogEntry {
   method: string
   path: string
+  query: string
   headers: Record<string, string | string[] | undefined>
 }
 
@@ -125,7 +126,7 @@ export class FakeEspoServer {
     const method = req.method ?? 'GET'
     const path = url.pathname
 
-    this.requestLog.push({ method, path, headers: { ...req.headers } })
+    this.requestLog.push({ method, path, query: url.search, headers: { ...req.headers } })
 
     const fault = this.takeFault(`${method} ${path}`)
     if (fault) {

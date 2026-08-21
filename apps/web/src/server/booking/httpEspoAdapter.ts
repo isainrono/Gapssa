@@ -366,7 +366,7 @@ export class HttpEspoBookingAdapter implements EspoBookingAdapter {
   async listTreatments(): Promise<TreatmentFixture[]> {
     const rows = await this.listAllPages(
       '/api/v1/CTratamiento',
-      { select: 'id,name,familia,duracionMinutos,activo', 'where[0][type]': 'equals', 'where[0][attribute]': 'activo', 'where[0][value]': 'true' },
+      { select: 'id,name,familia,duracionMinutos,activo', 'where[0][type]': 'isTrue', 'where[0][attribute]': 'activo' },
       treatmentRecordSchema,
     )
     return rows.map(toTreatmentFixture)
@@ -375,7 +375,7 @@ export class HttpEspoBookingAdapter implements EspoBookingAdapter {
   async listZones(): Promise<ZoneFixture[]> {
     const rows = await this.listAllPages(
       '/api/v1/CZonaAtencion',
-      { select: 'id,name,capacidadSimultanea,activa', 'where[0][type]': 'equals', 'where[0][attribute]': 'activa', 'where[0][value]': 'true' },
+      { select: 'id,name,capacidadSimultanea,activa', 'where[0][type]': 'isTrue', 'where[0][attribute]': 'activa' },
       zoneRecordSchema,
     )
     return rows.map(toZoneFixture)
@@ -444,10 +444,10 @@ export class HttpEspoBookingAdapter implements EspoBookingAdapter {
       'where[0][value][1]': 'NoShow',
       'where[1][type]': 'lessThan',
       'where[1][attribute]': 'dateStart',
-      'where[1][value]': input.to.toISOString(),
+      'where[1][value]': formatEspoDateTime(input.to),
       'where[2][type]': 'greaterThan',
       'where[2][attribute]': 'dateEnd',
-      'where[2][value]': input.from.toISOString(),
+      'where[2][value]': formatEspoDateTime(input.from),
     }
     if (input.professionalId) {
       query['where[3][type]'] = 'equals'
@@ -611,8 +611,8 @@ export class HttpEspoBookingAdapter implements EspoBookingAdapter {
         path: '/api/v1/Meeting',
         body: {
           name: PORTAL_MEETING_NAME,
-          dateStart: input.startAt.toISOString(),
-          dateEnd: input.endAt.toISOString(),
+          dateStart: formatEspoDateTime(input.startAt),
+          dateEnd: formatEspoDateTime(input.endAt),
           cTratamientoId: input.treatmentId,
           cZonaAtencionId: input.zoneId,
           assignedUserId: input.professionalId,
@@ -642,6 +642,19 @@ export class HttpEspoBookingAdapter implements EspoBookingAdapter {
         return { outcome: 'created', meeting: adopted.meeting }
       }
       throw error
+    }
+
+    if (input.controlledTestExcludeGcs) {
+      // Verifica la exclusión ANTES de relacionar el Contact. El hook GCS
+      // también reacciona a `afterRelate`; si EspoCRM hubiese filtrado el
+      // campo por ACL, relacionar primero encolaría un segundo UPSERT antes
+      // de que pudiéramos detectar el fallo. En modo controlado no se toca
+      // ninguna relación hasta probar por una relectura independiente que
+      // el Meeting nació realmente excluido.
+      const verifiedBeforeRelate = await this.getMeetingById(created.id)
+      if (!verifiedBeforeRelate || verifiedBeforeRelate.cExcluirGoogleCalendarSync !== true) {
+        throw new ControlledTestExclusionUnverifiedError(input.bookingRequestId, created.id)
+      }
     }
 
     await this.relateContact(created.id, input.contactId)
@@ -951,8 +964,8 @@ function toSimMeeting(row: MeetingRecord): SimMeeting {
     treatmentId: row.cTratamientoId ?? '',
     professionalId: row.assignedUserId ?? '',
     zoneId: row.cZonaAtencionId ?? '',
-    startAt: new Date(row.dateStart),
-    endAt: new Date(row.dateEnd),
+    startAt: parseEspoDateTime(row.dateStart),
+    endAt: parseEspoDateTime(row.dateEnd),
     cEstadoReserva,
     status: row.status,
     decidedBy: row.modifiedById ?? null,
@@ -965,4 +978,18 @@ function toSimMeeting(row: MeetingRecord): SimMeeting {
     // como éxito inventado).
     cExcluirGoogleCalendarSync: row.cExcluirGoogleCalendarSync ?? false,
   }
+}
+
+/** EspoCRM 10 valida DateTime en `YYYY-MM-DD HH:mm:ss` (UTC), no en ISO 8601 con `T`/milisegundos/`Z`. */
+export function formatEspoDateTime(value: Date): string {
+  if (!Number.isFinite(value.getTime())) {
+    throw new TypeError('Fecha inválida para EspoCRM.')
+  }
+  return value.toISOString().slice(0, 19).replace('T', ' ')
+}
+
+/** Las respuestas DateTime de EspoCRM no llevan offset; el contrato de su API las expresa en UTC. */
+export function parseEspoDateTime(value: string): Date {
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value) ? `${value.replace(' ', 'T')}Z` : value
+  return new Date(normalized)
 }

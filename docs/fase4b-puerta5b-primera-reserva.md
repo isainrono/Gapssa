@@ -515,3 +515,89 @@ desplegado por Puerta 6). Ningún `.env` real modificado.
 autorizado.** No se abrió ACL real, no se arrancó el proceso aislado
 contra EspoCRM real, no se creó ninguna reserva real. 5B-2B queda
 propuesta (§7) y pendiente de autorización explícita y separada.
+
+## 12. Ejecución real de 5B-2B — detenida por actividad GCS (2026-08-21)
+
+Ejecución autorizada tras completar la rotación global S1–S9. El
+preflight confirmó `maintenanceMode=null`,
+`gapssaBookingDecisionEnabled=false`, proceso principal en adaptador
+`simulated`, ACL efectiva del portal `{read:true, edit:false}`, una
+profesional real activa, 7/6/13 Meetings, 1 Contact, 4 `GcsEventLink` y
+cero jobs GCS pendientes (14 históricos ya terminales).
+
+El primer intento se detuvo antes de abrir ACL: EspoCRM 10 no resolvía
+los filtros booleanos `equals=true` de tratamientos/zonas. Se corrigieron
+a `isTrue`, con prueba contractual. El siguiente intento creó por el flujo
+HTTP/OTP real una sola cuenta técnica y un Contact, pero EspoCRM rechazó
+`dateStart`: el adaptador enviaba ISO 8601 y la API exige
+`YYYY-MM-DD HH:mm:ss` UTC. Se corrigieron escritura, filtros de solape y
+parseo UTC, también con prueba contractual.
+
+La reanudación usó la misma cuenta, recuperación de contraseña HTTP y la
+misma `idempotencyKey`. Creó el Meeting `6a889ece7433ef93f`, vinculado a
+la solicitud `6add7c61-647e-4df6-b9e0-19eccacde0ef`, en
+`PendingCenterApproval`/`Planned`, asignado a la profesional esperada.
+Sin embargo, la relectura confirmó
+`cExcluirGoogleCalendarSync=false`, no `true`. El Meeting no tiene
+`GcsEventLink`, pero quedaron 2 jobs nuevos asociados en `Failed`, el
+digest técnico de `GcsAccount` cambió y aparecieron 16 coincidencias GCS
+en el incremento de logs. Se activó inmediatamente la condición de
+parada: ningún reintento adicional, ninguna decisión, ningún sweep y
+ninguna limpieza de datos.
+
+La ACL fue restaurada en ambos fallos mediante la preimagen y verificada
+de nuevo vía `AclManager` como `{read:true, edit:false}`. Los backups de
+esta ejecución están en
+`data/.backup/gapssa/puerta5b2b/20260821T182346Z` y
+`data/.backup/gapssa/puerta5b2b/20260821T185405Z` dentro del volumen de
+EspoCRM. Proceso aislado, mailbox y dist dir fueron retirados; sus logs se
+verificaron sin secretos, PII ficticia ni identificador completo de
+ejecución. El proceso principal conservó el mismo PID y `/api/health`
+verde.
+
+Estado que se conserva para inspección humana: 1 cuenta técnica activa,
+1 sesión activa inaccesible fuera del proceso ya detenido, 1 Contact
+técnico, 1 `BookingRequestRecord` en `verification_processing` sin
+`meeting_id`, y el Meeting anterior aún activo. No se elimina ni corrige
+ninguno sin autorización separada. **5B-2B queda bloqueada** hasta
+diagnosticar por qué la API ignoró la exclusión pese a la ventana ACL
+efectiva y cómo se generaron los jobs GCS.
+
+### 12.1 Diagnóstico y reconciliación del incidente
+
+La causa quedó confirmada con una sonda en memoria contra el núcleo real
+de EspoCRM 10.0.3: el helper efímero de la ejecución mutó directamente el
+objeto anidado devuelto por `Role.fieldData`. El valor mutado era visible
+para `AclManager` dentro de ese mismo proceso, pero el ORM devolvía
+`isAttributeChanged('fieldData')=false`; por tanto, `saveEntity()` no
+persistió la apertura. Una petición HTTP nueva siguió viendo `edit:no` y
+`Record\Service::filterInput()` eliminó silenciosamente
+`cExcluirGoogleCalendarSync` del cuerpo. El `afterSave` encoló el primer
+UPSERT y el `afterRelate` del Contact encoló el segundo.
+
+La corrección operativa usa una copia profunda de `fieldData`, modifica
+solo `Meeting.cExcluirGoogleCalendarSync.edit`, reasigna el objeto con
+`Entity::set()`, exige que el ORM detecte el cambio, guarda, relee la fila
+persistida, limpia la caché y verifica el ACL efectivo desde otro proceso.
+El helper permanente y su prueba pura viven en `scripts/puerta5b2b/`.
+Además, `HttpEspoBookingAdapter.createMeeting()` relee y valida ahora la
+exclusión **antes** de relacionar el Contact: un ACL incorrecto ya no puede
+producir el segundo job.
+
+La reparación real reutilizó exclusivamente el Meeting y la solicitud ya
+existentes. Con el daemon detenido, la ventana ACL corregida quedó
+confirmada como `{read:true,edit:true}` desde un proceso nuevo; un `PUT`
+REST limitado al campo persistió `true`. Esto generó el DELETE esperado
+por el cambio `false→true`; con cero `GcsEventLink`, terminó `Success` como
+no-op local. La ACL se cerró inmediatamente y quedó confirmada de nuevo
+como `{read:true,edit:false}` antes de reactivar el daemon. Los dos UPSERT
+fallidos del incidente se conservaron como evidencia histórica.
+
+Finalmente se reanudó `completeBookingToMeeting` con la misma solicitud,
+el mismo Meeting y el Contact ya relacionado. El
+`BookingRequestRecord` quedó enlazado y en `pending_approval`; los datos de
+contacto temporales cifrados fueron purgados. Estado final comprobado:
+`cExcluirGoogleCalendarSync=true`, cero `GcsEventLink` para el Meeting,
+ACL cerrada efectiva, `app-check` verde, Postgres/Redis sanos y proceso
+principal intacto. No se llamó a `PutDecide`, no se aprobó/rechazó la
+reserva y no se eliminó ningún artefacto de negocio.
