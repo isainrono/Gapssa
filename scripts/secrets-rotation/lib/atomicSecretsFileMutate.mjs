@@ -89,9 +89,44 @@
 // stdout en éxito (0 o 20): un único documento JSON de resumen — SOLO
 // nombres de clave/versión y booleanos, JAMÁS un valor:
 //   {"changed":bool,"applied":["K", "K2.v3", ...],"skipped":["K3.v3", ...]}
+//
+// --- Failpoints de prueba (Bloque 10 — validación dedicada de S7) ---
+//
+// `GAPSSA_ROTATION_TEST_FAILPOINT` (ausente por defecto — CERO efecto en
+// cualquier ejecución real, incluidas todas las de S1-S9): permite a un
+// arnés de pruebas demostrar, con una interrupción REAL (SIGKILL de este
+// mismo proceso, nunca una salida ordenada — un `process.exit()` no
+// demuestra nada sobre qué sobrevive a un corte de corriente/OOM-kill
+// real) en un punto EXACTO de la secuencia de escritura, que el archivo
+// nunca queda truncado, a medio escribir o con permisos incorrectos.
+// Valores cerrados:
+//   "before-fsync"               — tras abrir+verificar el temporal y
+//                                   escribir los bytes, ANTES de fsync.
+//   "after-fsync-before-rename"  — tras fsync, ANTES de renombrar (el
+//                                   destino real todavía no se ha
+//                                   tocado en ningún caso).
+//   "after-rename"               — justo tras el rename atómico, ANTES
+//                                   del fsync de directorio/relectura.
+// Un valor fuera de este conjunto cerrado aborta (exit 1) — nunca se
+// ignora en silencio un failpoint mal escrito.
+//
+// Exige SIEMPRE, además, `GAPSSA_ROTATION_TEST_DISPOSABLE_LABEL` — debe
+// casar con el patrón cerrado de un proyecto Docker DESECHABLE de este
+// mismo arnés (`gapssa-*-(rehearsal|tests)-<hex>`, ver
+// tests/s1_s9_full_rehearsal.py::Project / tests/disposable-infra.sh).
+// Si `GAPSSA_ROTATION_TEST_FAILPOINT` está presente pero la etiqueta
+// falta o no casa con el patrón, o si `<secretsFilePath>` resuelve al
+// almacén externo REAL por defecto (`$HOME/.gapssa-secrets/.env.gapssa`
+// con el `$HOME` real del proceso, nunca uno de prueba), este script
+// ABORTA de inmediato (exit 1) SIN aplicar ninguna mutación — fallo
+// cerrado, nunca "el failpoint no aplica, sigo normalmente" (eso podría
+// enmascarar un arnés de pruebas mal configurado apuntando a un almacén
+// real). Ningún failpoint lee, genera ni acepta un valor secreto: solo
+// decide CUÁNDO morir, nunca QUÉ escribir.
 
 import { randomBytes } from 'node:crypto'
 import { openSync, closeSync, fstatSync, lstatSync, readFileSync, ftruncateSync, writeSync, fsyncSync, renameSync, realpathSync, constants } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parsePlainEnvEntries, validateEntriesAgainstSchema, BackupSchemaError, KNOWN_SCHEMA_VERSIONS } from './backupSchema.mjs'
@@ -293,6 +328,61 @@ function matchesPinFactory(expectedDev, expectedIno, expectedUid, expectedMode) 
   return (st) => st.isFile() && st.dev === expectedDev && st.ino === expectedIno && st.uid === expectedUid && (st.mode & 0o777) === expectedMode
 }
 
+// --- Failpoints de prueba (Bloque 10) — ver comentario de cabecera. ---
+const TEST_FAILPOINTS = ['before-fsync', 'after-fsync-before-rename', 'after-rename']
+const DISPOSABLE_LABEL_PATTERN = /^gapssa-[a-z0-9]+(-[a-z0-9]+)*-(rehearsal|tests?)-[0-9a-f]{6,}$/
+
+/**
+ * Valida, UNA VEZ al arrancar, que si `GAPSSA_ROTATION_TEST_FAILPOINT`
+ * está presente, el entorno completo demuestra ser un contexto
+ * desechable de pruebas — nunca "el failpoint no aplica aquí, sigo
+ * normalmente". Devuelve el punto solicitado (o null si la variable no
+ * está presente — caso normal, cero coste). Aborta (exit 1) si la
+ * variable está presente pero el valor no es uno de los 3 cerrados, si
+ * falta o no casa la etiqueta de proyecto desechable, o si
+ * `secretsFilePath` resuelve al almacén externo REAL por defecto.
+ */
+function resolveTestFailpoint(secretsFilePath) {
+  const requested = process.env.GAPSSA_ROTATION_TEST_FAILPOINT
+  if (!requested) return null
+
+  if (!TEST_FAILPOINTS.includes(requested)) {
+    console.error(`ERROR: GAPSSA_ROTATION_TEST_FAILPOINT="${requested}" no es uno de los valores cerrados (${TEST_FAILPOINTS.join(', ')}) — abortado, nunca ignorado en silencio.`)
+    process.exit(1)
+  }
+
+  const label = process.env.GAPSSA_ROTATION_TEST_DISPOSABLE_LABEL
+  if (!label || !DISPOSABLE_LABEL_PATTERN.test(label)) {
+    console.error('ERROR: GAPSSA_ROTATION_TEST_FAILPOINT está presente sin una GAPSSA_ROTATION_TEST_DISPOSABLE_LABEL válida (patrón de proyecto desechable) — abortado antes de aplicar ninguna mutación.')
+    process.exit(1)
+  }
+
+  const realDefaultSecretsFile = path.join(os.homedir(), '.gapssa-secrets', '.env.gapssa')
+  let resolvedTarget
+  try {
+    resolvedTarget = path.resolve(secretsFilePath)
+  } catch {
+    resolvedTarget = secretsFilePath
+  }
+  if (resolvedTarget === path.resolve(realDefaultSecretsFile)) {
+    console.error('ERROR: GAPSSA_ROTATION_TEST_FAILPOINT apunta al almacén externo REAL por defecto ($HOME/.gapssa-secrets/.env.gapssa) — abortado, un failpoint de prueba NUNCA se activa contra un almacén real.')
+    process.exit(1)
+  }
+
+  return requested
+}
+
+/**
+ * Simula una interrupción REAL (nunca una salida ordenada) en el punto
+ * `point` si coincide con el failpoint activo — SIGKILL de este mismo
+ * proceso: ni handlers de salida, ni flush de buffers adicional, ni
+ * limpieza. No-op si `activeFailpoint` es null o no coincide con `point`.
+ */
+function maybeCrashAtFailpoint(activeFailpoint, point) {
+  if (activeFailpoint !== point) return
+  process.kill(process.pid, 'SIGKILL')
+}
+
 async function readAllStdin() {
   const chunks = []
   for await (const chunk of process.stdin) chunks.push(chunk)
@@ -310,6 +400,7 @@ async function main() {
     console.error(`ERROR: <schemaVersion> desconocida: "${schemaVersion}".`)
     process.exit(1)
   }
+  const activeFailpoint = resolveTestFailpoint(secretsFilePath)
 
   const expectedDev = Number(expectedDevArg)
   const expectedIno = Number(expectedInoArg)
@@ -441,7 +532,9 @@ async function main() {
     while (written < reconstructedBuffer.length) {
       written += writeSync(fd, reconstructedBuffer, written, reconstructedBuffer.length - written, written)
     }
+    maybeCrashAtFailpoint(activeFailpoint, 'before-fsync')
     fsyncSync(fd)
+    maybeCrashAtFailpoint(activeFailpoint, 'after-fsync-before-rename')
   } catch (err) {
     console.error(`ERROR al escribir/fsync el temporal: ${err.message}`)
     closeSync(fd)
@@ -470,6 +563,7 @@ async function main() {
     closeSync(fd)
     process.exit(12)
   }
+  maybeCrashAtFailpoint(activeFailpoint, 'after-rename')
 
   let destOk = false
   try {

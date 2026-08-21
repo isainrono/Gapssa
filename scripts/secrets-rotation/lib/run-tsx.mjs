@@ -71,6 +71,19 @@ const extraVars = {
   // NODE_OPTIONS=--conditions=react-server.
   NODE_OPTIONS: '--conditions=react-server',
 }
+// Bloque 10 (validación dedicada de S7) — reenvío EXPLÍCITO Y CERRADO de
+// 3 variables de pausa de prueba a la sonda hija (probes/s7MigrateAndAudit.mts),
+// que las vuelve a validar por sí misma con la misma guarda de contexto
+// desechable antes de usarlas — buildChildEnv/buildS6*ProbeEnv nunca
+// reenvían `process.env` sin filtrar (BASE_ENV_ALLOWLIST es una lista
+// cerrada y deliberadamente NO incluye esto), así que sin este reenvío
+// explícito la sonda nunca las vería. Ausentes en cualquier ejecución
+// real — cero efecto.
+for (const testVar of ['GAPSSA_ROTATION_TEST_MIGRATION_PAUSE', 'GAPSSA_ROTATION_TEST_MIGRATION_PAUSE_MS', 'GAPSSA_ROTATION_TEST_DISPOSABLE_LABEL']) {
+  if (process.env[testVar] !== undefined) {
+    extraVars[testVar] = process.env[testVar]
+  }
+}
 
 const PROJECTION_BUILDERS = {
   's6-artifact': buildS6ArtifactProbeEnv,

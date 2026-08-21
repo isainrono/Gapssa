@@ -977,8 +977,20 @@ aviso explícito que apunta a S3B si el fichero quedó desincronizado.
   feliz, contra infraestructura real desechable — ver "Bloque 6 — cierre
   integral" arriba), `s9_env_example_failure_rehearsal.py` (mismo
   arnés que el anterior, pero con `.env.example` corrupto — Bloque 6,
-  corrección de colisiones, ver más arriba). Ver "Ejecutar las pruebas"
-  abajo.
+  corrección de colisiones, ver más arriba), `s7_atomic_rotation_rehearsal.py`
+  (validación DEDICADA de `gate_s7()` real contra Postgres/Redis/MariaDB/
+  EspoCRM desechables reales — filas de booking sintéticas con funciones
+  de producción, corte real en cada frontera de escritura/gate, retiro
+  bloqueado y resuelto — ver "Bloque 10" arriba). Ver "Ejecutar las
+  pruebas" abajo.
+- `probes/s7TestFixtureSeed.mts` / `s7TestFixtureVerify.mts` /
+  `s7TestFixtureCounts.mts` / `s7TestFixtureResolve.mts` /
+  `s7TestFixtureReset.mts` — herramientas de fixtures del Bloque 10,
+  usadas ÚNICAMENTE por `tests/s7_atomic_rotation_rehearsal.py`: siembran/
+  verifican/cuentan/resuelven/vacían filas de booking sintéticas con las
+  mismas funciones de cifrado/HMAC de producción. Todas exigen
+  `GAPSSA_ROTATION_TEST_DISPOSABLE_LABEL` (patrón cerrado de proyecto
+  desechable) y abortan si falta — ver "Bloque 10" arriba.
 
 ## Ejecutar las pruebas
 
@@ -1435,6 +1447,154 @@ antes de generar/activar nada). Si una ejecución anterior quedó
 la misma puerta es seguro: cada paso reanuda exactamente donde quedó,
 sin regenerar ninguna versión ya activa ni retirar nada fuera de la
 comprobación de recuento fresco.
+
+### Bloque 10 — validación dedicada de S7 contra Postgres/Redis desechables reales
+
+El Bloque 9 dejó un hueco reconocido explícitamente: la atomicidad de
+cada escritura individual quedaba probada de forma directa
+(`lib/atomicSecretsFileMutate.test.mjs`), y el camino feliz completo de
+`gate_s7()` quedaba probado end-to-end (`s1_s9_full_rehearsal.py`), pero
+ningún ensayo ejercitaba `gate_s7()` REAL contra filas de booking VIVAS
+con dependencias reales, ni interrumpía el proceso completo (nunca solo
+la escritura) en cada frontera. Este bloque cierra ese hueco con
+`tests/s7_atomic_rotation_rehearsal.py` — un ensayo dedicado, desechable
+y reproducible, DISTINTO de `s1_s9_full_rehearsal.py` (nunca lo
+modifica; reutiliza sus funciones de infraestructura como librería) que
+conduce `gate_s7()` REAL, siempre por PTY (`--only S7` contra
+`rotate-all-interactive.sh` real — nunca invoca sus helpers bash por
+separado), contra Postgres 18 + Redis 8 + MariaDB 11.4 + EspoCRM 10.0.3
+DESECHABLES reales.
+
+**Fixtures — datos sintéticos con funciones de producción reales**
+(`probes/s7TestFixtureSeed.mts`): siembra filas directamente vía Drizzle
+(`bookingDb`) usando el cifrado AES-256-GCM real
+(`server/crypto/fieldCrypto.ts::encryptFieldWithVersion`), la huella de
+identidad HMAC real (`server/booking/identityFingerprint.ts::computeIdentityFingerprint`,
+ambos dominios — invitado y autenticado), la firma de token de acceso
+real (`server/booking/accessToken.ts::signBookingRequestAccessTokenWithVersion`)
+y el HMAC de email-lookup real (`hmacSubjectId`, `@gapssa/contracts`) —
+nunca una reimplementación paralela ni un valor con "forma parecida" a
+un `EncryptedField`. Nunca pasa por `createGuestBooking`/
+`createAuthenticatedBooking` (exigirían Redis/EspoCRM/OTP reales,
+irrelevantes para probar rotación de secretos — la rotación tampoco pasa
+por esas rutas). Datos de negocio completamente ficticios (nombres/
+teléfonos/correos de prueba), nunca copiados de GAPSSA real. Cubre las
+5 familias exigidas: identidades cifradas AES v1 y v2, email-lookup HMAC
+v1, fingerprints v1 y v2, `booking_request_records` de invitado
+(`accessTokenKeyVersion=v1`) y autenticado (`accessTokenKeyVersion=NULL`,
+el valor correcto por diseño para ese flujo — nunca una anomalía), y una
+fila deliberadamente corrupta (ciphertext tamperado tras cifrarlo de
+verdad, tag de autenticación GCM roto a propósito). Un mapa v1+v2 ya
+convivendo se prepara ANTES de cada escenario con
+`lib/atomicSecretsFileMutate.mjs` directamente (la misma herramienta de
+producción, nunca escrito a mano) — simula un almacén que ya pasó por
+una rotación anterior incompleta. `probes/s7TestFixtureVerify.mts`
+demuestra equivalencia lógica (mismo plaintext, nunca mismo ciphertext)
+y descifrado usando EXCLUSIVAMENTE el mapa que haya en `$SECRETS_FILE`
+en cada instante — nunca un mapa "final" simulado aparte.
+`probes/s7TestFixtureCounts.mts` exhibe los mismos conteos EN FRESCO que
+`gate_s7()` usa internamente, de solo lectura, para poder inspeccionar
+el estado real entre pasos sin mutar nada. `probes/s7TestFixtureResolve.mts`
+resuelve una solicitud (simula que el negocio ya la completó/expiró).
+`probes/s7TestFixtureReset.mts` vacía las 3 tablas de fixtures vía el
+MISMO cliente Drizzle (nunca `docker run psql` con el resultado
+descartado sin comprobar — ver "bug real" más abajo) y verifica recuento
+cero antes de devolver éxito. Las 5 sondas comparten la MISMA guarda
+cerrada: exigen `GAPSSA_ROTATION_TEST_DISPOSABLE_LABEL` con el patrón de
+un proyecto desechable (`gapssa-*-(rehearsal|tests)-<hex>`) y abortan
+(nunca "no aplica, sigo normalmente") si falta o no casa.
+
+**Failpoints de escritura reales** (`GAPSSA_ROTATION_TEST_FAILPOINT`,
+`lib/atomicSecretsFileMutate.mjs`): SIGKILL real de ese mismo proceso —
+nunca una salida ordenada, que no demostraría nada sobre qué sobrevive a
+un corte de corriente real — en 3 puntos EXACTOS de la secuencia de
+escritura: `before-fsync`, `after-fsync-before-rename`, `after-rename`.
+Deshabilitados por defecto (variable ausente, cero efecto en cualquier
+ejecución real). Exigen SIEMPRE `GAPSSA_ROTATION_TEST_DISPOSABLE_LABEL`
+(mismo patrón cerrado) Y que `<secretsFilePath>` no resuelva al almacén
+externo real por defecto (`$HOME/.gapssa-secrets/.env.gapssa` con el
+`$HOME` REAL del proceso) — si el failpoint está pedido pero cualquiera
+de las dos guardas falla, el script aborta (exit 1) SIN aplicar ninguna
+mutación, nunca en silencio. Un valor de failpoint fuera del conjunto
+cerrado también aborta. Probado primero de forma aislada y determinista
+(`lib/atomicSecretsFileMutate.test.mjs`, 16 aserciones nuevas: cada
+punto de corte deja el destino ORIGINAL byte a byte intacto si el rename
+no llegó a ejecutarse, o el documento NUEVO completo si sí — nunca
+truncado, nunca a medias, modo 600 conservado en ambos casos), y después
+DEMOSTRADO en vivo DENTRO de `gate_s7()` real (Escenario E: SIGKILL real
+durante el retiro de la familia de fingerprint, en una reanudación donde
+generar/activar/migrar ya son no-op; Escenario F: SIGKILL real justo
+tras rotar `BOOKING_INTERNAL_API_SECRET`, antes de verificarlo).
+
+**Pausa de migración real** (`GAPSSA_ROTATION_TEST_MIGRATION_PAUSE`,
+`probes/s7MigrateAndAudit.mts`): el bucle `for fromVersion of ['v1','v2']`
+se desenrolló en dos fases explícitas para poder insertar 3 puntos de
+pausa acotada (`after-aes-v1`, `after-aes-v2`, `after-email-lookup`,
+`GAPSSA_ROTATION_TEST_MIGRATION_PAUSE_MS` configurable) — el marcador de
+progreso y la propia pausa van SIEMPRE a stderr, nunca a stdout (el
+contrato de esta sonda exige stdout limpio para `validateProbeJson.mjs`).
+Misma guarda cerrada que los failpoints de escritura. `lib/run-tsx.mjs`
+reenvía EXPLÍCITAMENTE estas 3 variables (más la etiqueta desechable) a
+la sonda hija — `buildChildEnv` nunca reenvía `process.env` sin filtrar
+(`BASE_ENV_ALLOWLIST` es una lista cerrada que deliberadamente NO
+incluye esto), así que sin este reenvío la sonda nunca las vería.
+
+**Escenarios obligatorios, todos con `gate_s7()` real vía PTY**:
+
+| Escenario | Qué demuestra |
+|---|---|
+| A — camino feliz | Añadir v3 sin regenerarlo; activar v3; recifrar/reindexar; las 5 familias retiran limpio (requiere solicitudes YA resueltas — fingerprint/access-token nunca retiran con una solicitud viva, por diseño); recuentos frescos en cero; descifrado/equivalencia lógica con el mapa FINAL (solo v3); `isValidInternalApiSecret` verificado; reejecución sobre `S7=done` no regenera v3 en ningún mapa. |
+| B — fila corrupta | La migración falla CERRADA (`S7=failed`, nunca `blocked` ni `done`); ninguna clave antigua se retira (mapa dual permanece); la fila VÁLIDA sigue descifrable y lógicamente equivalente; la fila corrupta sigue sin descifrar (nunca se "arregla" ni se pierde en silencio). |
+| C — retiro bloqueado | Una solicitud viva mantiene fingerprint (y, en este fixture, también access-token) en v1; `S7` termina `blocked`; mapa dual permanece; AES SÍ retira (independiente del status); tras resolver la solicitud, reejecutar `S7` termina `done` SIN cambiar el v3 ya activo. |
+| D — SIGINT real en 4 fronteras | `after-generar-v3`, `after-activar-v3`, `during-migration` (vía la pausa acotada), `after-migrate-before-retire` — en cada una: la interrupción SÍ se dispara sobre el proceso completo (nunca un helper aislado), `S7` queda `rollback_required`, ningún mapa queda vacío/corrupto, todas las filas siguen descifrables, y relanzar sin interrumpir termina `done` con el MISMO v3 (nunca regenerado). |
+| E — SIGKILL durante retiro | Failpoint `after-fsync-before-rename` disparado DENTRO de una reanudación real de `gate_s7()` (generar/activar/migrar ya no-op, el único escrito real es el retiro de fingerprint); la puerta termina en fallo limpio, `S7=failed`, archivo externo BYTE A BYTE intacto (rename nunca se ejecutó), mapa dual conservado; reanudar sin el failpoint termina `done`. |
+| F — SIGKILL tras rotar el secreto interno | Failpoint `after-rename` justo después de escribir `BOOKING_INTERNAL_API_SECRET`, antes de verificarlo; la puerta termina en fallo limpio (bash nunca puede distinguir "el rename sí ocurrió" de un corte real, así que siempre trata el hijo muerto como fallo); el valor en disco es COMPLETO (nunca parcial); reanudar rota el secreto DE NUEVO (no-idempotente por diseño — nunca reutiliza un valor que quedó sin verificar) y SÍ lo verifica antes de `done`. |
+
+**Alcance documentado explícitamente de `isValidInternalApiSecret`**
+(punto 7 de este bloque): la verificación que `gate_s7()` hace de
+`BOOKING_INTERNAL_API_SECRET` es SIEMPRE a nivel de función real
+(`s7InternalApiAuthCheck.mts` llama a `isValidInternalApiSecret`
+directamente — nuevo aceptado, anterior rechazado, ausente rechazado) —
+NUNCA una petición HTTP contra un `apps/web` real, que no arranca hasta
+S9. Auditado (sin cambios de código necesarios): los 6 consumidores
+reales son las rutas internas de booking
+(`/api/booking/v1/internal/decisions`, `/reviews`, `/reviews/[id]`,
+`/reviews/[id]/resolve`, `/reviews/[id]/reject`, `/sweep`,
+`internalAuth.ts`) — hoy S9 no repite esta verificación contra un
+servidor vivo, así que la sonda de S7 es la única que existe; el
+Escenario F demuestra además que una interrupción entre rotar y
+verificar nunca deja ni el almacén ni esos consumidores desincronizados
+(el valor en disco es siempre completo, y siempre se reverifica antes de
+`done`, nunca se asume).
+
+**Bug real encontrado y corregido por este mismo bloque** (antes de
+llegar a verde): `reset_booking_tables()` usaba inicialmente
+`docker run psql` (patrón de `s1_s9_full_rehearsal.py`) con el resultado
+DESCARTADO sin comprobar el código de salida — un `TRUNCATE` real que
+fallara ahí se ignoraba en silencio, dejando filas de un escenario
+anterior (p. ej. la fila deliberadamente corrupta del Escenario B)
+contaminando el siguiente y produciendo fallos en cascada sin relación
+alguna con lo que cada escenario probaba de verdad. Corregido con
+`probes/s7TestFixtureReset.mts` (mismo cliente Drizzle real que el resto
+de sondas de este bloque, recuento cero verificado explícitamente antes
+de devolver éxito).
+
+**Resultado de la última ejecución limpia**: `tests/s7_atomic_rotation_rehearsal.py`
+85/85 (0 fallos) contra infraestructura desechable real, teardown limpio
+(cero contenedores/redes/volúmenes residuales, inventario Docker real
+idéntico antes/después). Regresión completa tras este bloque:
+`run-node-tests.sh` 22/22, `lib.test.sh` 128/128,
+`tests/static_bash32_compat_guard.sh` 24/24, `tests/run_scenarios.py`
+142/142, `tests/s1_s9_full_rehearsal.py` — ensayo integral REAL S1→S9
+completo repetido tras este bloque, sin regresión.
+
+**Procedimiento para ejecutar SOLO esta validación dedicada**: `python3
+scripts/secrets-rotation/tests/s7_atomic_rotation_rehearsal.py` — trae su
+propia infraestructura desechable (proyecto `gapssa-s1s9-rehearsal-<hex>`,
+mismo patrón de aislamiento que `s1_s9_full_rehearsal.py`), nunca toca
+`gapssa-espocrm-1`/`gapssa-apps-db-1`/ningún recurso GAPSSA real, y hace
+teardown completo pase lo que pase (incluso si el propio ensayo falla a
+mitad, verificado por el `finally` que cubre a todos los escenarios).
 
 ## Lo que este directorio NUNCA hace por sí mismo
 

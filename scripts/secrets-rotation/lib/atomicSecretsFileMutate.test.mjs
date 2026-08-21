@@ -4,7 +4,7 @@
 // (Bloque 9, S7 atómico y reanudable). Todo bajo un directorio desechable
 // fuera del repositorio, con secretos ficticios.
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, symlinkSync, statSync, lstatSync, readFileSync, existsSync, rmSync, chmodSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, statSync, lstatSync, readFileSync, existsSync, rmSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,6 +22,10 @@ function pinOf(p) {
 
 function run(args, input) {
   return spawnSync(process.execPath, [SCRIPT, ...args], { input, encoding: 'utf8' })
+}
+
+function runWithEnv(args, input, envOverrides) {
+  return spawnSync(process.execPath, [SCRIPT, ...args], { input, encoding: 'utf8', env: { ...process.env, ...envOverrides } })
 }
 
 function newTemp(dir, name) {
@@ -345,6 +349,103 @@ const dir = mkdtempSync(path.join(tmpdir(), 'gapssa-atomicmutate-test-'))
   const mutations = JSON.stringify([{ op: 'set-line', key: 'BOOKING_INTERNAL_API_SECRET', value: 'x'.repeat(20) }])
   const res = run([secretsFile, tmp, String(dev), String(ino), String(uid), mode, 'no-existe-esta-version'], mutations)
   ok('schemaVersion desconocida: exit 1', res.status === 1 && readFileSync(secretsFile, 'utf8') === baseSecretsFileText())
+}
+
+// =====================================================================
+// Failpoints de prueba (Bloque 10) — interrupción REAL (SIGKILL de este
+// mismo proceso) en cada frontera de la escritura, bajo las guardas de
+// "solo contexto desechable".
+// =====================================================================
+const DISPOSABLE_LABEL = 'gapssa-s7-atomic-rehearsal-deadbeef01'
+
+// --- guarda: failpoint activo sin etiqueta desechable -> exit 1, nada escrito ---
+{
+  const secretsFile = writeSecretsFile(dir, 'failpoint-no-label.env', baseSecretsFileText())
+  const tmp = newTemp(dir, 'failpoint-no-label.tmp')
+  const [dev, ino, uid, mode] = pinOf(tmp)
+  const mutations = JSON.stringify([{ op: 'set-line', key: 'BOOKING_INTERNAL_API_SECRET', value: 'x'.repeat(20) }])
+  const res = runWithEnv([secretsFile, tmp, String(dev), String(ino), String(uid), mode, 'active'], mutations, { GAPSSA_ROTATION_TEST_FAILPOINT: 'before-fsync' })
+  ok('failpoint sin etiqueta desechable: exit 1 (nunca se ignora en silencio)', res.status === 1 && !res.signal)
+  ok('failpoint sin etiqueta desechable: destino intacto', readFileSync(secretsFile, 'utf8') === baseSecretsFileText())
+}
+
+// --- guarda: valor de failpoint fuera del conjunto cerrado -> exit 1 ---
+{
+  const secretsFile = writeSecretsFile(dir, 'failpoint-bad-value.env', baseSecretsFileText())
+  const tmp = newTemp(dir, 'failpoint-bad-value.tmp')
+  const [dev, ino, uid, mode] = pinOf(tmp)
+  const mutations = JSON.stringify([{ op: 'set-line', key: 'BOOKING_INTERNAL_API_SECRET', value: 'x'.repeat(20) }])
+  const res = runWithEnv([secretsFile, tmp, String(dev), String(ino), String(uid), mode, 'active'], mutations, {
+    GAPSSA_ROTATION_TEST_FAILPOINT: 'not-a-real-failpoint',
+    GAPSSA_ROTATION_TEST_DISPOSABLE_LABEL: DISPOSABLE_LABEL,
+  })
+  ok('failpoint con valor desconocido: exit 1', res.status === 1 && !res.signal)
+}
+
+// --- guarda: apunta al almacén externo REAL por defecto ($HOME simulado) -> exit 1 ---
+{
+  const fakeRealHome = path.join(dir, 'fake-real-home')
+  const realSecretsDir = path.join(fakeRealHome, '.gapssa-secrets')
+  mkdirSync(realSecretsDir, { recursive: true })
+  const realSecretsFile = writeSecretsFile(realSecretsDir, '.env.gapssa', baseSecretsFileText())
+  const tmp = newTemp(realSecretsDir, 'real.tmp')
+  const [dev, ino, uid, mode] = pinOf(tmp)
+  const mutations = JSON.stringify([{ op: 'set-line', key: 'BOOKING_INTERNAL_API_SECRET', value: 'x'.repeat(20) }])
+  const res = runWithEnv([realSecretsFile, tmp, String(dev), String(ino), String(uid), mode, 'active'], mutations, {
+    GAPSSA_ROTATION_TEST_FAILPOINT: 'before-fsync',
+    GAPSSA_ROTATION_TEST_DISPOSABLE_LABEL: DISPOSABLE_LABEL,
+    HOME: fakeRealHome,
+  })
+  ok('failpoint apuntando al almacén real por defecto: exit 1, nunca se activa', res.status === 1 && !res.signal)
+  ok('failpoint apuntando al almacén real por defecto: destino intacto', readFileSync(realSecretsFile, 'utf8') === baseSecretsFileText())
+}
+
+// --- before-fsync: SIGKILL real, destino ORIGINAL byte a byte intacto (rename nunca ocurrió) ---
+{
+  const secretsFile = writeSecretsFile(dir, 'crash-before-fsync.env', baseSecretsFileText())
+  const tmp = newTemp(dir, 'crash-before-fsync.tmp')
+  const [dev, ino, uid, mode] = pinOf(tmp)
+  const mutations = JSON.stringify([{ op: 'set-line', key: 'BOOKING_INTERNAL_API_SECRET', value: 'valor-que-nunca-debe-llegar-a-verse-activo' }])
+  const res = runWithEnv([secretsFile, tmp, String(dev), String(ino), String(uid), mode, 'active'], mutations, {
+    GAPSSA_ROTATION_TEST_FAILPOINT: 'before-fsync',
+    GAPSSA_ROTATION_TEST_DISPOSABLE_LABEL: DISPOSABLE_LABEL,
+  })
+  ok('before-fsync: el proceso murió por SIGKILL de verdad', res.signal === 'SIGKILL')
+  ok('before-fsync: destino ORIGINAL byte a byte intacto (nunca truncado, nunca a medias)', readFileSync(secretsFile, 'utf8') === baseSecretsFileText())
+  ok('before-fsync: destino conserva modo 600', (statSync(secretsFile).mode & 0o777).toString(8) === '600')
+}
+
+// --- after-fsync-before-rename: SIGKILL real, destino ORIGINAL sigue intacto (rename aún no ocurrió); el temporal SÍ quedó completo y durable ---
+{
+  const secretsFile = writeSecretsFile(dir, 'crash-after-fsync.env', baseSecretsFileText())
+  const tmp = newTemp(dir, 'crash-after-fsync.tmp')
+  const [dev, ino, uid, mode] = pinOf(tmp)
+  const mutations = JSON.stringify([{ op: 'set-line', key: 'BOOKING_INTERNAL_API_SECRET', value: 'valor-que-nunca-debe-llegar-a-verse-activo' }])
+  const res = runWithEnv([secretsFile, tmp, String(dev), String(ino), String(uid), mode, 'active'], mutations, {
+    GAPSSA_ROTATION_TEST_FAILPOINT: 'after-fsync-before-rename',
+    GAPSSA_ROTATION_TEST_DISPOSABLE_LABEL: DISPOSABLE_LABEL,
+  })
+  ok('after-fsync-before-rename: el proceso murió por SIGKILL de verdad', res.signal === 'SIGKILL')
+  ok('after-fsync-before-rename: destino ORIGINAL byte a byte intacto (rename NUNCA se ejecutó)', readFileSync(secretsFile, 'utf8') === baseSecretsFileText())
+  ok('after-fsync-before-rename: el temporal (huérfano, nunca renombrado) quedó completo y correcto', readFileSync(tmp, 'utf8').includes('BOOKING_INTERNAL_API_SECRET=valor-que-nunca-debe-llegar-a-verse-activo\n'))
+}
+
+// --- after-rename: SIGKILL real, destino YA es el documento nuevo COMPLETO (nunca parcial) ---
+{
+  const secretsFile = writeSecretsFile(dir, 'crash-after-rename.env', baseSecretsFileText())
+  const tmp = newTemp(dir, 'crash-after-rename.tmp')
+  const [dev, ino, uid, mode] = pinOf(tmp)
+  const mutations = JSON.stringify([{ op: 'set-line', key: 'BOOKING_INTERNAL_API_SECRET', value: 'valor-nuevo-tras-corte-justo-despues-del-rename' }])
+  const res = runWithEnv([secretsFile, tmp, String(dev), String(ino), String(uid), mode, 'active'], mutations, {
+    GAPSSA_ROTATION_TEST_FAILPOINT: 'after-rename',
+    GAPSSA_ROTATION_TEST_DISPOSABLE_LABEL: DISPOSABLE_LABEL,
+  })
+  ok('after-rename: el proceso murió por SIGKILL de verdad', res.signal === 'SIGKILL')
+  ok('after-rename: el temporal ya no existe (el rename SÍ se ejecutó)', !existsSync(tmp))
+  const finalContent = readFileSync(secretsFile, 'utf8')
+  ok('after-rename: destino contiene el documento NUEVO COMPLETO (nunca parcial/truncado)', finalContent.includes('BOOKING_INTERNAL_API_SECRET=valor-nuevo-tras-corte-justo-despues-del-rename\n'))
+  ok('after-rename: el resto del documento sigue íntegro (comentario preexistente)', finalContent.startsWith('# comentario preexistente\n\n'))
+  ok('after-rename: destino conserva modo 600 pese al corte', (statSync(secretsFile).mode & 0o777).toString(8) === '600')
 }
 
 rmSync(dir, { recursive: true, force: true })
