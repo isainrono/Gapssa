@@ -1308,6 +1308,62 @@ else
 fi
 rm -rf "$LOCK_TEST_DIR5"
 
+# --- regresión directa del bug real encontrado por la auditoría de
+#     preflight de S9 (2026-08-21): un `trap gapssa_secrets_lock_release
+#     EXIT` SEPARADO en rotate-all-interactive.sh sustituía en silencio al
+#     `trap gapssa_cleanup_dispatch EXIT` que `lib.sh` ya instala al
+#     cargarse (bash conserva un único manejador por señal, nunca los
+#     compone) — así que ningún ítem de la pila de limpieza global
+#     (ficheros temporales con secretos, el contenedor desechable de
+#     S3A...) llegaba a limpiarse nunca ante un SIGINT/EXIT real del
+#     proceso principal. Las pruebas de arriba (LOCK_RELEASE_OK, etc.)
+#     invocan `gapssa_secrets_lock_release`/`gapssa_cleanup_dispatch`
+#     DIRECTAMENTE, así que pasaban igual con el bug presente — nunca
+#     ejercitaban el trap realmente instalado en un proceso compuesto,
+#     igual que ocurría con el escenario Ctrl-C de run_scenarios.py (que
+#     interrumpe dentro del subproceso SEPARADO de 02-generate-secret.sh,
+#     cuyo propio `trap ... EXIT` nunca competía con nada). Esta prueba
+#     reproduce el patrón EXACTO que ahora usa rotate-all-interactive.sh
+#     (adquirir el lock, registrar su liberación con `gapssa_cleanup_push
+#     lock_release` — NUNCA un `trap` propio) y deja que el proceso
+#     termine SOLO por su `trap ... EXIT` real (el único que instala
+#     `lib.sh`) — sin llamar a `gapssa_secrets_lock_release` ni a
+#     `gapssa_cleanup_dispatch` a mano en ningún punto. Confirmado contra
+#     el `lib.sh` PRE-corrección (sin el `case` `lock_release)`, vía
+#     `git stash` temporal durante la auditoría, nunca commiteado): esta
+#     misma prueba falla ahí (el directorio de lock queda huérfano — la
+#     operación desconocida se descarta en silencio, ver `_gapssa_cleanup_run_one`)
+#     — así que si algún cambio futuro vuelve a separar la liberación del
+#     lock de esta pila (con o sin reintroducir un `trap` propio), esta
+#     prueba lo detecta
+#     en ningún punto — verificando que TANTO el lock COMO un fichero
+#     temporal con secreto ya registrado quedan limpios los dos.
+LOCK_TEST_DIR6B="$TMP_ROOT/lock-store-6b"
+LOCK_TRAP_RESULT="$(
+  bash -c '
+    source "$1/lib.sh"
+    trap on_interrupt_stub INT TERM
+    on_interrupt_stub() { exit 130; }
+    gapssa_secrets_lock_acquire "$2" >/dev/null 2>&1 || exit 1
+    gapssa_cleanup_push lock_release
+    f="$(gapssa_secrets_mktemp_secure gapssa-test-trap-secret)"
+    gapssa_cleanup_push shred_plain "$f"
+    printf "%s" "valor-ficticio-desechable" >"$f"
+    printf "%s" "$f" >"$3"
+    exit 130
+  ' _ "$SCRIPT_DIR" "$LOCK_TEST_DIR6B" "$TMP_ROOT/lock-store-6b.tmpfile-path" 2>/dev/null
+  echo "rc=$?"
+)"
+LOCK_TRAP_TMPFILE="$(cat "$TMP_ROOT/lock-store-6b.tmpfile-path" 2>/dev/null || true)"
+if [ ! -d "$LOCK_TEST_DIR6B/.rotation.lock" ] && [ -n "$LOCK_TRAP_TMPFILE" ] && [ ! -f "$LOCK_TRAP_TMPFILE" ]; then
+  echo "ok   - patrón real de rotate-all-interactive.sh (lock + gapssa_cleanup_push, sin trap propio): un EXIT no controlado limpia lock Y fichero temporal con secreto, ambos SOLO vía el trap real"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - trap real no limpió lock (dir presente=$([ -d "$LOCK_TEST_DIR6B/.rotation.lock" ] && echo si || echo no)) y/o temporal con secreto (path='$LOCK_TRAP_TMPFILE', presente=$([ -f "$LOCK_TRAP_TMPFILE" ] && echo si || echo no)) -- $LOCK_TRAP_RESULT"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$LOCK_TEST_DIR6B" "$TMP_ROOT/lock-store-6b.tmpfile-path"
+
 # --- dos adquisiciones REALMENTE concurrentes (dos procesos lanzados a la
 #     vez, nunca en secuencia) contra el MISMO almacén -> EXACTAMENTE una
 #     tiene éxito, la otra falla limpio (nunca las dos "ganan", nunca las

@@ -446,7 +446,20 @@ trap on_interrupt INT TERM
 # fin normal, `exit` explícito en cualquier puerta, o el `exit 130` de
 # on_interrupt. No-op si nunca se llegó a adquirir (p. ej. otra sesión ya
 # lo tenía y este proceso aborta antes).
-trap gapssa_secrets_lock_release EXIT
+#
+# Bug real (auditoría de preflight de S9, 2026-08-21): esto era antes un
+# `trap gapssa_secrets_lock_release EXIT` SEPARADO — bash solo conserva UN
+# manejador por señal (nunca los compone), así que este trap sustituía en
+# silencio al `trap gapssa_cleanup_dispatch EXIT` que `lib.sh` ya instala
+# al cargarse (línea ~1008), dejando la pila de limpieza global entera
+# (gapssa_cleanup_push: ficheros temporales con secretos como el
+# curl-config de admin de S9, el contenedor desechable de recuperación de
+# S3A...) sin ejecutarse NUNCA ante un SIGINT/EXIT real del proceso
+# principal — probado con una reproducción aislada de la semántica de
+# `trap` de bash (el segundo `trap ... EXIT` gana, no se compone). Ahora
+# la liberación del lock se registra como una entrada MÁS de esa misma
+# pila (ver gapssa_secrets_lock_acquire más abajo) — un único
+# `trap ... EXIT` real en todo el proceso, el que ya instala `lib.sh`.
 
 # ---------------------------------------------------------------------------
 # Frase de recuperación de backups — vive SOLO en esta variable bash del
@@ -4500,6 +4513,12 @@ main() {
     if ! gapssa_secrets_lock_acquire "$SECRETS_DIR"; then
       exit 1
     fi
+    # Se registra en la pila de limpieza global (nunca un `trap ... EXIT`
+    # propio — ver comentario junto a `trap on_interrupt INT TERM` más
+    # arriba) para que la liberación del lock participe en el mismo
+    # `trap gapssa_cleanup_dispatch EXIT` único que ya instala `lib.sh`,
+    # en vez de competir con él.
+    gapssa_cleanup_push lock_release
   fi
 
   if [ -n "$ONLY_GATE" ]; then

@@ -991,6 +991,28 @@ _gapssa_cleanup_run_one() {
     # activo no siga corriendo indefinidamente tras salir del script.
     docker rm -f "$a1" >/dev/null 2>&1 || true
     ;;
+  lock_release)
+    # Bloqueo de concurrencia (gapssa_secrets_lock_acquire/_release, más
+    # arriba en este mismo fichero) — participa en ESTA pila (registrado
+    # por rotate-all-interactive.sh justo tras adquirir el lock, nunca vía
+    # un `trap ... EXIT` propio) precisamente para que se libere en el
+    # mismo punto de choque que cualquier otra limpieza pendiente. Un
+    # `trap gapssa_secrets_lock_release EXIT` SEPARADO en
+    # rotate-all-interactive.sh (como existía antes de este cambio, bug
+    # real encontrado en la auditoría de preflight de S9 2026-08-21)
+    # SUSTITUYE en silencio a este `trap gapssa_cleanup_dispatch EXIT`
+    # (bash solo conserva un manejador por señal, nunca los compone) —
+    # así que ningún ítem de esta pila (ficheros temporales con secretos,
+    # el contenedor desechable de S3A...) llegaba a limpiarse nunca ante
+    # un SIGINT/EXIT real del proceso principal, pese a que
+    # `lib.test.sh` sí probaba `gapssa_cleanup_dispatch` correctamente en
+    # aislamiento (nunca contra el trap realmente instalado por el script
+    # compuesto). gapssa_secrets_lock_release ya es idempotente por
+    # diseño (no-op si el lock nunca se adquirió, o si el propietario
+    # registrado ya no es este proceso), así que puede repetirse sin
+    # riesgo si esta operación se dispatch-ea más de una vez.
+    gapssa_secrets_lock_release
+    ;;
   *)
     return 1
     ;;
