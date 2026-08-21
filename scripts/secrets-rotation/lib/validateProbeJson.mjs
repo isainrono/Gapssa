@@ -58,6 +58,23 @@ export const SCHEMAS = {
     oldRejected: 'boolean',
     absentRejected: 'boolean',
   },
+  's7-schema-preflight': {
+    ready: 'boolean',
+    appliedMigrations: 'number',
+    expectedMigrations: 'number',
+    missingMigrationTags: 'string[]',
+    missingColumns: 'string[]',
+    missingEnumValues: 'string[]',
+  },
+  's7a-apply': {
+    applied: 'boolean',
+  },
+  's7a-verify': {
+    guestAccessTokenBackfillMissing: 'number',
+    authenticatedAccessTokenVersionShouldBeNull: 'number',
+    emailLookupKeyVersionNullCount: 'number',
+    invariantsOk: 'boolean',
+  },
 }
 
 function fieldMatchesType(value, typeSpec) {

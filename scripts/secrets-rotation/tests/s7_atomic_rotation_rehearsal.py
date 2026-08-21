@@ -170,32 +170,112 @@ def restore_checkpoint(secrets_dir, checkpoint_dir):
     shutil.copy2(os.path.join(checkpoint_dir, "rotation-status"), os.path.join(secrets_dir, ".rotation-status"))
 
 
-def run_only_s7(shadow_root, env, extra_env=None, expect_prompt_answers=True, timeout=180, on_output=None):
-    """Lanza `rotate-all-interactive.sh --only S7` REAL vía PTY — nunca una
-    simulación que invoque helpers bash por separado. Responde los
-    prompts genéricos conocidos; `on_output(p, new_text)` (opcional) se
-    llama en cada iteración con el texto nuevo, para que el llamante
-    pueda decidir cuándo mandar SIGINT (los escenarios de interrupción lo
-    usan). Devuelve el PtyProcess ya cerrado (o SIGKILLed por un
-    failpoint, en cuyo caso `.proc.returncode`/`.signal` refleja eso)."""
+# =====================================================================
+# Reproducción del incidente real 2026-08-21 (Bloque 11): un esquema de
+# `gapssa_booking` con las migraciones 0007/0008 (email_lookup_hmac_key_version/
+# access_token_key_version) SIN aplicar. drizzle-orm no ofrece una forma
+# de aplicar "solo hasta la migración N" contra un `migrationsFolder` real
+# (readMigrationFiles siempre lee la carpeta COMPLETA que se le pasa) --
+# así que para reproducir el esquema VIEJO exacto se construye una carpeta
+# de migraciones TRUNCADA (copia real de los .sql/_journal.json del propio
+# repositorio, solo hasta el índice pedido -- nunca inventados) y se aplica
+# con el MISMO `migrate()` de drizzle-orm/node-postgres/migrator (nunca
+# una reimplementación), vía un script Node desechable ejecutado con el
+# node_modules real del monorepo (cwd=REPO_ROOT_REAL). Nunca toca el
+# checkout real (ni siquiera de lectura fuera de copiar bytes ya
+# versionados), nunca la base real.
+# =====================================================================
+
+REAL_BOOKING_MIGRATIONS_DIR = os.path.join(REPO_ROOT_REAL, "apps", "web", "drizzle", "booking", "migrations")
+
+
+def build_truncated_booking_migrations_dir(tmp_root, up_to_count):
+    """Copia REAL (nunca inventada) de las primeras `up_to_count` entradas
+    del journal real de gapssa_booking + sus .sql — reproduce el esquema
+    EXACTO en el que estaba la base real en el incidente 2026-08-21 (7 de
+    9 migraciones aplicadas, 0007/0008 pendientes)."""
+    with open(os.path.join(REAL_BOOKING_MIGRATIONS_DIR, "meta", "_journal.json"), encoding="utf-8") as f:
+        journal = json.load(f)
+    truncated_entries = journal["entries"][:up_to_count]
+    assert len(truncated_entries) == up_to_count, f"journal real tiene menos de {up_to_count} entradas"
+
+    out_dir = os.path.join(tmp_root, f"booking-migrations-truncated-{up_to_count}")
+    os.makedirs(os.path.join(out_dir, "meta"), exist_ok=True)
+    with open(os.path.join(out_dir, "meta", "_journal.json"), "w", encoding="utf-8") as f:
+        json.dump({**journal, "entries": truncated_entries}, f)
+    for entry in truncated_entries:
+        tag = entry["tag"]
+        shutil.copy2(os.path.join(REAL_BOOKING_MIGRATIONS_DIR, f"{tag}.sql"), os.path.join(out_dir, f"{tag}.sql"))
+    return out_dir
+
+
+def apply_migrations_with_folder(booking_url, migrations_folder):
+    """Aplica `migrations_folder` contra `booking_url` con el MISMO
+    `migrate()` real de drizzle-orm/node-postgres/migrator (nunca
+    reimplementado) -- usado SOLO para preparar el esquema VIEJO del
+    fixture (nunca para el paso real que gate_s7a() ejerce, que usa
+    runBookingMigrations()/la carpeta REAL completa vía su propio probe)."""
+    script = f"""
+import {{ migrate }} from 'drizzle-orm/node-postgres/migrator'
+import {{ drizzle }} from 'drizzle-orm/node-postgres'
+import {{ Pool }} from 'pg'
+const pool = new Pool({{ connectionString: process.argv[2] }})
+const db = drizzle(pool)
+await migrate(db, {{ migrationsFolder: process.argv[3] }})
+await pool.end()
+console.log('applied')
+"""
+    # dir=HERE (nunca el temp del sistema): resolución ESM de Node camina
+    # hacia ARRIBA desde la ruta del propio fichero que importa buscando
+    # node_modules -- un temp fuera del monorepo nunca encuentra
+    # drizzle-orm/pg (hallazgo real de la primera ejecución de este bloque).
+    tmp_script = tempfile.NamedTemporaryFile(mode="w", suffix=".mjs", delete=False, dir=HERE)
+    try:
+        tmp_script.write(script)
+        tmp_script.close()
+        res = subprocess.run(
+            ["node", tmp_script.name, booking_url, migrations_folder],
+            cwd=REPO_ROOT_REAL, capture_output=True, text=True, timeout=60,
+        )
+        if res.returncode != 0:
+            raise RuntimeError(f"apply_migrations_with_folder falló (rc={res.returncode}): stderr={res.stderr!r}")
+    finally:
+        os.unlink(tmp_script.name)
+
+
+def run_only_gate(shadow_root, env, gate, extra_env=None, timeout=180, on_output=None, extra_handlers=None):
+    """Lanza `rotate-all-interactive.sh --only <gate>` REAL vía PTY — nunca
+    una simulación que invoque helpers bash por separado. Responde los
+    prompts genéricos conocidos (más los específicos de `extra_handlers`,
+    p. ej. la frase de confirmación propia de S7A); `on_output(p, new_text)`
+    (opcional) se llama en cada iteración con el texto nuevo, para que el
+    llamante pueda decidir cuándo mandar SIGINT (los escenarios de
+    interrupción lo usan). Devuelve el PtyProcess ya cerrado (o SIGKILLed
+    por un failpoint, en cuyo caso `.proc.returncode`/`.signal` refleja
+    eso)."""
     script = os.path.join(shadow_root, "scripts", "secrets-rotation", "rotate-all-interactive.sh")
     full_env = dict(env)
     if extra_env:
         full_env.update(extra_env)
-    p = PtyProcess(["bash", script, "--only", "S7"], env=full_env, cwd=shadow_root)
+    p = PtyProcess(["bash", script, "--only", gate], env=full_env, cwd=shadow_root)
     handlers = [
-        (re.compile(r"Escribe exactamente"), lambda: p.send_line("confirmo fuera de claude code")),
+        (re.compile(r"Escribe exactamente 'confirmo fuera de claude code'"), lambda: p.send_line("confirmo fuera de claude code")),
         (re.compile(r"¿Generar una frase aleatoria segura ahora \(recomendado\)\?"), lambda: p.send_line("si")),
         (re.compile(r"Pulsa Enter cuando lo hayas hecho"), lambda: p.send_line("")),
         (re.compile(r"La puerta S7 ya está marcada 'done'\. ¿Repetirla de todos modos\?"), lambda: p.send_line("si")),
-        (re.compile(r"¿Ejecutar la puerta \w+ ahora\?"), lambda: p.send_line("si")),
     ]
+    if extra_handlers:
+        handlers = list(extra_handlers) + handlers
+    # Genérico "¿Ejecutar la puerta X ahora?" DEBE evaluarse último — algunas
+    # puertas (S3A/S7A) tienen SU PROPIA confirmación previa independiente
+    # (ask_yes_no + frase exacta) que debe responderse primero.
+    handlers.append((re.compile(r"¿Ejecutar la puerta \w+ ahora\?"), lambda: p.send_line("si")))
     start = time.time()
     last_len = 0
     try:
         while True:
             if time.time() - start >= timeout:
-                raise TimeoutError(f"run_only_s7: tope agotado tras {timeout}s. Transcript reciente:\n{p.transcript[last_len:][-2000:]}")
+                raise TimeoutError(f"run_only_gate({gate}): tope agotado tras {timeout}s. Transcript reciente:\n{p.transcript[last_len:][-2000:]}")
             p.read_available(timeout=1)
             new_text = p.transcript[last_len:]
             if new_text and on_output:
@@ -219,6 +299,28 @@ def run_only_s7(shadow_root, env, extra_env=None, expect_prompt_answers=True, ti
     finally:
         p.close()
     return p
+
+
+def run_only_s7(shadow_root, env, extra_env=None, expect_prompt_answers=True, timeout=180, on_output=None):
+    return run_only_gate(shadow_root, env, "S7", extra_env=extra_env, timeout=timeout, on_output=on_output)
+
+
+def run_only_s7a(shadow_root, env, extra_env=None, timeout=180, on_output=None):
+    """`--only S7A` — responde también su confirmación PREVIA e
+    INDEPENDIENTE (ask_yes_no genérico + frase exacta 'confirmo
+    migraciones s7a', ver gate_s7a()) vía `on_output`, ya que esos
+    prompts necesitan el `PtyProcess` que `run_only_gate` crea
+    internamente."""
+    def on_output_wrapper(p, new_text):
+        if re.search(r"¿Confirmas que quieres comprobar/aplicar las migraciones pendientes de gapssa_booking ahora \(S7A\)\?", new_text):
+            p.send_line("si")
+        elif re.search(r"Escribe exactamente 'confirmo migraciones s7a'", new_text):
+            p.send_line("confirmo migraciones s7a")
+        if on_output:
+            return on_output(p, new_text)
+        return False
+
+    return run_only_gate(shadow_root, env, "S7A", extra_env=extra_env, timeout=timeout, on_output=on_output_wrapper)
 
 
 # =====================================================================
@@ -288,10 +390,27 @@ def main():
         migrate_env["DATABASE_URL_AUTH"] = auth_url
         auth_res = subprocess.run(["npm", "run", "auth:db:migrate", "-w", "@gapssa/web"], cwd=REPO_ROOT_REAL, env=migrate_env, capture_output=True, text=True)
         report("Migraciones: gapssa_auth aplicadas", auth_res.returncode == 0, auth_res.stderr[-1500:] if auth_res.returncode != 0 else "")
-        migrate_env2 = dict(os.environ)
-        migrate_env2["DATABASE_URL_BOOKING"] = booking_url
-        booking_res = subprocess.run(["npm", "run", "booking:db:migrate", "-w", "@gapssa/web"], cwd=REPO_ROOT_REAL, env=migrate_env2, capture_output=True, text=True)
-        report("Migraciones: gapssa_booking aplicadas", booking_res.returncode == 0, booking_res.stderr[-1500:] if booking_res.returncode != 0 else "")
+
+        # ================================================================
+        # Bloque 11 (incidente real 2026-08-21) — preparación para los
+        # Escenarios G/H/G' (más abajo, DESPUÉS de la sesión S1→S6 real:
+        # tanto gate_s7()::preflight como gate_s7a() importan
+        # server/env.ts, que exige el env COMPLETO válido — incluido
+        # ESPOCRM_API_KEY, que solo existe tras S4 real — así que
+        # '--only S7'/'--only S7A' no pueden invocarse de forma
+        # significativa antes de que la sesión S1→S6 termine; hallazgo
+        # real de la primera ejecución de este bloque). En vez de migrar
+        # gapssa_booking COMPLETO de entrada, primero se aplica SOLO hasta
+        # la migración 0006 (journal real truncado — reproduce
+        # EXACTAMENTE el esquema en el que estaba la base real cuando
+        # ocurrió el incidente: 0007/0008 pendientes) — la sesión S1→S6
+        # de abajo nunca toca gapssa_booking, así que corre igual de bien
+        # contra este esquema viejo.
+        # ================================================================
+        print("\n=== Preparación esquema VIEJO (Bloque 11): solo 0000-0006 aplicadas ===")
+        old_schema_dir = build_truncated_booking_migrations_dir(tmp, up_to_count=7)
+        apply_migrations_with_folder(booking_url, old_schema_dir)
+        report("Esquema VIEJO preparado: gapssa_booking tiene exactamente 7 migraciones aplicadas (0007/0008 pendientes)", True)
 
         base.install_acl_meeting_custom_fields(shadow_root, pj, tmp)
         base.setup_acl_fixture(pj)
@@ -371,6 +490,67 @@ def main():
             return json.loads(val).get("v3") if val else None
 
         # ============================================================
+        # Escenario G — gate_s7() bloquea LIMPIAMENTE por preflight contra
+        # el esquema VIEJO real (0007/0008 pendientes, preparado arriba) —
+        # SIN generar ni activar v3 en ningún mapa, SIN tocar Postgres.
+        # Escenario H — gate_s7a() aplica EXACTAMENTE las migraciones que
+        # faltan con el runner oficial, tras un backup estructural
+        # verificado, y confirma los invariantes del backfill de 0008.
+        # Escenario G' — tras S7A, gate_s7() ya NO bloquea por esquema
+        # (preflight ready=true) — interrumpida DELIBERADAMENTE justo
+        # después (nunca se deja completar aquí: el checkpoint post-S6 de
+        # arriba debe seguir sirviendo, sin cambios, a los Escenarios A-F).
+        # ============================================================
+        print("\n=== Escenario G: gate_s7() bloquea por preflight contra el esquema VIEJO (cero mutación) ===")
+        restore_checkpoint(secrets_dir, checkpoint_dir)
+        reset_booking_tables()
+        env_snapshot_before_g = base.read_secrets_file(secrets_dir)
+        p_g = run_only_gate(shadow_root, env, "S7", timeout=120)
+        status_g = base.read_status(secrets_dir)
+        report("Escenario G: S7 termina 'blocked' (preflight — nunca 'failed', nunca 'done')", status_g.get("S7") == "blocked", {"status": status_g, "tail": p_g.transcript[-2500:]})
+        report("Escenario G: el mensaje de bloqueo apunta a S7A", "S7A" in p_g.transcript[-3000:], p_g.transcript[-3000:])
+        env_snapshot_after_g = base.read_secrets_file(secrets_dir)
+        report("Escenario G: el archivo externo queda BYTE A BYTE intacto (v3 JAMÁS se generó/activó — preflight corta ANTES de la primera mutación)", env_snapshot_before_g == env_snapshot_after_g, "difiere")
+        maps_g = active_version_map()
+        for key, versions in maps_g.items():
+            report(f"Escenario G: {key} NUNCA contiene v3", "v3" not in versions, versions)
+
+        print("\n=== Escenario H: gate_s7a() aplica las migraciones que faltan, verifica, y deja listo ===")
+        p_h = run_only_s7a(shadow_root, env, timeout=180)
+        status_h = base.read_status(secrets_dir)
+        report("Escenario H: S7A termina 'done'", status_h.get("S7A") == "done", {"status": status_h, "tail": p_h.transcript[-2500:]})
+        report("Escenario H: S7A creó un backup estructural verificado", "backup estructural verificado" in p_h.transcript, p_h.transcript[-3000:])
+        report("Escenario H: S7A aplicó las migraciones con el runner oficial", "migraciones aplicadas" in p_h.transcript, p_h.transcript[-3000:])
+        report("Escenario H: S7A verificó los invariantes del backfill", '"invariantsOk":true' in p_h.transcript, p_h.transcript[-3000:])
+        env_snapshot_after_h = base.read_secrets_file(secrets_dir)
+        report("Escenario H: S7A NUNCA tocó \\$SECRETS_FILE (archivo externo byte a byte intacto)", env_snapshot_after_g == env_snapshot_after_h, "difiere")
+
+        # Reejecución de S7A tras quedar 'done': el propio preflight ya
+        # informa ready=true -> no-op explícito, nunca reaplica nada.
+        p_h2 = run_only_s7a(shadow_root, env, timeout=60)
+        report("Escenario H (reejecución tras 'done'): S7A no vuelve a aplicar nada (mensaje explícito de 'nada que hacer')", "nada que hacer" in p_h2.transcript, p_h2.transcript[-2000:])
+
+        print("\n=== Escenario G' (tras S7A): gate_s7() ya NO bloquea por esquema — preflight ready=true ===")
+        preflight_ready_seen = {"value": False}
+
+        def on_output_g2(p, new_text, seen=preflight_ready_seen):
+            if not seen["value"] and re.search(r"Esquema real de gapssa_booking listo", new_text):
+                seen["value"] = True
+                p.sigint()
+            return False
+
+        run_only_gate(shadow_root, env, "S7", timeout=60, on_output=on_output_g2)
+        report("Escenario G' (tras S7A): el mensaje de preflight 'listo' SÍ apareció (el bloqueo del Escenario G ya no ocurre)", preflight_ready_seen["value"])
+        status_g2 = base.read_status(secrets_dir)
+        report("Escenario G' (tras S7A): S7 pasa de 'blocked' a 'rollback_required' (interrumpida DESPUÉS del preflight, nunca vuelve a bloquearse por esquema)", status_g2.get("S7") == "rollback_required", status_g2)
+
+        # Restaura el checkpoint (estado + archivo) para que los
+        # Escenarios A-F de abajo arranquen EXACTAMENTE igual que si
+        # G/H/G' nunca se hubieran ensayado.
+        restore_checkpoint(secrets_dir, checkpoint_dir)
+        report("Escenario G' (limpieza): checkpoint post-S6(+v2) restaurado — S7 vuelve a 'pending'", base.read_status(secrets_dir).get("S7") in (None, "pending"), base.read_status(secrets_dir))
+
+        # ============================================================
         # Escenario A — camino feliz completo, sin interrupción.
         # ============================================================
         print("\n=== Escenario A: camino feliz completo ===")
@@ -413,6 +593,50 @@ def main():
         report("Escenario A (reejecución): v3 NUNCA cambia en ningún mapa (idempotente, sin generar otro v3)", v3_by_map_a == v3_by_map_a2, {"antes": v3_by_map_a, "despues": v3_by_map_a2})
 
         # ============================================================
+        # Escenario I (Bloque 11, incidente real 2026-08-21) — corte real
+        # (SIGKILL) DESPUÉS de que v3 quede activo en los 4 mapas
+        # versionados, ANTES de la primera consulta real de
+        # probes/s7MigrateAndAudit.mts (el punto EXACTO del incidente
+        # real, reproducido con el mismo failpoint de auto-SIGKILL que
+        # Escenario E/F ya prueban para otras fronteras). Demuestra que
+        # gate_s7() queda en 'forward_recovery_required' (nunca 'failed'
+        # simple) y que reanudar completa la rotación normalmente, sin
+        # regenerar v3.
+        # ============================================================
+        print("\n=== Escenario I: SIGKILL real justo antes de la primera consulta de migración (v3 ya activo) ===")
+        restore_checkpoint(secrets_dir, checkpoint_dir)
+        reset_booking_tables()
+        seed_result_i = seed([guest_row(aes="v1", fp="v1", status="resolved"), guest_row(aes="v2", fp="v2", status="resolved")])
+        rows_i = seed_result_i["created"]
+
+        crash_env_i = {
+            "GAPSSA_ROTATION_TEST_MIGRATION_PAUSE": "before-migration",
+            "GAPSSA_ROTATION_TEST_MIGRATION_CRASH": "1",
+            "GAPSSA_ROTATION_TEST_DISPOSABLE_LABEL": pj.name,
+        }
+        p_i = run_only_s7(shadow_root, s7_env, extra_env=crash_env_i, timeout=60)
+        report("Escenario I: la puerta termina en fallo limpio (rc != 0) tras el SIGKILL real del proceso de migración, ANTES de su primera consulta", p_i.proc.returncode != 0, f"returncode={p_i.proc.returncode}")
+        status_i_crash = base.read_status(secrets_dir)
+        report("Escenario I: S7 queda 'forward_recovery_required' tras el corte — NUNCA 'failed' simple, NUNCA 'rollback_required' (el corte es un fallo real DENTRO de la puerta, no una señal externa al proceso bash)", status_i_crash.get("S7") == "forward_recovery_required", status_i_crash)
+        maps_i_crash = active_version_map()
+        report("Escenario I: v3 SÍ quedó activo en los 4 mapas versionados pese al corte (la frontera ya se había cruzado)", all("v3" in v for v in maps_i_crash.values()), maps_i_crash)
+        for key in ("BOOKING_FIELD_ENCRYPTION_ACTIVE_KEY_VERSION", "BOOKING_IDENTITY_FINGERPRINT_ACTIVE_KEY_VERSION", "BOOKING_EMAIL_LOOKUP_HMAC_ACTIVE_KEY_VERSION", "BOOKING_REQUEST_ACCESS_TOKEN_HMAC_ACTIVE_KEY_VERSION"):
+            report(f"Escenario I: {key}=v3 pese al corte", base.field_from_secrets_file(secrets_dir, key) == "v3")
+        report("Escenario I: v1/v2 SIGUEN presentes (convivencia dual — nada se retiró, la migración/reindexado nunca llegó a su primera consulta)", "v1" in maps_i_crash["BOOKING_FIELD_ENCRYPTION_KEYS"] and "v2" in maps_i_crash["BOOKING_FIELD_ENCRYPTION_KEYS"], maps_i_crash)
+        v3_i_before_resume = {k: v3_value_of(k) for k in maps_i_crash}
+        env_snapshot_i_crash = base.read_secrets_file(secrets_dir)
+
+        p_i2 = run_only_s7(shadow_root, s7_env, timeout=180)
+        status_i2 = base.read_status(secrets_dir)
+        report("Escenario I (reanudación): S7 termina 'done'", status_i2.get("S7") == "done", status_i2)
+        v3_i_after_resume = {k: v3_value_of(k) for k in maps_i_crash}
+        report("Escenario I (reanudación): v3 NUNCA cambia en ningún mapa (reanuda desde el v3 existente, nunca regenera)", v3_i_before_resume == v3_i_after_resume, {"antes": v3_i_before_resume, "despues": v3_i_after_resume})
+        verify_rows_i = [{"kind": r["kind"], "identityId": r["identityId"]} for r in rows_i]
+        vres_i = verify(verify_rows_i)
+        report("Escenario I (reanudación): todas las filas descifran con el mapa FINAL (solo v3)", vres_i["allOk"], vres_i)
+        report("Escenario I: en ningún momento se OFRECIÓ restaurar un backup (el prompt '¿Intentar restaurar el backup...' es EXCLUSIVO de la rama no-S7 de confirm_gate — nunca debe aparecer aquí)", "Intentar restaurar el backup" not in p_i.transcript and "Intentar restaurar el backup" not in p_i2.transcript, "prompt de restauración de backup encontrado en el transcript")
+
+        # ============================================================
         # Escenario B — fila corrupta/no descifrable.
         # ============================================================
         print("\n=== Escenario B: fila corrupta/no descifrable ===")
@@ -426,7 +650,15 @@ def main():
         p = run_only_s7(shadow_root, s7_env, timeout=180)
         status = base.read_status(secrets_dir)
         report("Escenario B: la migración falla CERRADA — S7 NUNCA queda 'done'", status.get("S7") != "done", status)
-        report("Escenario B: S7 queda 'failed' (fallo real de migración, distinto de 'blocked')", status.get("S7") == "failed", status)
+        # Bloque 11: el fallo real de descifrado ocurre DENTRO de
+        # probes/s7MigrateAndAudit.mts, DESPUÉS de que v3 ya quedara
+        # activo en los 4 mapas (generar+activar ya corrieron antes de
+        # invocar esta sonda) — la frontera de _s7_leave_forward_recovery_required
+        # ya se cruzó, así que el estado correcto es 'forward_recovery_required',
+        # nunca 'failed' simple (que antes de este bloque sugería, de
+        # forma incorrecta, que reintentar desde cero era equivalente a
+        # reanudar).
+        report("Escenario B: S7 queda 'forward_recovery_required' (fallo real de migración DESPUÉS de activar v3, distinto de 'blocked' y de 'failed' simple)", status.get("S7") == "forward_recovery_required", status)
         maps_b = active_version_map()
         report("Escenario B: NINGUNA clave antigua se retira — v1 sigue presente en BOOKING_FIELD_ENCRYPTION_KEYS (mapa dual permanece)", "v1" in maps_b["BOOKING_FIELD_ENCRYPTION_KEYS"], maps_b)
         vres_control = verify([{"kind": "guest", "identityId": control_row["identityId"]}])
@@ -486,7 +718,9 @@ def main():
         # El SIGKILL solo mata al hijo Node (atomicSecretsFileMutate.mjs) —
         # bash lo ve como un exit code no-cero de la sustitución de
         # comando ($rc=137), lo captura con la comprobación normal de
-        # _s7_apply_mutations y llama a leave_gate_failed "S7" — el
+        # _s7_apply_mutations y llama a _s7_leave_forward_recovery_required
+        # "S7" (Bloque 11 — este corte ocurre reti­rando fingerprint,
+        # MUY por detrás de la frontera de activación de v3) — el
         # proceso bash termina de forma ORDENADA con exit != 0, nunca
         # colgado ni el intérprete completo abatido por la señal (esa es
         # justo la garantía que se está demostrando: el corte real ocurre
@@ -496,7 +730,7 @@ def main():
         p = run_only_s7(shadow_root, s7_env, extra_env=crash_env, timeout=60)
         report("Escenario E: la puerta termina en fallo limpio (rc != 0) tras el SIGKILL real del escritor atómico durante el retiro", p.proc.returncode != 0, f"returncode={p.proc.returncode}")
         status_e_crash = base.read_status(secrets_dir)
-        report("Escenario E: S7 queda 'failed' tras el corte (nunca 'done' con una escritura a medias)", status_e_crash.get("S7") == "failed", status_e_crash)
+        report("Escenario E: S7 queda 'forward_recovery_required' tras el corte (nunca 'done' con una escritura a medias, nunca 'failed' simple — v3 ya activo)", status_e_crash.get("S7") == "forward_recovery_required", status_e_crash)
         env_snapshot_after_crash = base.read_secrets_file(secrets_dir)
         report("Escenario E: el archivo externo queda BYTE A BYTE intacto tras el corte (rename nunca llegó a ejecutarse)", env_snapshot_before == env_snapshot_after_crash, "difiere")
         maps_e_after_crash = active_version_map()
@@ -585,7 +819,10 @@ def main():
         p = run_only_s7(shadow_root, s7_env, extra_env=crash_env_f, timeout=60)
         report("Escenario F: la puerta termina en fallo limpio (rc != 0) — bash nunca puede distinguir 'el rename sí ocurrió' de un corte real, así que trata el hijo muerto como fallo pase lo que pase", p.proc.returncode != 0)
         status_f_crash = base.read_status(secrets_dir)
-        report("Escenario F: S7 queda 'failed' tras el corte (nunca 'done' con un secreto sin verificar)", status_f_crash.get("S7") == "failed", status_f_crash)
+        # Bloque 11: BOOKING_INTERNAL_API_SECRET se rota DESPUÉS de que v3
+        # ya sea la versión activa de los 4 mapas — la frontera ya se
+        # cruzó, así que 'forward_recovery_required', nunca 'failed'.
+        report("Escenario F: S7 queda 'forward_recovery_required' tras el corte (nunca 'done' con un secreto sin verificar, nunca 'failed' simple — v3 ya activo)", status_f_crash.get("S7") == "forward_recovery_required", status_f_crash)
         mid_internal_secret = base.field_from_secrets_file(secrets_dir, "BOOKING_INTERNAL_API_SECRET")
         report("Escenario F: el valor en disco tras el corte es COMPLETO y distinto del anterior (nunca parcial — atomicidad ya probada a nivel de primitiva; el rename SÍ llegó a ejecutarse antes del corte)", mid_internal_secret != old_internal_secret and len(mid_internal_secret) > 0)
 

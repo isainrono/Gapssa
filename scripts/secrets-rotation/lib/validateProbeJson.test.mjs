@@ -2,6 +2,7 @@
 // Pruebas de lib/validateProbeJson.mjs — contrato JSON cerrado de las
 // sondas permanentes de S6/S7: documento único, conjunto exacto de
 // claves, tipos exactos, nunca imprime valores en sus mensajes de error.
+// (9 schemas — ver SCHEMAS en validateProbeJson.mjs)
 import { validateProbeJsonText, SCHEMAS } from './validateProbeJson.mjs'
 import { ok, summarizeAndExit } from './testHarness.mjs'
 
@@ -46,6 +47,38 @@ import { ok, summarizeAndExit } from './testHarness.mjs'
 {
   const r = validateProbeJsonText('s7-internal-check', '{"newAccepted":true,"oldRejected":true,"absentRejected":true}\n')
   ok('s7-internal-check válido: ok=true', r.ok === true)
+}
+{
+  const r = validateProbeJsonText(
+    's7-schema-preflight',
+    JSON.stringify({
+      ready: false,
+      appliedMigrations: 7,
+      expectedMigrations: 9,
+      missingMigrationTags: ['0007_gifted_typhoid_mary', '0008_freezing_matthew_murdock'],
+      missingColumns: ['pending_guest_identities.email_lookup_hmac_key_version'],
+      missingEnumValues: [],
+    }) + '\n',
+  )
+  ok('s7-schema-preflight válido (ready=false con detalle): ok=true', r.ok === true)
+}
+{
+  const r = validateProbeJsonText(
+    's7-schema-preflight',
+    '{"ready":true,"appliedMigrations":9,"expectedMigrations":9,"missingMigrationTags":[],"missingColumns":[],"missingEnumValues":[]}\n',
+  )
+  ok('s7-schema-preflight válido (ready=true): ok=true', r.ok === true)
+}
+{
+  const r = validateProbeJsonText('s7a-apply', '{"applied":true}\n')
+  ok('s7a-apply válido: ok=true', r.ok === true)
+}
+{
+  const r = validateProbeJsonText(
+    's7a-verify',
+    '{"guestAccessTokenBackfillMissing":0,"authenticatedAccessTokenVersionShouldBeNull":0,"emailLookupKeyVersionNullCount":0,"invariantsOk":true}\n',
+  )
+  ok('s7a-verify válido: ok=true', r.ok === true)
 }
 
 // --- fallo cerrado: schema desconocida ---
@@ -125,9 +158,9 @@ import { ok, summarizeAndExit } from './testHarness.mjs'
   ok('dos documentos JSON pegados en la misma línea: rechazado', r.ok === false)
 }
 
-// --- las 6 schemas están efectivamente cerradas (documentación viva) ---
+// --- las 9 schemas están efectivamente cerradas (documentación viva) ---
 {
-  ok('exactamente 6 schemas registradas', Object.keys(SCHEMAS).length === 6)
+  ok('exactamente 9 schemas registradas', Object.keys(SCHEMAS).length === 9)
 }
 
 summarizeAndExit()

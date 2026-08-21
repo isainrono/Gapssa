@@ -846,6 +846,89 @@ el `app-check` final no queda verde, para `espocrm`/`daemon`/`websocket`
 limpiamente en vez de dejarlos en un bucle de reinicio indefinido — con un
 aviso explícito que apunta a S3B si el fichero quedó desincronizado.
 
+## S7A — aplicar migraciones pendientes de `gapssa_booking` (subpuerta separada)
+
+Existe para un caso concreto y real (no hipotético — incidente
+2026-08-21, ver "Bloque 11" más abajo): `gate_s7()` generó/activó `v3` en
+los 4 mapas versionados de secretos de booking y SOLO ENTONCES intentó
+recifrar/reindexar filas reales de `gapssa_booking` — cuya migración
+0008 (`email_lookup_hmac_key_version`/`access_token_key_version`) nunca
+se había aplicado contra la base conectada. La primera consulta real
+falló a mitad (columna inexistente), dentro de una transacción que se
+revirtió sola (cero escritura en Postgres), pero `v3` YA era la versión
+activa del almacén externo.
+
+**Causa raíz**: `gate_s7()` nunca comprobaba el esquema real de
+`gapssa_booking` antes de mutar el almacén de secretos, y no existía
+ninguna vía, dentro de este toolkit, para aplicar únicamente las
+migraciones de Drizzle pendientes — rotar secretos y aplicar DDL de
+esquema son operaciones distintas, con permisos y necesidades de backup
+distintas, que nunca deberían vivir dentro de la misma puerta.
+
+**Mecanismo** (`--only S7A`, nunca parte del recorrido normal S1→S9,
+confirmación explícita e independiente de la de S7 — frase exacta
+`confirmo migraciones s7a`): NUNCA toca `$SECRETS_FILE` (ni un byte —
+solo lee, del mismo modo que `pg_capture()`, las credenciales de
+Postgres que ya necesita para conectar), NUNCA arranca `apps/web`, NUNCA
+importa `fieldEncryptionRotation.ts`/`emailLookupHmacRotation.ts` (cero
+recifrado/reindexado — eso es EXCLUSIVAMENTE `gate_s7()`).
+
+Pasos, en orden, cada uno con su propia condición de parada:
+
+1. `probes/s7SchemaPreflight.mts` (la MISMA sonda de solo lectura que
+   `gate_s7()` ejecuta como su propio primer paso — nunca duplicada):
+   compara `drizzle.__drizzle_migrations` contra la lista cerrada de
+   `apps/web/drizzle/booking/migrations/meta/_journal.json`, y comprueba
+   explícitamente (`information_schema.columns`/`pg_enum`) las
+   columnas/valores de enum concretos que 0007/0008 añaden. Si el
+   esquema YA está listo (`ready=true`), S7A termina `done` sin tocar
+   nada — nunca reaplica migraciones ya aplicadas.
+2. Backup ESTRUCTURAL (`pg_dump --schema-only --no-owner
+   --no-privileges` — tablas/columnas/índices/constraints/enums, CERO
+   filas, CERO PII, CERO ciphertext) de `gapssa_booking`, verificado
+   no-vacío antes de continuar, escrito bajo
+   `$SECRETS_DIR/s7a-postgres-backups/` (modo 700/600). Mismo patrón de
+   credenciales que `pg_capture()`: fichero `.pgpass` 600 montado de
+   solo lectura en un contenedor efímero, la contraseña nunca en
+   argv/env de ningún proceso.
+3. Aplica las migraciones pendientes con el runner OFICIAL de Drizzle
+   (`probes/s7aApplyBookingMigrations.mts` → `runBookingMigrations()`,
+   `apps/web/src/server/booking/db/migrate.ts` — el MISMO código que
+   `npm run booking:db:migrate`, nunca reimplementado). Drizzle envuelve
+   TODAS las migraciones pendientes en una ÚNICA transacción
+   (`pg-core/dialect.js::migrate`) — un fallo a mitad NUNCA deja DDL a
+   medias comprometido: la base queda EXACTAMENTE como antes de ese
+   intento, así que `failed` aquí es seguro reintentar sin más
+   (corrige el problema y vuelve a lanzar `--only S7A`).
+4. Vuelve a ejecutar `s7SchemaPreflight.mts` y exige `ready=true`.
+5. Verifica los invariantes documentados del backfill de 0008
+   (`probes/s7aVerifyBookingInvariants.mts`, solo `count(*)`, cero PII):
+   toda solicitud de invitado histórica (`client_account_id IS NULL`)
+   debe tener `access_token_key_version='v1'` (nunca NULL); ninguna
+   solicitud autenticada debe tener `access_token_key_version` (nunca
+   emite/persiste token de acceso); `email_lookup_hmac_key_version`
+   (`NOT NULL` desde 0008) no debe tener ninguna fila NULL.
+
+**Si el DDL SÍ se aplicó (transacción confirmada) pero el paso 4 o el 5
+fallan**: la puerta queda `blocked`, nunca `done` ni `failed` — el DDL ya
+está comprometido (no se deshace automáticamente) y exige revisión
+MANUAL antes de lanzar `S7`. Si el paso 3 (aplicar) falla, la base queda
+intacta (transacción revertida) y la puerta queda `failed`, seguro de
+reintentar.
+
+**Nunca hace**: tocar `$SECRETS_FILE`, generar/rotar/retirar ningún
+secreto, recifrar/reindexar ninguna fila, arrancar `apps/web`, ni tocar
+`gapssa_auth`/`gapssa_cms`/MariaDB/Redis.
+
+**`gate_s7()` mejorado** (mismo cierre): ejecuta `s7SchemaPreflight.mts`
+como su PRIMERA acción real (antes incluso de la migración
+legacy-pre-s7 → active del archivo de secretos, antes de generar/activar
+nada) — si el esquema no está listo, queda `blocked` sin haber tocado el
+almacén externo, con un aviso explícito que apunta a `--only S7A`.
+Cualquier fallo DESPUÉS de que `v3` quede añadido a los 4 mapas
+versionados deja la puerta en `forward_recovery_required` (nunca
+`failed` simple) — ver "Bloque 11" más abajo.
+
 ## Archivos
 
 - `lib.sh` — funciones compartidas: guardas de ruta/harness/permisos,
@@ -1595,6 +1678,115 @@ mismo patrón de aislamiento que `s1_s9_full_rehearsal.py`), nunca toca
 `gapssa-espocrm-1`/`gapssa-apps-db-1`/ningún recurso GAPSSA real, y hace
 teardown completo pase lo que pase (incluso si el propio ensayo falla a
 mitad, verificado por el `finally` que cubre a todos los escenarios).
+
+### Bloque 11 — preflight de esquema de `gapssa_booking`, S7A, y `forward_recovery_required` para S7 (incidente real 2026-08-21)
+
+**Incidencia real** (diagnóstico inicial de solo lectura, nunca se leyó
+`.env`/`~/.gapssa-secrets`, nunca se ejecutó S7/S7A reales durante el
+diagnóstico): una ejecución real de `gate_s7()` generó/activó `v3` en los
+4 mapas versionados de secretos de booking y SOLO ENTONCES lanzó
+`probes/s7MigrateAndAudit.mts`. Su primera consulta real (dentro de una
+transacción, en `fieldEncryptionRotation.ts::migrateGuestIdentityRow`)
+falló referenciando la columna `email_lookup_hmac_key_version` de
+`pending_guest_identities` — la transacción se revirtió sola (CERO
+escritura en Postgres), pero `v3` YA era la versión activa del almacén
+externo. `S7` terminó `failed`; `apps/web` estaba parado; S8/S9 nunca se
+ejecutaron.
+
+**Causa raíz** (confirmada auditando el esquema REAL de `gapssa_booking`
+con `information_schema`/`drizzle.__drizzle_migrations` vía una conexión
+local sin leer credenciales — `docker compose exec` al contenedor
+`apps-db`, sustitución de `$POSTGRES_USER`/`$POSTGRES_BOOKING_DB` hecha
+POR EL PROPIO CONTENEDOR vía autenticación local `trust`, nunca leída por
+este proceso): la base tenía exactamente 7 de las 9 migraciones de
+`apps/web/drizzle/booking/migrations/` aplicadas — `0007_gifted_typhoid_mary`
+(enums `MeetingGcsExclusionMismatch`/`meeting_gcs_exclusion_mismatch`) y
+`0008_freezing_matthew_murdock` (`email_lookup_hmac_key_version` en
+`pending_guest_identities`, `access_token_key_version` en
+`booking_request_records`, con su backfill histórico) seguían pendientes.
+`gate_s7()` nunca comprobaba el esquema real antes de mutar el almacén de
+secretos — asumía, sin verificarlo, que `apps/web/drizzle/booking/migrations/`
+ya estaba aplicada contra la base conectada, y no existía ninguna vía en
+este toolkit para aplicar solo las migraciones pendientes.
+
+**Cero pérdida confirmada**: la primera consulta real de
+`rotatePendingGuestIdentities`/`migrateGuestIdentityRow` es un `SELECT ...
+FOR UPDATE` DENTRO de una transacción Drizzle — al fallar por columna
+inexistente, Postgres revierte esa transacción automáticamente (ninguna
+sentencia previa a un `SELECT` fallido puede haber comprometido nada).
+`v1`/`v2` seguían presentes en los 4 mapas del almacén externo (nunca se
+llegó al paso de retirada, que solo corre DESPUÉS de un `s7-migrate`
+exitoso) y ningún secreto se había retirado.
+
+**Fix** (`gate_s7()`, `rotate-all-interactive.sh`):
+
+1. **Preflight de esquema** (`probes/s7SchemaPreflight.mts`, solo lectura
+   — `information_schema.columns`/`pg_enum` + conteo de
+   `drizzle.__drizzle_migrations` contra el journal real, CERO datos de
+   negocio) como PRIMERA acción real de la puerta, antes incluso de la
+   migración legacy-pre-s7 → active del archivo de secretos, antes de
+   generar/activar nada. Si el esquema no está listo, la puerta queda
+   `blocked` sin haber tocado el almacén externo ni Postgres, con un
+   aviso explícito que apunta a `--only S7A`.
+2. **Frontera `forward_recovery_required`**: desde el instante en que la
+   mutación "generar v3" completa (éxito real o no-op idempotente),
+   CUALQUIER fallo posterior de `gate_s7()` (verificación de mapa dual,
+   activar v3, migración/reindexado, auditoría de allowlist, cualquiera
+   de los 4 retiros, generación/verificación de
+   `BOOKING_INTERNAL_API_SECRET`) deja la puerta en
+   `forward_recovery_required` — nunca `failed` simple. `confirm_gate()`
+   trata este estado para S7 igual que ya trataba `rollback_required`:
+   nunca ofrece restaurar backup, siempre indica reanudar hacia delante.
+3. **S7A** (`--only S7A`, subpuerta separada — ver su sección dedicada
+   más arriba): aplica exactamente las migraciones pendientes con el
+   runner oficial de Drizzle, tras un backup estructural verificado, y
+   confirma los invariantes del backfill de 0008 antes de `done`.
+
+**Ensayo real contra el esquema antiguo exacto** (`tests/s7_atomic_rotation_rehearsal.py`,
+Escenarios G/H/G'/I, nuevos en este bloque — infraestructura desechable
+real, `gapssa_booking` migrada a propósito SOLO hasta `0006` con una
+copia truncada real del journal, reproduciendo el esquema EXACTO del
+incidente):
+
+- **G**: `gate_s7()` contra el esquema viejo real queda `blocked` por el
+  preflight — CERO mutación (archivo externo byte a byte intacto, `v3`
+  nunca aparece en ningún mapa, Postgres nunca tocado).
+- **H**: `--only S7A` aplica `0007`/`0008` con el runner oficial tras un
+  backup estructural verificado, confirma los invariantes del backfill, y
+  termina `done`; una reejecución tras `done` es un no-op explícito
+  (nunca reaplica nada); `$SECRETS_FILE` queda byte a byte intacto en
+  todo momento.
+- **G'**: tras S7A, `gate_s7()` YA NO bloquea por esquema (el preflight
+  informa `ready=true`) — interrumpida deliberadamente justo después para
+  no completar la rotación real dentro del ensayo.
+- **I** (el punto EXACTO del incidente, reproducido con SIGKILL real):
+  con `v3` ya activo en los 4 mapas y las filas AÚN sin migrar, un corte
+  real justo ANTES de la primera consulta de
+  `probes/s7MigrateAndAudit.mts` dejar S7 en `forward_recovery_required`
+  (nunca `failed`, nunca `rollback_required`) — `v1`/`v2` siguen
+  presentes (convivencia dual intacta), ningún backup se ofrece ni se
+  restaura, y reanudar completa la rotación normalmente sin regenerar
+  `v3`.
+
+Los Escenarios B/E/F existentes (fallos reales DESPUÉS de la frontera de
+activación de `v3`) se actualizaron para exigir `forward_recovery_required`
+en vez de `failed` — coherente con el punto 2 de arriba.
+
+**Resultado de la última ejecución limpia**: `tests/s7_atomic_rotation_rehearsal.py`
+113/113 (0 fallos) contra infraestructura desechable real, teardown
+limpio (cero contenedores/redes/volúmenes residuales, inventario Docker
+real idéntico antes/después). Regresión completa tras este bloque:
+`run-node-tests.sh` 22/22 (incluye los 2 nuevos schemas de contrato JSON,
+`s7-schema-preflight`/`s7a-apply`/`s7a-verify`), `lib.test.sh` 128/128,
+`tests/static_bash32_compat_guard.sh` 24/24, `tests/run_scenarios.py`
+142/142 — sin regresión.
+
+**Procedimiento operativo recomendado ante schema drift de
+`gapssa_booking`**: lanzar `--only S7` normalmente; si queda `blocked`
+con un aviso que menciona S7A, lanzar `--only S7A` (backup estructural
+automático + runner oficial + verificación de invariantes) y, una vez
+`done`, volver a lanzar `--only S7` — reanuda desde el `v3` existente si
+ya se había generado, o arranca limpio si no.
 
 ## Lo que este directorio NUNCA hace por sí mismo
 

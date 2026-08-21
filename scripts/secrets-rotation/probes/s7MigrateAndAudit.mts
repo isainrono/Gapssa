@@ -19,8 +19,12 @@
 // vez de solo antes/después de la invocación completa — la única forma
 // de demostrar de verdad "convivencia dual conservada e idempotencia"
 // si la interrupción cae ENTRE la fase AES y la de email-lookup, o
-// entre v1 y v2 de la propia fase AES. Puntos cerrados: "after-aes-v1",
-// "after-aes-v2", "after-email-lookup". Exige la MISMA
+// entre v1 y v2 de la propia fase AES — o incluso ANTES de la primera
+// consulta real (Bloque 11: "before-migration", usado para demostrar que
+// un fallo justo ahí, con v3 YA activo en el almacén externo, deja S7 en
+// 'forward_recovery_required', nunca 'failed'). Puntos cerrados:
+// "before-migration", "after-aes-v1", "after-aes-v2",
+// "after-email-lookup". Exige la MISMA
 // `GAPSSA_ROTATION_TEST_DISPOSABLE_LABEL` (patrón de proyecto
 // desechable) que lib/atomicSecretsFileMutate.mjs — si la pausa está
 // pedida pero la etiqueta falta o no casa, o el valor no es uno de los
@@ -59,7 +63,7 @@ async function verifyAllRowsDecryptableWithCurrentMap(): Promise<boolean> {
   }
 }
 
-const TEST_MIGRATION_PAUSE_POINTS = ['after-aes-v1', 'after-aes-v2', 'after-email-lookup'] as const
+const TEST_MIGRATION_PAUSE_POINTS = ['before-migration', 'after-aes-v1', 'after-aes-v2', 'after-email-lookup'] as const
 const DISPOSABLE_LABEL_PATTERN = /^gapssa-[a-z0-9]+(-[a-z0-9]+)*-(rehearsal|tests?)-[0-9a-f]{6,}$/
 
 /**
@@ -87,17 +91,34 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/** Marcador de progreso a stderr + pausa acotada si `point` es el pedido — no-op en cualquier otro caso (incluida la ejecución real, donde la variable nunca está presente). */
+/**
+ * Marcador de progreso a stderr + pausa acotada si `point` es el pedido —
+ * no-op en cualquier otro caso (incluida la ejecución real, donde la
+ * variable nunca está presente). Si además `GAPSSA_ROTATION_TEST_MIGRATION_CRASH=1`
+ * está presente (misma guarda de `resolveTestMigrationPause` — nunca sin
+ * `GAPSSA_ROTATION_TEST_DISPOSABLE_LABEL` válida), se AUTO-mata con
+ * SIGKILL en vez de dormir — mismo patrón exacto que
+ * `lib/atomicSecretsFileMutate.mjs::maybeCrashAtFailpoint` (Bloque 9),
+ * reutilizado aquí (Bloque 11) para demostrar que un corte real justo
+ * ANTES de la primera consulta — con v3 YA activo en los 4 mapas
+ * versionados del almacén externo — deja `gate_s7()` en
+ * 'forward_recovery_required', nunca 'failed'.
+ */
 async function maybePauseAtTestPoint(activePause: string | null, point: string): Promise<void> {
   if (activePause !== point) return
-  const ms = Number(process.env.GAPSSA_ROTATION_TEST_MIGRATION_PAUSE_MS ?? '5000')
   console.error(`GAPSSA_ROTATION_TEST_MIGRATION_PAUSE_REACHED=${point}`)
+  if (process.env.GAPSSA_ROTATION_TEST_MIGRATION_CRASH === '1') {
+    process.kill(process.pid, 'SIGKILL')
+    return
+  }
+  const ms = Number(process.env.GAPSSA_ROTATION_TEST_MIGRATION_PAUSE_MS ?? '5000')
   await sleep(Number.isFinite(ms) && ms > 0 ? ms : 5000)
 }
 
 async function main() {
   assertRotationEnvironmentAllowed()
   const activePause = resolveTestMigrationPause()
+  await maybePauseAtTestPoint(activePause, 'before-migration')
 
   const allowlist = await verifyNoUnlistedEncryptedColumns(bookingDb)
 

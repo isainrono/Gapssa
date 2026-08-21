@@ -124,7 +124,7 @@ Uso: rotate-all-interactive.sh [--dry-run] [--only Sx] [-h|--help]
 
   --dry-run     Muestra qué haría cada puerta sin escribir ni ejecutar nada
                 real.
-  --only Sx     Ejecuta solo la puerta indicada (S1..S9, o S3A/S3B).
+  --only Sx     Ejecuta solo la puerta indicada (S1..S9, o S3A/S3B/S7A).
   -h, --help    Muestra esta ayuda.
 
 S3A ('--only S3A') es una subpuerta de recuperación SEPARADA — nunca forma
@@ -139,6 +139,17 @@ data/config-internal.php cuando MariaDB y el almacén externo YA coinciden en
 ESPOCRM_DB_PASSWORD pero ese fichero se quedó con un valor distinto — nunca
 genera ni rota ninguna credencial. Ver la cabecera de
 lib/espoConfigReconcile.sh y README.md.
+
+S7A ('--only S7A') es otra subpuerta de recuperación SEPARADA — nunca forma
+parte del recorrido normal S1..S9, solo alcanzable explícitamente. Aplica las
+migraciones PENDIENTES de gapssa_booking (apps/web/drizzle/booking/migrations/)
+con el runner OFICIAL de Drizzle, tras un backup estructural (schema-only)
+verificado — NUNCA toca el almacén externo de secretos, NUNCA arranca
+apps/web, NUNCA dispara recifrado/reindexado (eso es EXCLUSIVAMENTE S7).
+gate_s7() ya hace su propio preflight de este mismo esquema ANTES de generar/
+activar nada: si lo encuentra desactualizado, queda 'blocked' e indica que
+lances '--only S7A' antes de reintentar. Ver la cabecera de gate_s7a() y
+README.md.
 
 Antes de ejecutar, exporta en tu propia terminal:
   export ROTACION_GAPSSA_FUERA_DEL_HARNESS=SI
@@ -1362,7 +1373,18 @@ confirm_gate() {
     say "AVISO: la puerta $code quedó en 'server_coordination_required' — el ARCHIVO externo ya se restauró correctamente, pero al menos un sub-secreto no quedó reaplicado (o no se pudo verificar) en el SERVIDOR real. La disponibilidad NO está confirmada — revisa el detalle que dejó la restauración antes de continuar."
     ;;
   forward_recovery_required)
-    say "AVISO: la puerta $code quedó en 'forward_recovery_required' — al menos un sub-secreto IRREVERSIBLE (p.ej. una API Key ya invalidada) se recuperó generando un valor NUEVO, nunca restaurando el antiguo. Disponibilidad recuperada con ese valor nuevo, pero esto NO es una rotación completa. Volver a ejecutarla generará secretos nuevos para el resto de sub-secretos."
+    if [ "$code" = "S7" ]; then
+      # S7 nunca llega aquí por un sub-secreto IRREVERSIBLE (vocabulario de
+      # S2-S5/decideRecoveryPlan.mjs) — llega por CUALQUIER fallo ocurrido
+      # DESPUÉS de que v3 quedara añadido/activado en al menos uno de los 4
+      # mapas versionados (ver _s7_leave_forward_recovery_required más
+      # arriba): una fila real de Postgres puede ya depender de v3, o el
+      # propio archivo puede tener v3 como versión ACTIVA — restaurar el
+      # backup de esta puerta nunca es seguro a partir de ahí.
+      say "AVISO: la puerta S7 quedó en 'forward_recovery_required' — v3 ya existe (y puede que ya sea la versión ACTIVA de al menos uno de los mapas versionados, y puede que ya haya filas reales de Postgres recifradas/reindexadas a v3), pero la migración/verificación/retirada no terminó. Recuperación SIEMPRE hacia delante para S7, igual que 'rollback_required' — vuelve a lanzar esta puerta: cada mutación es idempotente y reanuda desde el v3 existente, NUNCA restaura un backup anterior a v3."
+    else
+      say "AVISO: la puerta $code quedó en 'forward_recovery_required' — al menos un sub-secreto IRREVERSIBLE (p.ej. una API Key ya invalidada) se recuperó generando un valor NUEVO, nunca restaurando el antiguo. Disponibilidad recuperada con ese valor nuevo, pero esto NO es una rotación completa. Volver a ejecutarla generará secretos nuevos para el resto de sub-secretos."
+    fi
     ;;
   rollback_required)
     if [ "$code" = "S7" ]; then
@@ -3225,6 +3247,26 @@ _s7_migrate_legacy_schema() {
   [ "$rc" -eq 0 ] || [ "$rc" -eq 20 ]
 }
 
+# _s7_leave_forward_recovery_required <reason>
+# Usada por gate_s7() para CUALQUIER fallo que ocurra DESPUÉS de que v3
+# quede añadido a los 4 mapas versionados (aunque solo sea "añadido", ni
+# siquiera "activado" todavía) — nunca 'failed' a partir de ese punto.
+# 'failed' sugeriría (incorrectamente) que basta con reintentar desde cero
+# o, peor, que restaurar el backup de esta puerta es una opción segura;
+# para S7 nunca lo es una vez v3 existe en el almacén externo, porque una
+# fila real de Postgres puede depender ya de él (recifrada/reindexada) o
+# el propio archivo puede tener v3 como versión ACTIVA. confirm_gate()
+# trata 'forward_recovery_required' igual que las demás puertas (nunca
+# ofrece restaurar backup, solo avisa y deja continuar) — con un mensaje
+# específico para S7 (ver más abajo).
+_s7_leave_forward_recovery_required() {
+  local reason="${1:-}"
+  state_set "S7" forward_recovery_required
+  [ -n "$reason" ] && say "Puerta S7: $reason"
+  say "Puerta S7: v3 YA existe (y puede que ya esté activo) en el almacén externo — recuperación SIEMPRE hacia delante, nunca se restaura un backup anterior a v3. Vuelve a lanzar esta puerta: cada mutación es idempotente y reanuda desde el v3 existente."
+  CURRENT_GATE=""
+}
+
 # ---------------------------------------------------------------------------
 # S7 — Booking: los cinco secretos, con comprobaciones de seguridad reales
 # antes de sustituir/retirar nada, y retirada obligatoria de v1/v2 dentro
@@ -3249,6 +3291,31 @@ gate_s7() {
     leave_gate_done "S7"
     return 0
   fi
+
+  # --- Bloque 11 — preflight de esquema: PRIMERA acción real de esta
+  # puerta, antes incluso de la migración legacy-pre-s7 -> active de
+  # abajo, antes de generar/activar nada. Hallazgo real del incidente
+  # 2026-08-21: gate_s7() generaba/activaba v3 en los 4 mapas ANTES de
+  # comprobar que las migraciones de Drizzle de gapssa_booking
+  # (apps/web/drizzle/booking/migrations/) ya estaban aplicadas contra la
+  # base REAL conectada — la migración/reindexado de más abajo falló a
+  # mitad (columna inexistente) con v3 ya activo. Esta sonda es de SOLO
+  # LECTURA (information_schema + tabla de control de Drizzle, cero datos
+  # de negocio) — si el esquema no está listo, la puerta queda 'blocked'
+  # AQUÍ MISMO, sin haber tocado el almacén externo ni Postgres todavía. -
+  say "Comprobando el esquema REAL de gapssa_booking (migraciones/columnas) antes de tocar nada..."
+  local preflight_json
+  if ! preflight_json="$(run_probe_and_validate s7-schema-preflight "$SCRIPT_DIR/probes/s7SchemaPreflight.mts")"; then
+    leave_gate_failed "S7" "no se pudo comprobar el esquema real de gapssa_booking (o su salida no superó la validación de contrato JSON) — es reanudable, corrige el problema (¿está arriba el contenedor de Postgres?) y vuelve a lanzar esta puerta; ningún secreto se ha tocado."
+    return 1
+  fi
+  local schema_ready
+  schema_ready="$(printf '%s' "$preflight_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['ready'])")"
+  if [ "$schema_ready" != "True" ]; then
+    leave_gate_blocked "S7" "el esquema real de gapssa_booking NO está listo para la migración/reindexado de esta puerta — NINGÚN secreto se ha tocado (ni siquiera generado). Aplica las migraciones que falten con la subpuerta S7A ('--only S7A', ver README.md) y vuelve a lanzar S7. Detalle (solo metadatos, cero datos de negocio): $preflight_json"
+    return 1
+  fi
+  say "Esquema real de gapssa_booking listo: $preflight_json"
 
   # --- precondición Bloque 8: si $SECRETS_FILE todavía está en esquema
   #     legacy-pre-s7 (claves singulares BOOKING_EMAIL_LOOKUP_HMAC_SECRET/
@@ -3294,9 +3361,16 @@ gate_s7() {
   local gen_rc=0
   _s7_apply_mutations "$generate_v3_mutations" "generar-v3" || gen_rc=$?
   if [ "$gen_rc" -ne 0 ] && [ "$gen_rc" -ne 20 ]; then
-    leave_gate_failed "S7" "no se pudo generar/añadir v3 a los 4 mapas versionados (código $gen_rc)."
+    leave_gate_failed "S7" "no se pudo generar/añadir v3 a los 4 mapas versionados (código $gen_rc) — la reescritura atómica no llegó a completarse (nunca deja un archivo a medias), el almacén externo sigue exactamente como antes de esta puerta."
     return 1
   fi
+  # --- FRONTERA: a partir de aquí v3 YA existe en el almacén externo (la
+  # reescritura atómica de arriba completó, con éxito real o como no-op
+  # porque ya existía de una ejecución anterior) — CUALQUIER fallo desde
+  # este punto en adelante deja la puerta en 'forward_recovery_required',
+  # NUNCA en 'failed' simple (que sugeriría, incorrectamente, que
+  # reintentar desde cero o restaurar el backup de esta puerta son
+  # opciones equivalentes — para S7, una vez v3 existe, nunca lo son). ---
 
   say "Verificando que los 4 mapas quedan en convivencia dual (v3 recién añadido junto a las"
   say "versiones viejas — activar más abajo nunca invalida nada todavía vivo)..."
@@ -3312,7 +3386,7 @@ gate_s7() {
     fi
   done
   if [ "$dual_map_ok" != true ]; then
-    leave_gate_failed "S7" "al menos uno de los 4 mapas versionados no contiene v3 tras generarlo — nunca se activa v3 sin verificar antes que los 4 mapas lo tienen."
+    _s7_leave_forward_recovery_required "al menos uno de los 4 mapas versionados no contiene v3 tras generarlo — nunca se activa v3 sin verificar antes que los 4 mapas lo tienen."
     return 1
   fi
 
@@ -3334,7 +3408,7 @@ gate_s7() {
   local activate_rc=0
   _s7_apply_mutations "$activate_v3_mutations" "activar-v3" || activate_rc=$?
   if [ "$activate_rc" -ne 0 ] && [ "$activate_rc" -ne 20 ]; then
-    leave_gate_failed "S7" "no se pudo activar v3 en los 4 secretos versionados (código $activate_rc)."
+    _s7_leave_forward_recovery_required "no se pudo activar v3 en los 4 secretos versionados (código $activate_rc)."
     return 1
   fi
 
@@ -3345,7 +3419,7 @@ gate_s7() {
   say "transaccional por fila)..."
   local migrate_json
   if ! migrate_json="$(run_probe_and_validate s7-migrate "$SCRIPT_DIR/probes/s7MigrateAndAudit.mts")"; then
-    leave_gate_failed "S7" "la migración/reindexado/auditoría falló, o su salida no superó la validación de contrato JSON — es reanudable, corrige el problema y vuelve a lanzar esta puerta."
+    _s7_leave_forward_recovery_required "la migración/reindexado/auditoría falló, o su salida no superó la validación de contrato JSON — es reanudable, corrige el problema y vuelve a lanzar esta puerta."
     return 1
   fi
   say "Resultado (solo conteos/booleanos, cero PII, cero ciphertext): $migrate_json"
@@ -3360,7 +3434,7 @@ gate_s7() {
   at_remaining="$(printf '%s' "$migrate_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['accessTokenRemaining'])")"
 
   if [ "$allowlist_ok" != "True" ]; then
-    leave_gate_failed "S7" "auditoría de columnas cifradas falló (allowlistUnlisted/allowlistMissing en el JSON de arriba) — corrige encryptedColumnsAllowlist.ts o el esquema antes de continuar, esto NUNCA es un 'esperar a que se resuelva'."
+    _s7_leave_forward_recovery_required "auditoría de columnas cifradas falló (allowlistUnlisted/allowlistMissing en el JSON de arriba) — corrige encryptedColumnsAllowlist.ts o el esquema antes de continuar, esto NUNCA es un 'esperar a que se resuelva'."
     return 1
   fi
 
@@ -3374,7 +3448,7 @@ gate_s7() {
     local rc=0
     _s7_apply_mutations '[{"op":"json-map-retain","key":"BOOKING_FIELD_ENCRYPTION_KEYS","versions":["v3"]}]' "retirar-aes" || rc=$?
     if [ "$rc" -ne 0 ] && [ "$rc" -ne 20 ]; then
-      leave_gate_failed "S7" "no se pudo retirar v1/v2 de BOOKING_FIELD_ENCRYPTION_KEYS (código $rc)."
+      _s7_leave_forward_recovery_required "no se pudo retirar v1/v2 de BOOKING_FIELD_ENCRYPTION_KEYS (código $rc)."
       return 1
     fi
   else
@@ -3389,7 +3463,7 @@ gate_s7() {
     local rc=0
     _s7_apply_mutations '[{"op":"json-map-retain","key":"BOOKING_IDENTITY_FINGERPRINT_HMAC_SECRETS","versions":["v3"]}]' "retirar-fingerprint" || rc=$?
     if [ "$rc" -ne 0 ] && [ "$rc" -ne 20 ]; then
-      leave_gate_failed "S7" "no se pudo retirar v1/v2 de BOOKING_IDENTITY_FINGERPRINT_HMAC_SECRETS (código $rc)."
+      _s7_leave_forward_recovery_required "no se pudo retirar v1/v2 de BOOKING_IDENTITY_FINGERPRINT_HMAC_SECRETS (código $rc)."
       return 1
     fi
   else
@@ -3404,7 +3478,7 @@ gate_s7() {
     local rc=0
     _s7_apply_mutations '[{"op":"json-map-retain","key":"BOOKING_EMAIL_LOOKUP_HMAC_SECRETS","versions":["v3"]}]' "retirar-email-lookup" || rc=$?
     if [ "$rc" -ne 0 ] && [ "$rc" -ne 20 ]; then
-      leave_gate_failed "S7" "no se pudo retirar v1 de BOOKING_EMAIL_LOOKUP_HMAC_SECRETS (código $rc)."
+      _s7_leave_forward_recovery_required "no se pudo retirar v1 de BOOKING_EMAIL_LOOKUP_HMAC_SECRETS (código $rc)."
       return 1
     fi
   else
@@ -3419,7 +3493,7 @@ gate_s7() {
     local rc=0
     _s7_apply_mutations '[{"op":"json-map-retain","key":"BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRETS","versions":["v3"]}]' "retirar-access-token" || rc=$?
     if [ "$rc" -ne 0 ] && [ "$rc" -ne 20 ]; then
-      leave_gate_failed "S7" "no se pudo retirar v1 de BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRETS (código $rc)."
+      _s7_leave_forward_recovery_required "no se pudo retirar v1 de BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRETS (código $rc)."
       return 1
     fi
   else
@@ -3435,7 +3509,7 @@ gate_s7() {
   old_internal_api="$(field_from_secrets_file BOOKING_INTERNAL_API_SECRET)"
   if ! bash "$SCRIPT_DIR/02-generate-secret.sh" "$SECRETS_FILE" --set-line BOOKING_INTERNAL_API_SECRET --format base64 --bytes 32 --schema-version "$(current_secrets_schema_version)"; then
     unset old_internal_api
-    leave_gate_failed "S7" "no se pudo generar BOOKING_INTERNAL_API_SECRET."
+    _s7_leave_forward_recovery_required "no se pudo generar BOOKING_INTERNAL_API_SECRET."
     return 1
   fi
 
@@ -3453,7 +3527,7 @@ gate_s7() {
   gapssa_cleanup_pop_matching shred_plain "$old_internal_api_file"
 
   if [ "$internal_check_ok" != true ]; then
-    leave_gate_failed "S7" "no se pudo verificar la función de autenticación interna (isValidInternalApiSecret) tras rotar BOOKING_INTERNAL_API_SECRET."
+    _s7_leave_forward_recovery_required "no se pudo verificar la función de autenticación interna (isValidInternalApiSecret) tras rotar BOOKING_INTERNAL_API_SECRET."
     return 1
   fi
   say "Verificación directa de isValidInternalApiSecret (nunca el sweep real, ningún efecto de negocio): $internal_check_json"
@@ -3474,6 +3548,183 @@ gate_s7() {
   fi
 
   leave_gate_done "S7"
+}
+
+# ---------------------------------------------------------------------------
+# S7A — aplicar migraciones PENDIENTES de gapssa_booking (subpuerta
+# SEPARADA, NUNCA parte del recorrido normal S1-S9, solo alcanzable con
+# '--only S7A' explícito). Nace del incidente real 2026-08-21: gate_s7()
+# asumía que apps/web/drizzle/booking/migrations/ ya estaba aplicada
+# contra la base conectada — nunca lo comprobaba, y nunca tenía forma de
+# arreglarlo por sí sola (rotar secretos y aplicar DDL son operaciones
+# distintas, con permisos/backups distintos).
+#
+# S7A: NUNCA toca $SECRETS_FILE (ni un byte — ni lo lee para escribir en
+# él, solo para obtener las credenciales de Postgres que ya usa
+# pg_capture()); NUNCA arranca apps/web; NUNCA dispara recifrado AES ni
+# reindexado de email-lookup HMAC (cero import de
+# fieldEncryptionRotation.ts/emailLookupHmacRotation.ts — eso es
+# EXCLUSIVAMENTE gate_s7()). Aplica EXACTAMENTE la lista cerrada de
+# migraciones que probes/s7SchemaPreflight.mts reporta como pendientes,
+# con el runner OFICIAL de Drizzle (probes/s7aApplyBookingMigrations.mts
+# -> runBookingMigrations(), el mismo código que 'npm run
+# booking:db:migrate' — nunca reimplementado), tras un backup
+# ESTRUCTURAL (schema-only, cero datos de negocio) verificado.
+#
+# Drizzle envuelve TODAS las migraciones pendientes en una ÚNICA
+# transacción (pg-core/dialect.js::migrate) — un fallo a mitad NUNCA deja
+# DDL a medias comprometido: la base queda EXACTAMENTE como antes de ese
+# intento, así que "recuperación" para S7A es simplemente "corrige el
+# problema y vuelve a lanzar '--only S7A'" (failed = seguro reintentar
+# desde cero, sin ambigüedad — a diferencia de gate_s7(), aquí nunca hay
+# una frontera de mutación irreversible que cruzar). La ÚNICA excepción es
+# si la migración SÍ se aplica (transacción confirmada) pero la
+# verificación POSTERIOR de invariantes falla: ahí el DDL ya está
+# comprometido (no se deshace) y S7A queda 'blocked', exigiendo revisión
+# MANUAL — nunca 'done' con una verificación fallida.
+# ---------------------------------------------------------------------------
+
+_s7a_backup_dir_has_space() {
+  local dir="$1" kb_needed="${2:-20480}"
+  local avail
+  avail="$(df -Pk "$dir" 2>/dev/null | awk 'NR==2 {print $4}')"
+  [ -n "$avail" ] && [ "$avail" -ge "$kb_needed" ] 2>/dev/null
+}
+
+# _s7a_backup_booking_schema <out_file>
+# Backup ESTRUCTURAL (schema-only: tablas/columnas/índices/constraints/
+# enums, `pg_dump --schema-only`, cero filas, cero PII, cero ciphertext)
+# de gapssa_booking, verificado no-vacío antes de devolver éxito. Mismo
+# patrón de credenciales que pg_capture() (fichero .pgpass 600 montado
+# de solo lectura en un contenedor efímero — la contraseña nunca en
+# argv/env de ningún proceso de este host ni del contenedor).
+_s7a_backup_booking_schema() {
+  local out="$1"
+  local net img pg_user pg_db pw rc=0 dump
+  net="$(compose_network_name apps-private)"
+  img="$(field_from_secrets_file POSTGRES_IMAGE)"
+  pg_user="$(field_from_secrets_file POSTGRES_USER)"
+  pg_db="$(field_from_secrets_file POSTGRES_BOOKING_DB)"
+  pw="$(field_from_secrets_file POSTGRES_PASSWORD)"
+
+  local pgpassfile
+  pgpassfile="$(gapssa_secrets_mktemp_secure gapssa-s7a-pgpass)"
+  gapssa_cleanup_push shred_plain "$pgpassfile"
+  printf '*:*:*:%s:%s\n' "$(gapssa_secrets_pgpass_escape "$pg_user")" "$(gapssa_secrets_pgpass_escape "$pw")" >"$pgpassfile"
+  unset pw
+  chmod 600 "$pgpassfile"
+
+  dump="$(docker run --rm -i --network "$net" \
+    -v "${pgpassfile}:/tmp/.gapssa-s7a.pgpass:ro" -e "PGPASSFILE=/tmp/.gapssa-s7a.pgpass" "$img" \
+    pg_dump -h apps-db -U "$pg_user" -d "$pg_db" --schema-only --no-owner --no-privileges)" || rc=$?
+  gapssa_secrets_shred "$pgpassfile"
+  gapssa_cleanup_pop_matching shred_plain "$pgpassfile"
+
+  if [ "$rc" -ne 0 ] || [ -z "$dump" ]; then
+    return 1
+  fi
+  printf '%s\n' "$dump" >"$out"
+  chmod 600 "$out"
+  [ -s "$out" ]
+}
+
+gate_s7a() {
+  divider
+  say "Puerta S7A — aplicar migraciones PENDIENTES de gapssa_booking (subpuerta"
+  say "separada, solo con '--only S7A') — NUNCA toca \$SECRETS_FILE, NUNCA arranca"
+  say "apps/web, NUNCA dispara recifrado/reindexado de secretos (eso es S7)."
+  say "Backup estructural (schema-only) verificado antes de aplicar nada; runner"
+  say "OFICIAL de Drizzle (mismo código que 'npm run booking:db:migrate')."
+
+  if ! ask_yes_no "¿Confirmas que quieres comprobar/aplicar las migraciones pendientes de gapssa_booking ahora (S7A)?"; then
+    say "S7A cancelada por decisión tuya."
+    return 1
+  fi
+  local s7a_reply
+  read -r -p "Escribe exactamente 'confirmo migraciones s7a' para continuar: " s7a_reply
+  if [ "$s7a_reply" != "confirmo migraciones s7a" ]; then
+    say "ABORTADO: frase de confirmación no coincide. Nada se ha tocado."
+    return 1
+  fi
+  unset s7a_reply
+
+  require_secrets_file || return 1
+  enter_gate "S7A" || return 1
+
+  if [ "$DRY_RUN" = true ]; then
+    say "[dry-run] no se comprueba el esquema real, no se hace backup, no se aplica ninguna migración."
+    leave_gate_done "S7A"
+    return 0
+  fi
+
+  say "Comprobando qué migraciones de gapssa_booking faltan por aplicar (misma sonda de solo lectura que gate_s7())..."
+  local preflight_json
+  if ! preflight_json="$(run_probe_and_validate s7-schema-preflight "$SCRIPT_DIR/probes/s7SchemaPreflight.mts")"; then
+    leave_gate_failed "S7A" "no se pudo comprobar el esquema real de gapssa_booking (o su salida no superó la validación de contrato JSON) — ninguna migración se ha aplicado."
+    return 1
+  fi
+  local ready
+  ready="$(printf '%s' "$preflight_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['ready'])")"
+  if [ "$ready" = "True" ]; then
+    say "El esquema real de gapssa_booking YA está al día — nada que hacer. S7A no aplica ninguna migración ni toca nada."
+    leave_gate_done "S7A"
+    return 0
+  fi
+  local missing_tags
+  missing_tags="$(printf '%s' "$preflight_json" | python3 -c "import sys,json; print(', '.join(json.load(sys.stdin)['missingMigrationTags']))")"
+  say "Lista CERRADA de migraciones pendientes (exactamente estas, ninguna otra — el runner oficial de más abajo es incremental): $missing_tags"
+
+  mkdir -p "$SECRETS_DIR/s7a-postgres-backups"
+  chmod 700 "$SECRETS_DIR/s7a-postgres-backups"
+  if ! _s7a_backup_dir_has_space "$SECRETS_DIR/s7a-postgres-backups" 20480; then
+    leave_gate_failed "S7A" "espacio libre insuficiente para el backup estructural — abortada antes de tocar nada. Libera espacio y vuelve a lanzar '--only S7A'."
+    return 1
+  fi
+  local backup_file
+  backup_file="$SECRETS_DIR/s7a-postgres-backups/S7A-schema-$(date -u +%Y%m%dT%H%M%SZ)-$(_gapssa_secrets_random_suffix_hex 4).sql"
+  say "Creando backup ESTRUCTURAL (schema-only, cero filas/PII/ciphertext) de gapssa_booking antes de aplicar nada..."
+  if ! _s7a_backup_booking_schema "$backup_file"; then
+    rm -f -- "$backup_file"
+    leave_gate_failed "S7A" "no se pudo crear/verificar el backup estructural de gapssa_booking — abortada, ninguna migración se ha aplicado."
+    return 1
+  fi
+  say "  OK — backup estructural verificado (no vacío): $backup_file"
+
+  say "Aplicando migraciones pendientes con el runner OFICIAL (drizzle-orm/node-postgres/migrator,"
+  say "mismo código que 'npm run booking:db:migrate') — nunca arranca apps/web, nunca toca"
+  say "\$SECRETS_FILE, nunca dispara recifrado/reindexado..."
+  if ! run_probe_and_validate s7a-apply "$SCRIPT_DIR/probes/s7aApplyBookingMigrations.mts" >/dev/null; then
+    leave_gate_failed "S7A" "el runner oficial de migraciones falló — Drizzle aplica TODAS las migraciones pendientes en una ÚNICA transacción, así que un fallo aquí NUNCA deja DDL a medias comprometido: gapssa_booking queda EXACTAMENTE como antes de este intento (el backup estructural de arriba ni siquiera hace falta restaurarlo). Corrige el problema (ver mensaje de arriba) y vuelve a lanzar '--only S7A'."
+    return 1
+  fi
+  say "  OK — migraciones aplicadas."
+
+  say "Verificando que el esquema queda listo y que los invariantes del backfill de 0008 se cumplen..."
+  local preflight_after_json
+  if ! preflight_after_json="$(run_probe_and_validate s7-schema-preflight "$SCRIPT_DIR/probes/s7SchemaPreflight.mts")"; then
+    leave_gate_blocked "S7A" "las migraciones SÍ se aplicaron (DDL ya comprometido, no se deshace) pero no se pudo re-ejecutar la comprobación de esquema tras aplicarlas — revisión MANUAL requerida antes de lanzar S7. Nunca 'done' sin volver a confirmar 'ready=true'."
+    return 1
+  fi
+  local ready_after
+  ready_after="$(printf '%s' "$preflight_after_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['ready'])")"
+  if [ "$ready_after" != "True" ]; then
+    leave_gate_blocked "S7A" "las migraciones SÍ se aplicaron (DDL ya comprometido, no se deshace) pero el esquema SIGUE sin quedar 'ready=true' tras aplicarlas (detalle: $preflight_after_json) — revisión MANUAL requerida antes de lanzar S7."
+    return 1
+  fi
+
+  local invariants_json invariants_ok
+  if ! invariants_json="$(run_probe_and_validate s7a-verify "$SCRIPT_DIR/probes/s7aVerifyBookingInvariants.mts")"; then
+    leave_gate_blocked "S7A" "las migraciones SÍ se aplicaron (DDL ya comprometido, no se deshace) pero la verificación de invariantes del backfill (0008) falló al ejecutarse — revisión MANUAL requerida antes de lanzar S7."
+    return 1
+  fi
+  invariants_ok="$(printf '%s' "$invariants_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['invariantsOk'])")"
+  if [ "$invariants_ok" != "True" ]; then
+    leave_gate_blocked "S7A" "las migraciones SÍ se aplicaron (DDL ya comprometido, no se deshace) pero el backfill histórico de 0008 NO cumple sus invariantes documentados (detalle: $invariants_json) — revisión MANUAL requerida antes de lanzar S7, esto NUNCA es un 'esperar a que se resuelva'."
+    return 1
+  fi
+  say "Invariantes del backfill verificados (solo recuentos, cero PII): $invariants_json"
+
+  leave_gate_done "S7A"
 }
 
 # ---------------------------------------------------------------------------
@@ -4221,7 +4472,7 @@ main() {
 
   if [ -n "$ONLY_GATE" ]; then
     if ! declare -F "gate_${ONLY_GATE}" >/dev/null; then
-      echo "ERROR: puerta desconocida '--only ${ONLY_GATE}'. Usa S1..S9." >&2
+      echo "ERROR: puerta desconocida '--only ${ONLY_GATE}'. Usa S1..S9, o S3A/S3B/S7A." >&2
       exit 1
     fi
     # Captura el código de salida REAL de la puerta sin dejar que `set -e`
