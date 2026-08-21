@@ -4231,6 +4231,17 @@ PYEOF
     return 1
   fi
   say "  $start_json"
+  # Registrado en la pila de limpieza global (nunca solo la variable
+  # local $pid_file) para que un SIGINT/EXIT real mientras apps/web sigue
+  # arrancado lo detenga igual -- `detached: true` (start-apps-web.mjs)
+  # lo saca del grupo de procesos en primer plano de esta terminal, así
+  # que un Ctrl-C real nunca le llega por su cuenta (bug real, auditoría
+  # de preflight de S9, 2026-08-21). Cada parada EXPLÍCITA más abajo en
+  # esta misma puerta retira este ítem con `gapssa_cleanup_pop_matching`
+  # justo después -- incluida la rama en la que el operador responde que
+  # SÍ quiere dejarlo funcionando, donde se retira SIN detenerlo (nunca
+  # debe matarse un proceso que el operador acaba de pedir dejar vivo).
+  gapssa_cleanup_push stop_apps_web "$pid_file"
 
   # Bloque 6 — el puerto SIEMPRE se deriva de lo que start-apps-web.mjs
   # reportó realmente (campo "port" del propio start_json — 3000 en uso
@@ -4279,6 +4290,7 @@ PYEOF
   if [ "$health_ok" != true ]; then
     say "  FALLO — /api/health no respondió (o el proceso murió) dentro del plazo. Deteniendo el proceso y restaurando .env* desde cuarentena..."
     node "$SCRIPT_DIR/start-apps-web.mjs" stop "$pid_file" >/dev/null 2>&1 || true
+    gapssa_cleanup_pop_matching stop_apps_web "$pid_file"
     restore_env_files_from_quarantine
     gapssa_secrets_shred "$curl_admin_cfg"
     gapssa_cleanup_pop_matching shred_plain "$curl_admin_cfg"
@@ -4295,6 +4307,7 @@ PYEOF
   if [ "$scan_ok" != true ]; then
     say "  FALLO: al menos un secreto apareció en el log de apps/web."
     node "$SCRIPT_DIR/start-apps-web.mjs" stop "$pid_file" >/dev/null 2>&1 || true
+    gapssa_cleanup_pop_matching stop_apps_web "$pid_file"
     restore_env_files_from_quarantine
     gapssa_secrets_shred "$curl_admin_cfg"
     gapssa_cleanup_pop_matching shred_plain "$curl_admin_cfg"
@@ -4306,6 +4319,7 @@ PYEOF
   if ! run_s6_dynamic_verification; then
     say "  AVISO: la verificación dinámica de S6 no pasó — S6 permanece 'prepared', S9 no puede darse por completa."
     node "$SCRIPT_DIR/start-apps-web.mjs" stop "$pid_file" >/dev/null 2>&1 || true
+    gapssa_cleanup_pop_matching stop_apps_web "$pid_file"
     restore_env_files_from_quarantine
     gapssa_secrets_shred "$curl_admin_cfg"
     gapssa_cleanup_pop_matching shred_plain "$curl_admin_cfg"
@@ -4321,9 +4335,15 @@ PYEOF
   local keep_running=false
   if ask_yes_no "¿Dejar apps/web funcionando (arrancado exclusivamente desde el almacén externo)? Si respondes 'no', se detiene ahora mismo."; then
     keep_running=true
+    # Se retira de la pila de limpieza SIN detenerlo -- el operador acaba
+    # de pedir explícitamente dejarlo vivo; un SIGINT/EXIT posterior
+    # (p.ej. durante la escritura del informe, más abajo) nunca debe
+    # matarlo por su cuenta.
+    gapssa_cleanup_pop_matching stop_apps_web "$pid_file"
     say "apps/web sigue funcionando — PID en $pid_file, log en $log_file. Detenlo tú mismo cuando quieras: node '$SCRIPT_DIR/start-apps-web.mjs' stop '$pid_file'."
   else
     node "$SCRIPT_DIR/start-apps-web.mjs" stop "$pid_file" >/dev/null 2>&1 || true
+    gapssa_cleanup_pop_matching stop_apps_web "$pid_file"
     say "apps/web detenido."
   fi
 

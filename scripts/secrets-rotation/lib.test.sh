@@ -2130,6 +2130,43 @@ else
 fi
 rm -rf "$QR_DIR" "$QRESTORE_SNIPPET"
 
+# ---------------------------------------------------------------------------
+# stop_apps_web (operación de _gapssa_cleanup_run_one, lib.sh) — regresión
+# directa de otro bug real encontrado por la misma auditoría de preflight
+# de S9 (2026-08-21): apps/web se lanza con `detached: true`
+# (start-apps-web.mjs), así que NO forma parte del grupo de procesos en
+# primer plano de esta terminal y un Ctrl-C real nunca le llega por su
+# cuenta -- sin este ítem en la pila de limpieza global, una interrupción
+# mientras apps/web seguía arrancado lo dejaba huérfano, sirviendo
+# indefinidamente contra Postgres/Redis reales. Prueba de extremo a
+# extremo con un proceso real (nunca un doble/mock): un `sleep` en
+# background hace de sustituto del hijo `next dev`, registrado con el
+# mismo patrón que ahora usa gate_s9() justo tras arrancar apps/web.
+# ---------------------------------------------------------------------------
+QSTOP_DIR="$TMP_ROOT/stop-apps-web-case"
+mkdir -p "$QSTOP_DIR"
+QSTOP_PIDFILE="$QSTOP_DIR/apps-web.pid"
+bash -c '
+  set -euo pipefail
+  SCRIPT_DIR="$1"
+  source "$SCRIPT_DIR/lib.sh"
+  sleep 300 &
+  child_pid=$!
+  printf "%s" "$child_pid" >"$2"
+  gapssa_cleanup_push stop_apps_web "$2"
+' _ "$SCRIPT_DIR" "$QSTOP_PIDFILE"
+QSTOP_CHILD_PID="$(cat "$QSTOP_PIDFILE" 2>/dev/null || true)"
+
+if [ -n "$QSTOP_CHILD_PID" ] && ! kill -0 "$QSTOP_CHILD_PID" 2>/dev/null; then
+  echo "ok   - stop_apps_web (cleanup op de lib.sh, registrado por gate_s9 tras arrancar apps/web): un EXIT no controlado detiene el proceso real vía start-apps-web.mjs stop"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - stop_apps_web: el proceso (PID '$QSTOP_CHILD_PID') sigue vivo tras el EXIT trap"
+  FAIL=$((FAIL + 1))
+  [ -n "$QSTOP_CHILD_PID" ] && kill -9 "$QSTOP_CHILD_PID" 2>/dev/null || true
+fi
+rm -rf "$QSTOP_DIR"
+
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

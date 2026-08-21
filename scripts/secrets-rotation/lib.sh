@@ -991,6 +991,21 @@ _gapssa_cleanup_run_one() {
     # activo no siga corriendo indefinidamente tras salir del script.
     docker rm -f "$a1" >/dev/null 2>&1 || true
     ;;
+  stop_apps_web)
+    # S9 (rotate-all-interactive.sh, gate_s9) — a1=pid_file. apps/web se
+    # lanza con `detached: true` (start-apps-web.mjs) precisamente para
+    # sobrevivir a un `next dev` que tarda en apagarse -- pero eso también
+    # significa que NO forma parte del grupo de procesos en primer plano
+    # de esta terminal, así que un Ctrl-C real (SIGINT) nunca le llega
+    # solo. Sin este ítem en la pila (bug real, auditoría de preflight de
+    # S9, 2026-08-21), una interrupción mientras apps/web está arrancado
+    # lo dejaba huérfano, sirviendo indefinidamente contra Postgres/Redis
+    # reales sin que nadie lo supiera. Mejor esfuerzo: `stop` ya es
+    # idempotente (informa `alreadyDead=true` y sale 0 si el proceso ya no
+    # existe), así que repetirlo tras un `stop` explícito previo nunca
+    # falla ni hace ruido.
+    node "$SCRIPT_DIR/start-apps-web.mjs" stop "$a1" >/dev/null 2>&1 || true
+    ;;
   lock_release)
     # Bloqueo de concurrencia (gapssa_secrets_lock_acquire/_release, más
     # arriba en este mismo fichero) — participa en ESTA pila (registrado
