@@ -2073,6 +2073,63 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+
+# ---------------------------------------------------------------------------
+# restore_env_files_from_quarantine (gate_s9, rotate-all-interactive.sh) —
+# regresión directa de un bug real encontrado por la auditoría de preflight
+# de S9 (2026-08-21): `mv "$dest" "$orig"` sin comprobación previa
+# SOBRESCRIBÍA en silencio cualquier cosa que hubiera reaparecido en
+# `$orig` mientras el `.env*` real estaba en cuarentena — justo lo que el
+# propio checklist de esa auditoría pedía verificar ("nunca sobrescribir
+# un archivo que reaparezca"). Extrae la función REAL del cuerpo de
+# gate_s9() (nunca una reimplementación aparte — mismo patrón que
+# BLOQUE 12 con _s7_*, así una regresión futura en el propio fichero de
+# producción se detecta aquí).
+# ---------------------------------------------------------------------------
+QRESTORE_SNIPPET="$TMP_ROOT/qrestore-fn.sh"
+awk '/^  restore_env_files_from_quarantine\(\) \{/,/^  \}/' "$SCRIPT_DIR/rotate-all-interactive.sh" >"$QRESTORE_SNIPPET"
+if [ -s "$QRESTORE_SNIPPET" ]; then
+  echo "ok   - restore_env_files_from_quarantine: se extrajo de rotate-all-interactive.sh (snippet no vacío)"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - restore_env_files_from_quarantine: extracción vacía -- revisa el patrón awk si rotate-all-interactive.sh cambió de forma"
+  FAIL=$((FAIL + 1))
+fi
+
+QR_DIR="$TMP_ROOT/qrestore-case"
+mkdir -p "$QR_DIR"
+# Caso A: orig ausente (camino normal) -> se restaura.
+printf 'contenido-en-cuarentena-A' >"$QR_DIR/dest-a"
+# Caso B: orig REAPARECIÓ mientras estaba en cuarentena -> nunca se sobrescribe.
+printf 'contenido-en-cuarentena-B' >"$QR_DIR/dest-b"
+printf 'contenido-que-reaparecio' >"$QR_DIR/orig-b"
+
+bash -c '
+  set -euo pipefail
+  source "$1"
+  qr_say_log="$2"
+  say() { printf "SAY:%s\n" "$*" >>"$qr_say_log"; }
+  quarantine_map="$(printf "%s\t%s\n%s\t%s" "$3/orig-a" "$3/dest-a" "$3/orig-b" "$3/dest-b")"
+  restore_env_files_from_quarantine
+' _ "$QRESTORE_SNIPPET" "$QR_DIR/say.log" "$QR_DIR"
+QR_SAY_LOG="$(cat "$QR_DIR/say.log" 2>/dev/null || true)"
+
+QR_OK=true
+[ "$(cat "$QR_DIR/orig-a" 2>/dev/null || true)" = "contenido-en-cuarentena-A" ] || QR_OK=false
+[ -e "$QR_DIR/dest-a" ] && QR_OK=false # debe haberse movido -- ya no debe existir la copia en cuarentena
+[ "$(cat "$QR_DIR/orig-b" 2>/dev/null || true)" = "contenido-que-reaparecio" ] || QR_OK=false # NUNCA sobrescrito
+[ "$(cat "$QR_DIR/dest-b" 2>/dev/null || true)" = "contenido-en-cuarentena-B" ] || QR_OK=false # copia en cuarentena preservada
+printf '%s' "$QR_SAY_LOG" | grep -q "reaparec" || QR_OK=false # aviso explícito emitido
+
+if [ "$QR_OK" = true ]; then
+  echo "ok   - restore_env_files_from_quarantine: restaura el caso normal; si \$orig reapareció, NUNCA lo sobrescribe (copia en cuarentena preservada, aviso explícito)"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - restore_env_files_from_quarantine: orig-a='$(cat "$QR_DIR/orig-a" 2>/dev/null || echo ausente)' dest-a-existe=$([ -e "$QR_DIR/dest-a" ] && echo si || echo no) orig-b='$(cat "$QR_DIR/orig-b" 2>/dev/null || echo ausente)' dest-b='$(cat "$QR_DIR/dest-b" 2>/dev/null || echo ausente)' say-log=[$QR_SAY_LOG]"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$QR_DIR" "$QRESTORE_SNIPPET"
+
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

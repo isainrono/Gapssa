@@ -4145,10 +4145,31 @@ PYEOF
   # ocurriendo correctamente (S9 fallaba bien) pero la restauración real
   # del `.env*` desde cuarentena, pese al mensaje que la prometía, nunca
   # llegaba a ejecutarse en ese camino concreto.
+  # Bug real (auditoría de preflight de S9, 2026-08-21): `mv "$dest"
+  # "$orig"` sin comprobación previa SOBRESCRIBE en silencio cualquier
+  # cosa que haya reaparecido en `$orig` mientras el `.env*` real estaba
+  # en cuarentena (un proceso ajeno, una restauración manual del
+  # operador, cualquier escritura entre la puesta en cuarentena y este
+  # punto) — exactamente lo que la propia auditoría pedía verificar
+  # ("nunca sobrescribir un archivo que reaparezca"). Ahora comprueba
+  # `$orig` (fichero, symlink colgante o no) ANTES de mover cada entrada;
+  # si reapareció, la copia en cuarentena se conserva sin tocar (nunca se
+  # pierde) y el aviso queda explícito en la salida — nunca un fallo
+  # silencioso. `mv -n` como segunda barrera (mejor esfuerzo: la
+  # comprobación previa ya cierra la ventana real de forma determinista
+  # para el caso que esta función puede observar).
   restore_env_files_from_quarantine() {
     printf '%s\n' "$quarantine_map" | while IFS=$'\t' read -r orig dest; do
       [ -n "$orig" ] || continue
-      mv "$dest" "$orig"
+      if [ -e "$orig" ] || [ -L "$orig" ]; then
+        say "  AVISO: '$orig' reapareció mientras estaba en cuarentena — NO se sobrescribe. La copia en cuarentena sigue en '$dest'; revísalo manualmente."
+        continue
+      fi
+      if ! mv -n -- "$dest" "$orig"; then
+        say "  AVISO: no se pudo restaurar '$dest' -> '$orig' — revísalo manualmente."
+      elif [ -e "$dest" ]; then
+        say "  AVISO: '$orig' reapareció justo antes de mover (mv -n lo rechazó) — la copia en cuarentena sigue en '$dest'; revísalo manualmente."
+      fi
     done
   }
 
