@@ -1718,6 +1718,305 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# ---------------------------------------------------------------------------
+# BLOQUE 12 (incidente real 2026-08-21 — limpieza de temporales atómicos
+# no consumidos): _s7_apply_mutations()/_s7_migrate_legacy_schema()
+# (rotate-all-interactive.sh) dejaban un temporal FIJADO sin retirar en
+# disco cada vez que atomicSecretsFileMutate.mjs/
+# migrateLegacySecretsFileToActive.mjs terminaban en no-op (rc=20) o en
+# cualquier error sin consumirlo: _s7_unpin_secrets_tmp() solo hacía
+# gapssa_cleanup_pop_matching (retirar el REGISTRO de la pila de
+# limpieza), nunca gapssa_secrets_shred_pinned (retirar el FICHERO) — así
+# que el propio AVISO del script Node ("bórralo") quedaba sin nadie que
+# lo ejecutara, y dos temporales de 0 bytes sobrevivían indefinidamente
+# en el almacén externo real. Estas pruebas invocan las funciones REALES
+# extraídas de rotate-all-interactive.sh (nunca una reimplementación
+# aparte — así una regresión futura en el propio fichero de producción se
+# detecta aquí) contra el CLI real de atomicSecretsFileMutate.mjs, con
+# fixtures desechables fuera del repositorio.
+# ---------------------------------------------------------------------------
+
+S7FN_SNIPPET="$TMP_ROOT/s7-fns.sh"
+{
+  awk '/^_s7_pin_secrets_tmp\(\) \{/,/^\}/' "$SCRIPT_DIR/rotate-all-interactive.sh"
+  awk '/^_s7_unpin_secrets_tmp\(\) \{/,/^\}/' "$SCRIPT_DIR/rotate-all-interactive.sh"
+  awk '/^_s7_apply_mutations\(\) \{/,/^\}/' "$SCRIPT_DIR/rotate-all-interactive.sh"
+  awk '/^_s7_migrate_legacy_schema\(\) \{/,/^\}/' "$SCRIPT_DIR/rotate-all-interactive.sh"
+} >"$S7FN_SNIPPET"
+
+# Sanity: las 4 funciones se extrajeron de verdad — si el patrón awk
+# alguna vez deja de casar (p. ej. tras un refactor real del fichero),
+# esta prueba debe fallar RUIDOSAMENTE en vez de "pasar" contra un
+# snippet vacío que no ejercería nada.
+S7FN_COUNT="$(grep -c '^_s7_.*() {' "$S7FN_SNIPPET" || true)"
+if [ "$S7FN_COUNT" = 4 ]; then
+  echo "ok   - BLOQUE 12: las 4 funciones _s7_* se extrajeron de rotate-all-interactive.sh (snippet no vacío)"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - BLOQUE 12: extracción de funciones _s7_* rota (se esperaban 4, se encontraron $S7FN_COUNT) — revisa el patrón awk si rotate-all-interactive.sh cambió de forma"
+  FAIL=$((FAIL + 1))
+fi
+
+# Generador de fixture — importa MANDATORY_KEYS_ACTIVE del propio
+# backupSchema.mjs real (nunca una lista copiada a mano, que podría
+# divergir en silencio) para producir un $SECRETS_FILE válido contra el
+# esquema "active" completo, con valores ficticios desechables.
+S7_FIXTURE_GEN="$TMP_ROOT/s7-fixture-gen.mjs"
+cat >"$S7_FIXTURE_GEN" <<'FIXTURE_EOF'
+import { writeFileSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
+const backupSchemaPath = process.argv[2]
+const outPath = process.argv[3]
+const { MANDATORY_KEYS_ACTIVE } = await import(pathToFileURL(backupSchemaPath).href)
+const lines = ['# fixture de prueba (BLOQUE 12, lib.test.sh) - desechable', '']
+for (const k of MANDATORY_KEYS_ACTIVE) {
+  if (k.endsWith('_KEYS') || k.endsWith('_SECRETS')) {
+    lines.push(k + '=' + JSON.stringify({ v1: 'valor-v1-' + k.toLowerCase() }))
+  } else if (k.endsWith('_ACTIVE_KEY_VERSION')) {
+    lines.push(k + '=v1')
+  } else {
+    lines.push(k + '=valor-original-' + k.toLowerCase())
+  }
+}
+writeFileSync(outPath, lines.join('\n') + '\n', { mode: 0o600 })
+FIXTURE_EOF
+
+s7_make_fixture_dir() {
+  local d="$TMP_ROOT/s7-case-$1"
+  mkdir -p "$d"
+  node "$S7_FIXTURE_GEN" "$SCRIPT_DIR/lib/backupSchema.mjs" "$d/.env.gapssa"
+  printf '%s' "$d/.env.gapssa"
+}
+
+# --- Caso 1: NO-OP (rc=20) — el temporal, vacío, se retira de forma
+#     síncrona (nunca queda para que el operador lo borre a mano). ---
+CASE1_DIR="$TMP_ROOT/s7-case-1"
+CASE1_SECRETS_FILE="$(s7_make_fixture_dir 1)"
+CASE1_CURRENT_VALUE="$(grep '^BOOKING_INTERNAL_API_SECRET=' "$CASE1_SECRETS_FILE" | cut -d= -f2-)"
+CASE1_RESULT="$(bash -c '
+  set -euo pipefail
+  SCRIPT_DIR="$1"; SECRETS_FILE="$2"
+  source "$SCRIPT_DIR/lib.sh"
+  source "$3"
+  say() { :; }
+  current_secrets_schema_version() { printf "active"; }
+  mutations="[{\"op\":\"set-line\",\"key\":\"BOOKING_INTERNAL_API_SECRET\",\"value\":\"$4\"}]"
+  rc=0
+  _s7_apply_mutations "$mutations" "noop-test" >/dev/null 2>/dev/null || rc=$?
+  tmp_gone="no"; [ -e "$S7_PIN_TMP" ] || tmp_gone="yes"
+  stack_empty="no"; [ "${#GAPSSA_CLEANUP_OPS[@]}" -eq 0 ] && stack_empty="yes"
+  printf "rc=%s tmp_gone=%s stack_empty=%s" "$rc" "$tmp_gone" "$stack_empty"
+' _ "$SCRIPT_DIR" "$CASE1_SECRETS_FILE" "$S7FN_SNIPPET" "$CASE1_CURRENT_VALUE")"
+if [ "$CASE1_RESULT" = "rc=20 tmp_gone=yes stack_empty=yes" ]; then
+  echo "ok   - BLOQUE 12 caso 1 (no-op rc=20): el temporal SIN CONSUMIR se retira de forma síncrona, pila de limpieza queda vacía"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - BLOQUE 12 caso 1 (no-op): $CASE1_RESULT"
+  FAIL=$((FAIL + 1))
+fi
+# El nombre real que produce gapssa_secrets_mktemp_secure_same_dir es
+# ".${base}.${label}-XXXXXXXX" con base=".env.gapssa" (YA empieza por
+# punto) -> doble punto inicial de verdad: "..env.gapssa.<label>-XXXXXXXX"
+# (confirmado empíricamente sobre el almacén externo real durante el
+# diagnóstico de este incidente) — el patrón de abajo usa exactamente esa
+# forma, nunca una aproximación de un solo punto que dejaría pasar en
+# silencio un huérfano real sin que esta prueba lo detectara.
+if find "$CASE1_DIR" -maxdepth 1 -name '..env.gapssa.*' 2>/dev/null | grep -q .; then
+  echo "FAIL - BLOQUE 12 caso 1: quedó un temporal huérfano en $CASE1_DIR"
+  FAIL=$((FAIL + 1))
+else
+  echo "ok   - BLOQUE 12 caso 1: cero temporales huérfanos (patrón '..env.gapssa.*') en $CASE1_DIR"
+  PASS=$((PASS + 1))
+fi
+
+# --- Caso 2: error ANTES de escribir (rc=2, versión pedida ausente en
+#     json-map-retain) — el temporal (vacío, nunca abierto para
+#     escritura) se retira igual, nunca queda para el operador. ---
+CASE2_SECRETS_FILE="$(s7_make_fixture_dir 2)"
+CASE2_RESULT="$(bash -c '
+  set -euo pipefail
+  SCRIPT_DIR="$1"; SECRETS_FILE="$2"
+  source "$SCRIPT_DIR/lib.sh"
+  source "$3"
+  say() { :; }
+  current_secrets_schema_version() { printf "active"; }
+  mutations="[{\"op\":\"json-map-retain\",\"key\":\"BOOKING_FIELD_ENCRYPTION_KEYS\",\"versions\":[\"v9-nunca-existio\"]}]"
+  rc=0
+  _s7_apply_mutations "$mutations" "error-before-write-test" >/dev/null 2>/dev/null || rc=$?
+  tmp_gone="no"; [ -e "$S7_PIN_TMP" ] || tmp_gone="yes"
+  stack_empty="no"; [ "${#GAPSSA_CLEANUP_OPS[@]}" -eq 0 ] && stack_empty="yes"
+  printf "rc=%s tmp_gone=%s stack_empty=%s" "$rc" "$tmp_gone" "$stack_empty"
+' _ "$SCRIPT_DIR" "$CASE2_SECRETS_FILE" "$S7FN_SNIPPET")"
+if [ "$CASE2_RESULT" = "rc=2 tmp_gone=yes stack_empty=yes" ]; then
+  echo "ok   - BLOQUE 12 caso 2 (error antes de escribir, rc=2): el temporal se retira, pila de limpieza queda vacía, \$SECRETS_FILE nunca se tocó"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - BLOQUE 12 caso 2 (error antes de escribir): $CASE2_RESULT"
+  FAIL=$((FAIL + 1))
+fi
+
+# --- Caso 3: error DESPUÉS de escribir == interrupción real (SIGKILL vía
+#     GAPSSA_ROTATION_TEST_FAILPOINT="after-fsync-before-rename", Bloque
+#     10) — el temporal SÍ contiene ya los bytes completos del secreto
+#     nuevo (fsync ya ocurrió, rename nunca) cuando el proceso Node
+#     muere; _s7_unpin_secrets_tmp debe SOBRESCRIBIR (shred, nunca un
+#     simple rm) antes de borrar, y $SECRETS_FILE debe seguir intacto. ---
+CASE3_SECRETS_FILE="$(s7_make_fixture_dir 3)"
+CASE3_RESULT="$(bash -c '
+  set -euo pipefail
+  SCRIPT_DIR="$1"; SECRETS_FILE="$2"
+  source "$SCRIPT_DIR/lib.sh"
+  source "$3"
+  say() { :; }
+  current_secrets_schema_version() { printf "active"; }
+  export GAPSSA_ROTATION_TEST_FAILPOINT="after-fsync-before-rename"
+  export GAPSSA_ROTATION_TEST_DISPOSABLE_LABEL="gapssa-s7-cleanup-tests-deadbeef02"
+  mutations="[{\"op\":\"set-line\",\"key\":\"BOOKING_INTERNAL_API_SECRET\",\"value\":\"valor-que-nunca-debe-sobrevivir-en-disco\"}]"
+  rc=0
+  _s7_apply_mutations "$mutations" "crash-after-write-test" >/dev/null 2>/dev/null || rc=$?
+  tmp_gone="no"; [ -e "$S7_PIN_TMP" ] || tmp_gone="yes"
+  stack_empty="no"; [ "${#GAPSSA_CLEANUP_OPS[@]}" -eq 0 ] && stack_empty="yes"
+  secrets_intact="no"; grep -q "^BOOKING_INTERNAL_API_SECRET=valor-original-booking_internal_api_secret$" "$SECRETS_FILE" && secrets_intact="yes"
+  printf "rc=%s tmp_gone=%s stack_empty=%s secrets_intact=%s" "$rc" "$tmp_gone" "$stack_empty" "$secrets_intact"
+' _ "$SCRIPT_DIR" "$CASE3_SECRETS_FILE" "$S7FN_SNIPPET")"
+if [ "$CASE3_RESULT" = "rc=137 tmp_gone=yes stack_empty=yes secrets_intact=yes" ]; then
+  echo "ok   - BLOQUE 12 caso 3 (interrupción real / error tras escribir, SIGKILL after-fsync-before-rename): el temporal con bytes de secreto real se retira (shred) igual, \$SECRETS_FILE original intacto"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - BLOQUE 12 caso 3 (interrupción real): $CASE3_RESULT"
+  FAIL=$((FAIL + 1))
+fi
+
+# --- Caso 4a: sustitución por SYMLINK — entre el pin y la retirada, el
+#     temporal fijado se sustituye por un enlace simbólico a un fichero
+#     "víctima" ajeno. _s7_unpin_secrets_tmp NUNCA debe seguir el enlace
+#     ni tocar su destino — como mucho retira el propio enlace (mismo
+#     contrato que gapssa_secrets_safe_unlink_if_symlink, ya probado en
+#     BLOQUE 6). ---
+CASE4A_SECRETS_FILE="$(s7_make_fixture_dir 4a)"
+CASE4A_VICTIM="$TMP_ROOT/s7-case-4a-victima.txt"
+printf 'CONTENIDO-VICTIMA-QUE-DEBE-SOBREVIVIR' >"$CASE4A_VICTIM"
+CASE4A_RESULT="$(bash -c '
+  set -euo pipefail
+  SCRIPT_DIR="$1"; SECRETS_FILE="$2"; VICTIM="$4"
+  source "$SCRIPT_DIR/lib.sh"
+  source "$3"
+  say() { :; }
+  _s7_pin_secrets_tmp "symlink-swap-test"
+  rm -f -- "$S7_PIN_TMP"
+  ln -s "$VICTIM" "$S7_PIN_TMP"
+  _s7_unpin_secrets_tmp false
+  link_gone="no"; [ -e "$S7_PIN_TMP" ] || [ -h "$S7_PIN_TMP" ] || link_gone="yes"
+  victim_intact="no"; [ "$(cat "$VICTIM")" = "CONTENIDO-VICTIMA-QUE-DEBE-SOBREVIVIR" ] && victim_intact="yes"
+  stack_empty="no"; [ "${#GAPSSA_CLEANUP_OPS[@]}" -eq 0 ] && stack_empty="yes"
+  printf "link_gone=%s victim_intact=%s stack_empty=%s" "$link_gone" "$victim_intact" "$stack_empty"
+' _ "$SCRIPT_DIR" "$CASE4A_SECRETS_FILE" "$S7FN_SNIPPET" "$CASE4A_VICTIM")"
+if [ "$CASE4A_RESULT" = "link_gone=yes victim_intact=yes stack_empty=yes" ]; then
+  echo "ok   - BLOQUE 12 caso 4a (sustitución por symlink): el enlace se retira, el destino/víctima NUNCA se toca"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - BLOQUE 12 caso 4a (symlink): $CASE4A_RESULT"
+  FAIL=$((FAIL + 1))
+fi
+
+# --- Caso 4b: sustitución por OTRO fichero regular (mismo path, inodo
+#     distinto) — _s7_unpin_secrets_tmp NUNCA debe sobrescribir/borrar
+#     algo que ya no coincide con el pin capturado; el fichero sustituido
+#     debe sobrevivir intacto y la función debe seguir retirando el
+#     registro de la pila (para que el trap EXIT no repita el intento con
+#     datos obsoletos). ---
+CASE4B_SECRETS_FILE="$(s7_make_fixture_dir 4b)"
+CASE4B_RESULT="$(bash -c '
+  set -euo pipefail
+  SCRIPT_DIR="$1"; SECRETS_FILE="$2"
+  source "$SCRIPT_DIR/lib.sh"
+  source "$3"
+  say() { :; }
+  _s7_pin_secrets_tmp "inode-swap-test"
+  rm -f -- "$S7_PIN_TMP"
+  printf "CONTENIDO-SUSTITUTO-QUE-DEBE-SOBREVIVIR" >"$S7_PIN_TMP"
+  chmod 600 "$S7_PIN_TMP"
+  _s7_unpin_secrets_tmp false
+  substituted_intact="no"; [ -f "$S7_PIN_TMP" ] && [ "$(cat "$S7_PIN_TMP")" = "CONTENIDO-SUSTITUTO-QUE-DEBE-SOBREVIVIR" ] && substituted_intact="yes"
+  stack_empty="no"; [ "${#GAPSSA_CLEANUP_OPS[@]}" -eq 0 ] && stack_empty="yes"
+  rm -f -- "$S7_PIN_TMP"
+  printf "substituted_intact=%s stack_empty=%s" "$substituted_intact" "$stack_empty"
+' _ "$SCRIPT_DIR" "$CASE4B_SECRETS_FILE" "$S7FN_SNIPPET")"
+if [ "$CASE4B_RESULT" = "substituted_intact=yes stack_empty=yes" ]; then
+  echo "ok   - BLOQUE 12 caso 4b (sustitución por inodo distinto): el fichero sustituido NUNCA se toca, pila de limpieza igual queda vacía"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - BLOQUE 12 caso 4b (sustitución por inodo): $CASE4B_RESULT"
+  FAIL=$((FAIL + 1))
+fi
+
+# --- Caso 5: llamadas idempotentes repetidas — EXACTAMENTE la secuencia
+#     real de gate_s7() ("generar-v3" seguido de "activar-v3", cada una
+#     relanzada una segunda vez simulando una reanudación tras
+#     interrupción) — cero temporales huérfanos al final, valor v3
+#     idéntico entre la primera pasada y la reanudación. Regresión
+#     directa del incidente real 2026-08-21. ---
+CASE5_DIR="$TMP_ROOT/s7-case-5"
+CASE5_SECRETS_FILE="$(s7_make_fixture_dir 5)"
+CASE5_RESULT="$(bash -c '
+  set -euo pipefail
+  SCRIPT_DIR="$1"; SECRETS_FILE="$2"
+  source "$SCRIPT_DIR/lib.sh"
+  source "$3"
+  say() { :; }
+  current_secrets_schema_version() { printf "active"; }
+  gen_mutations="[{\"op\":\"json-map-generate\",\"key\":\"BOOKING_FIELD_ENCRYPTION_KEYS\",\"versionKey\":\"v3\",\"bytes\":32,\"format\":\"base64\"}]"
+  act_mutations="[{\"op\":\"set-line\",\"key\":\"BOOKING_FIELD_ENCRYPTION_ACTIVE_KEY_VERSION\",\"value\":\"v3\"}]"
+  rc1=0; _s7_apply_mutations "$gen_mutations" "generar-v3" >/dev/null 2>/dev/null || rc1=$?
+  rc2=0; _s7_apply_mutations "$act_mutations" "activar-v3" >/dev/null 2>/dev/null || rc2=$?
+  v3_first="$(node -e "console.log(JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\").match(/^BOOKING_FIELD_ENCRYPTION_KEYS=(.*)$/m)[1]).v3)" "$SECRETS_FILE")"
+  # Segunda "ejecución" (reanudación) — ambas deben ser no-op (rc=20).
+  rc3=0; _s7_apply_mutations "$gen_mutations" "generar-v3" >/dev/null 2>/dev/null || rc3=$?
+  rc4=0; _s7_apply_mutations "$act_mutations" "activar-v3" >/dev/null 2>/dev/null || rc4=$?
+  v3_second="$(node -e "console.log(JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\").match(/^BOOKING_FIELD_ENCRYPTION_KEYS=(.*)$/m)[1]).v3)" "$SECRETS_FILE")"
+  same_v3="no"; [ "$v3_first" = "$v3_second" ] && same_v3="yes"
+  printf "rc1=%s rc2=%s rc3=%s rc4=%s same_v3=%s" "$rc1" "$rc2" "$rc3" "$rc4" "$same_v3"
+' _ "$SCRIPT_DIR" "$CASE5_SECRETS_FILE" "$S7FN_SNIPPET")"
+if [ "$CASE5_RESULT" = "rc1=0 rc2=0 rc3=20 rc4=20 same_v3=yes" ]; then
+  echo "ok   - BLOQUE 12 caso 5 (llamadas idempotentes repetidas, secuencia real generar-v3/activar-v3): primera pasada cambia, reanudación es no-op, v3 nunca se regenera"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - BLOQUE 12 caso 5 (idempotencia repetida): $CASE5_RESULT"
+  FAIL=$((FAIL + 1))
+fi
+CASE5_ORPHANS="$(find "$CASE5_DIR" -maxdepth 1 -name '..env.gapssa.*' 2>/dev/null | wc -l | tr -d ' ')"
+if [ "$CASE5_ORPHANS" = "0" ]; then
+  echo "ok   - BLOQUE 12 caso 5: cero temporales huérfanos tras las 4 invocaciones (regresión directa del incidente real 2026-08-21)"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - BLOQUE 12 caso 5: $CASE5_ORPHANS temporal(es) huérfano(s) sobrevivieron en $CASE5_DIR"
+  FAIL=$((FAIL + 1))
+fi
+
+# --- Caso 6: _s7_migrate_legacy_schema — mismo contrato (no-op cuando el
+#     archivo YA está en esquema "active", que es el caso normal en estas
+#     fixtures) también retira su temporal de forma síncrona. ---
+CASE6_SECRETS_FILE="$(s7_make_fixture_dir 6)"
+CASE6_RESULT="$(bash -c '
+  set -euo pipefail
+  SCRIPT_DIR="$1"; SECRETS_FILE="$2"
+  source "$SCRIPT_DIR/lib.sh"
+  source "$3"
+  say() { :; }
+  rc=0
+  _s7_migrate_legacy_schema >/dev/null 2>/dev/null || rc=$?
+  tmp_gone="no"; [ -e "$S7_PIN_TMP" ] || tmp_gone="yes"
+  stack_empty="no"; [ "${#GAPSSA_CLEANUP_OPS[@]}" -eq 0 ] && stack_empty="yes"
+  printf "rc=%s tmp_gone=%s stack_empty=%s" "$rc" "$tmp_gone" "$stack_empty"
+' _ "$SCRIPT_DIR" "$CASE6_SECRETS_FILE" "$S7FN_SNIPPET")"
+if [ "$CASE6_RESULT" = "rc=0 tmp_gone=yes stack_empty=yes" ]; then
+  echo "ok   - BLOQUE 12 caso 6 (_s7_migrate_legacy_schema, no-op porque ya está en 'active'): el temporal se retira igual, pila de limpieza queda vacía"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - BLOQUE 12 caso 6 (_s7_migrate_legacy_schema): $CASE6_RESULT"
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -3204,7 +3204,32 @@ _s7_pin_secrets_tmp() {
   return 0
 }
 
+# _s7_unpin_secrets_tmp <consumed>
+# <consumed>="true": el escritor Node consumió el temporal con éxito
+# (rename atómico ejecutado, rc=0) — no queda fichero que sobrescribir,
+# solo se retira el registro de la pila de limpieza.
+# <consumed>="false" (o ausente) para CUALQUIER otro desenlace — no-op
+# rc=20 (temporal SIN CONSUMIR, vacío) o cualquier código de error
+# (que puede haber dejado bytes de un secreto real a medio escribir en
+# el temporal) — el componente que fijó el temporal es quien debe
+# retirarlo, aquí mismo y de forma síncrona, contra la identidad ya
+# fijada (gapssa_secrets_shred_pinned: revalida device/inode/uid/modo,
+# nunca sigue ni sobrescribe un symlink, nunca actúa sobre una ruta que
+# ya no coincide con el pin) — nunca un mensaje pidiendo al operador que
+# lo borre a mano. Si por lo que sea el temporal ya no existe (p. ej.
+# consumed="false" pasado por error tras un rc=13 en el que el rename SÍ
+# llegó a ejecutarse), gapssa_secrets_shred_pinned es un no-op seguro.
+# Sigue siendo necesaria como red de seguridad adicional la pila de
+# limpieza global (gapssa_cleanup_dispatch, trap EXIT) para el caso de
+# una interrupción real (SIGINT/SIGTERM) DURANTE la propia invocación de
+# node, antes de que esta función llegue a ejecutarse.
 _s7_unpin_secrets_tmp() {
+  local consumed="${1:-false}"
+  if [ "$consumed" != true ]; then
+    gapssa_secrets_shred_pinned "$S7_PIN_TMP" "$S7_PIN_DIR" "$S7_PIN_DEV" "$S7_PIN_INO" "$S7_PIN_UID" "$S7_PIN_MODE" || {
+      echo "AVISO: el temporal fijado ('$S7_PIN_TMP') cambió de identidad antes de poder retirarlo automáticamente (ver mensaje de arriba) — revisión manual requerida, posible sustitución." >&2
+    }
+  fi
   gapssa_cleanup_pop_matching shred_pinned_tmp "$S7_PIN_TMP" "$S7_PIN_DIR" "$S7_PIN_DEV" "$S7_PIN_INO" "$S7_PIN_UID" "$S7_PIN_MODE"
 }
 
@@ -3215,7 +3240,9 @@ _s7_unpin_secrets_tmp() {
 # no-op — TODAS las mutaciones ya estaban aplicadas (reanudación segura
 # tras una interrupción anterior; nunca regenera un valor ya activo).
 # Ambos se tratan como éxito por el llamador. rc=1: fallo real (mensaje ya
-# impreso a stderr por el propio script Node).
+# impreso a stderr por el propio script Node). En TODOS los casos el
+# temporal fijado se retira aquí mismo antes de devolver el control
+# (_s7_unpin_secrets_tmp) — nunca queda para que el operador lo borre.
 _s7_apply_mutations() {
   local mutations_json="$1" label="$2"
   if ! _s7_pin_secrets_tmp "$label"; then
@@ -3224,7 +3251,9 @@ _s7_apply_mutations() {
   fi
   local rc=0 summary
   summary="$(printf '%s' "$mutations_json" | node "$SCRIPT_DIR/lib/atomicSecretsFileMutate.mjs" "$SECRETS_FILE" "$S7_PIN_TMP" "$S7_PIN_DEV" "$S7_PIN_INO" "$S7_PIN_UID" "$S7_PIN_MODE" "$(current_secrets_schema_version)")" || rc=$?
-  _s7_unpin_secrets_tmp
+  local consumed=false
+  [ "$rc" -eq 0 ] && consumed=true
+  _s7_unpin_secrets_tmp "$consumed"
   if [ "$rc" -eq 0 ] || [ "$rc" -eq 20 ]; then
     say "  $label: $summary"
   fi
@@ -3232,7 +3261,8 @@ _s7_apply_mutations() {
 }
 
 # _s7_migrate_legacy_schema — invoca migrateLegacySecretsFileToActive.mjs
-# con un temporal fijado (mismo patrón que arriba). rc=0/20 = éxito
+# con un temporal fijado (mismo patrón que arriba, incluida la retirada
+# síncrona del temporal en TODOS los desenlaces). rc=0/20 = éxito
 # (20 = ya estaba en "active", no-op defensivo — no debería ocurrir aquí,
 # el llamador ya comprobó el esquema antes, pero se trata igual que
 # cualquier otro no-op idempotente). rc=1 = fallo real.
@@ -3243,7 +3273,9 @@ _s7_migrate_legacy_schema() {
   fi
   local rc=0
   node "$SCRIPT_DIR/lib/migrateLegacySecretsFileToActive.mjs" "$SECRETS_FILE" "$S7_PIN_TMP" "$S7_PIN_DEV" "$S7_PIN_INO" "$S7_PIN_UID" "$S7_PIN_MODE" || rc=$?
-  _s7_unpin_secrets_tmp
+  local consumed=false
+  [ "$rc" -eq 0 ] && consumed=true
+  _s7_unpin_secrets_tmp "$consumed"
   [ "$rc" -eq 0 ] || [ "$rc" -eq 20 ]
 }
 

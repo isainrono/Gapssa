@@ -84,7 +84,12 @@
 //        symlink/tipo/propietario/modo — nada se ha escrito
 //   20 = NO-OP — todas las mutaciones ya estaban aplicadas (ningún byte
 //        habría cambiado). El temporal pre-creado por el llamador NUNCA
-//        se consume en este caso — el llamador en bash debe borrarlo.
+//        se consume en este caso (este script termina ANTES de escribir
+//        ningún byte en él — permanece exactamente como lo creó
+//        `mktemp`, vacío) — es responsabilidad del llamador en bash
+//        retirarlo de forma síncrona y determinista contra la identidad
+//        ya fijada (ver gapssa_secrets_shred_pinned/
+//        gapssa_cleanup_push en lib.sh), nunca de un operador humano.
 //
 // stdout en éxito (0 o 20): un único documento JSON de resumen — SOLO
 // nombres de clave/versión y booleanos, JAMÁS un valor:
@@ -503,7 +508,7 @@ async function main() {
   if (!applyResult.changed) {
     closeSync(fd)
     process.stdout.write(JSON.stringify({ changed: false, applied: [], skipped: applyResult.skipped }) + '\n')
-    console.error('AVISO: ninguna mutación cambió nada (todas ya estaban aplicadas) — el temporal pre-creado por el llamador queda SIN USAR, bórralo.')
+    console.error('AVISO: ninguna mutación cambió nada (todas ya estaban aplicadas) — el temporal pre-creado por el llamador queda SIN CONSUMIR (vacío, nunca se escribió en él). El llamador en bash debe retirarlo de forma síncrona contra la identidad fijada.')
     process.exit(20)
   }
 

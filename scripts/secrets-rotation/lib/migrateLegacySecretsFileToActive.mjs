@@ -41,8 +41,10 @@
 // Uso: node migrateLegacySecretsFileToActive.mjs <secretsFilePath> <tempPath> <dev> <ino> <uid> <modo-octal>
 //   exit 0  = migrado con éxito, o el archivo YA estaba en esquema
 //             "active" (no-op idempotente — el temporal pre-creado por
-//             el llamador NUNCA se consume en este caso, hay que
-//             borrarlo)
+//             el llamador NUNCA se consume en este caso; es
+//             responsabilidad del llamador en bash retirarlo de forma
+//             síncrona y determinista contra la identidad ya fijada,
+//             nunca de un operador humano)
 //   exit 1  = uso incorrecto
 //   exit 2  = el archivo no está en un esquema reconocible para esta
 //             operación (mezcla, clave desconocida, legacy incompleta) —
@@ -259,7 +261,7 @@ function main() {
   }
 
   if (!result.changed) {
-    console.error('El archivo externo ya está en esquema "active" — nada que migrar (no-op). El temporal pre-creado por el llamador queda SIN USAR, bórralo.')
+    console.error('El archivo externo ya está en esquema "active" — nada que migrar (no-op). El temporal pre-creado por el llamador queda SIN CONSUMIR (vacío, nunca se escribió en él). El llamador en bash debe retirarlo de forma síncrona contra la identidad fijada.')
     process.exit(20)
   }
 

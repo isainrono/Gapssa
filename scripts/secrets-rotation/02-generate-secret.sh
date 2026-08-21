@@ -154,25 +154,46 @@ if ! gapssa_secrets_verify_pinned_tmp "$tmp_path" "$tmp_dir" "$tmp_dev" "$tmp_in
   exit 1
 fi
 
+# Registrado en la pila de limpieza global (trap EXIT, ver
+# gapssa_cleanup_dispatch en lib.sh) DESDE AQUÍ — cubre una interrupción
+# real (SIGINT/SIGTERM) en cualquier punto posterior, incluida la propia
+# invocación de node más abajo. En el camino normal (sin interrupción)
+# _retire_tmp, más abajo, retira el registro de forma síncrona en cuanto
+# se conoce el desenlace — nunca se deja para que el trap EXIT actúe en
+# el camino feliz, y nunca para que un operador humano lo borre a mano.
+gapssa_cleanup_push shred_pinned_tmp "$tmp_path" "$tmp_dir" "$tmp_dev" "$tmp_ino" "$tmp_uid" "$tmp_mode"
+
+# _retire_tmp — retira el temporal fijado de forma síncrona contra la
+# identidad ya capturada (sobrescritura + rm si sigue existiendo; no-op
+# seguro si ya fue consumido por un rename atómico con éxito) y limpia su
+# registro en la pila de limpieza global para que el trap EXIT no repita
+# el trabajo con datos obsoletos.
+_retire_tmp() {
+  gapssa_secrets_shred_pinned "$tmp_path" "$tmp_dir" "$tmp_dev" "$tmp_ino" "$tmp_uid" "$tmp_mode" || {
+    echo "AVISO: el temporal fijado ('$tmp_path') cambió de identidad antes de poder retirarlo automáticamente — revisión manual requerida, posible sustitución." >&2
+  }
+  gapssa_cleanup_pop_matching shred_pinned_tmp "$tmp_path" "$tmp_dir" "$tmp_dev" "$tmp_ino" "$tmp_uid" "$tmp_mode"
+}
+
 # VAR_NAME/BYTES/FORMAT se validan aquí ANTES de interpolarlos en JSON a
 # mano (nunca llevan comillas/backslash — alfabeto cerrado comprobado
 # explícitamente, así que no hace falta un escapador JSON genérico) —
 # atomicSecretsFileMutate.mjs vuelve a validarlos de forma estricta antes
 # de aplicarlos, esto es solo para construir un documento bien formado.
 if ! [[ "$VAR_NAME" =~ ^[A-Z_][A-Z0-9_]*$ ]]; then
-  rm -f -- "$tmp_path" 2>/dev/null || true
+  _retire_tmp
   echo "ERROR: VAR_NAME '$VAR_NAME' no tiene forma MAYUSCULA_CON_GUIONES_BAJOS." >&2
   exit 1
 fi
 if ! [[ "$BYTES" =~ ^[0-9]+$ ]]; then
-  rm -f -- "$tmp_path" 2>/dev/null || true
+  _retire_tmp
   echo "ERROR: --bytes '$BYTES' no es un entero." >&2
   exit 1
 fi
 case "$FORMAT" in
 hex | base64) ;;
 *)
-  rm -f -- "$tmp_path" 2>/dev/null || true
+  _retire_tmp
   echo "ERROR: --format '$FORMAT' desconocido (usa hex o base64)." >&2
   exit 1
   ;;
@@ -187,16 +208,20 @@ if [ "$write_rc" -eq 20 ]; then
   # No-op (nunca debería ocurrir para --set-line-generate, que siempre
   # cambia el valor — ver comentario de cabecera de
   # atomicSecretsFileMutate.mjs; se trata igual que un caso real por si
-  # acaso) — el temporal nunca se consumió, hay que limpiarlo.
-  rm -f -- "$tmp_path" 2>/dev/null || true
+  # acaso) — el temporal nunca se consumió, se retira aquí mismo.
+  _retire_tmp
   echo "ERROR: la escritura no cambió nada (inesperado para --set-line, que siempre rota el valor)." >&2
   exit 1
 fi
 if [ "$write_rc" -ne 0 ]; then
-  rm -f -- "$tmp_path" 2>/dev/null || true
+  _retire_tmp
   echo "ERROR: no se pudo escribir '$VAR_NAME' de forma atómica (código $write_rc)." >&2
   exit 1
 fi
+
+# write_rc == 0: el temporal fue consumido por el rename atómico — no
+# queda nada que sobrescribir, solo se retira el registro de limpieza.
+gapssa_cleanup_pop_matching shred_pinned_tmp "$tmp_path" "$tmp_dir" "$tmp_dev" "$tmp_ino" "$tmp_uid" "$tmp_mode"
 
 echo "write_summary=$write_summary"
 echo "S_WRITE_OK=true"
