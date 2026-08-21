@@ -742,55 +742,208 @@ backup_secrets_file() {
   unset -f _backup_reserved_cleanup
 
   say "Backup cifrado y verificado (ensayo de restauración en streaming, sin texto plano en disco) de esta puerta: $out"
+
+  # Incidencia S9 2026-08-21: persiste, en estado NO sensible (nunca el
+  # contenido, solo el nombre del fichero), qué backup corresponde
+  # exactamente a ESTA puerta en ESTE instante -- la única fuente de
+  # verdad fiable de "qué backup precede a la rotación real", nunca "el
+  # más reciente por timestamp" adivinado más tarde. Se sobrescribe en
+  # cada llamada (nunca se acumula un historial): un reintento posterior
+  # de la misma puerta que sí complete la rotación debe ganar sobre un
+  # intento cancelado/fallido anterior, y lo hace automáticamente porque
+  # su propia llamada a backup_secrets_file() vuelve a pisar esta misma
+  # clave. Ver _resolve_backup_for_gate().
+  gapssa_secrets_meta_set "$STATUS_FILE" "${gate}_BACKUP" "$(basename "$out")"
   return 0
 }
 
-# Extrae UNA variable del backup cifrado más reciente de $gate, en
-# streaming (openssl descifra hacia stdout, nunca a un fichero) — nunca
-# se crea un .env.gapssa descifrado completo en disco. El valor solo vive
-# en la variable bash devuelta al llamador, que debe hacer `unset`
-# inmediatamente después de usarlo. Vacío + return 1 si no hay backup o la
-# frase no descifra — el llamador NUNCA debe inventar un valor en ese caso.
+# _resolve_backup_for_gate <gate>
+# Devuelve por stdout la ruta del backup cifrado que corresponde EXACTAMENTE
+# al valor anterior a la rotación que dejó a $gate en 'done' — nunca "el
+# más reciente" sin más si eso pudiera ser ambiguo (incidencia S9,
+# 2026-08-21: puertas ejecutadas en procesos separados, con intentos
+# cancelados/fallidos de por medio, hacían de "elige el más nuevo por
+# timestamp" una apuesta, no una prueba).
+#
+# Prioridad:
+#   1. El identificador que backup_secrets_file() persistió en el propio
+#      instante de tomar el backup ("${gate}_BACKUP" en $STATUS_FILE, vía
+#      gapssa_secrets_meta_set) — disponible para toda rotación hecha con
+#      esta versión del script en adelante; se sobrescribe en cada intento
+#      de la puerta, así que el intento que de verdad terminó en 'done' es
+#      siempre el que gana, nunca un intento cancelado o fallido anterior.
+#      Si el fichero referenciado ya no existe (borrado a mano, migración
+#      de máquina...) se descarta y se cae al heurístico de abajo — nunca
+#      se inventa una ruta.
+#   2. Heurístico de compatibilidad para backups anteriores a este
+#      mecanismo (nunca persistieron su propio identificador): candidatos
+#      que casan "${gate}-*.env.gapssa.enc" (el guion es literal — nunca
+#      casa "${gate}A-"/"${gate}B-"), descartando symlinks. Un único
+#      candidato es trivialmente inequívoco. Con dos o más, se ordena por
+#      mtime; si los dos más recientes EMPATAN (resolución de segundo, lo
+#      único que el sistema de ficheros garantiza), elegir cualquiera
+#      sería arbitrario — falla cerrado en vez de adivinar. Si no
+#      empatan, se usa el más reciente (mismo resultado que antes de esta
+#      corrección para el historial ya existente) pero avisando SIEMPRE
+#      de forma explícita, nunca en silencio.
+_resolve_backup_for_gate() {
+  local gate="$1"
+  local meta_name meta_path
+  meta_name="$(gapssa_secrets_meta_get "$STATUS_FILE" "${gate}_BACKUP")"
+  if [ -n "$meta_name" ]; then
+    meta_path="$BACKUP_DIR/$meta_name"
+    if [ -f "$meta_path" ] && [ ! -L "$meta_path" ]; then
+      printf '%s' "$meta_path"
+      return 0
+    fi
+    say "AVISO: el backup asociado a $gate ('$meta_name') ya no existe o no es un fichero regular — resolviendo por heurístico de compatibilidad." >&2
+  fi
+
+  local candidates=() f
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    [ -L "$f" ] && continue
+    candidates+=("$f")
+  done < <(find "$BACKUP_DIR" -maxdepth 1 -name "${gate}-*.env.gapssa.enc" 2>/dev/null)
+
+  local count="${#candidates[@]}"
+  if [ "$count" -eq 0 ]; then
+    return 1
+  fi
+  if [ "$count" -eq 1 ]; then
+    printf '%s' "${candidates[0]}"
+    return 0
+  fi
+
+  local best="" best_mtime=-1 second_mtime=-1 mtime
+  for f in "${candidates[@]}"; do
+    mtime="$(stat -f '%m' "$f" 2>/dev/null || stat -c '%Y' "$f" 2>/dev/null || echo -1)"
+    if [ "$mtime" -gt "$best_mtime" ]; then
+      second_mtime="$best_mtime"
+      best_mtime="$mtime"
+      best="$f"
+    elif [ "$mtime" -gt "$second_mtime" ]; then
+      second_mtime="$mtime"
+    fi
+  done
+
+  if [ "$best_mtime" -eq "$second_mtime" ]; then
+    say "ERROR: $count backups de $gate sin identificador persistido, con timestamps empatados — no se puede determinar con seguridad cuál precede a la rotación real. Nunca se elige al azar entre ellos. Resuélvelo por metadatos (nunca contenido) en $BACKUP_DIR, o vuelve a ejecutar la puerta $gate para regenerar la asociación." >&2
+    return 1
+  fi
+  say "AVISO: $count backups de $gate sin identificador persistido (anteriores a esta corrección) — se usa el más reciente por timestamp: $(basename "$best")." >&2
+  printf '%s' "$best"
+  return 0
+}
+
+# _try_decrypt_old_secret_value <backup_file> <var_name> <phrase>
+# Un único intento de descifrado con UNA frase concreta — nunca la global
+# $BACKUP_PASSPHRASE a ciegas. El fichero temporal con la frase se shreddea
+# aquí mismo, inmediatamente después de su única lectura por openssl, tanto
+# si el intento tiene éxito como si no. Devuelve el valor por stdout y el
+# código de salida REAL de lib/recoverOldSecretValue.mjs (0 éxito; 2 esquema;
+# 3 variable ausente; 4 frase incorrecta o backup corrupto).
+#
+# Registrado en la pila de limpieza global ANTES de escribir la frase real
+# (incidencia S9, 2026-08-21 — gap pre-existente en la versión anterior de
+# recover_old_secret_value(), nunca cerrado hasta ahora): sin esto, un
+# SIGINT/EXIT real justo entre crear el temporal y su propio
+# gapssa_secrets_shred explícito de abajo lo dejaba con la frase en claro
+# en disco indefinidamente — mismo patrón ya usado por backup_secrets_file()
+# para su propio passfile.
+_try_decrypt_old_secret_value() {
+  local backup_file="$1" var_name="$2" phrase="$3"
+  local passfile
+  passfile="$(gapssa_secrets_mktemp_secure gapssa-backup-pass)"
+  gapssa_cleanup_push shred_plain "$passfile"
+  printf '%s' "$phrase" >"$passfile"
+  local value rc=0
+  value="$(node "$SCRIPT_DIR/lib/recoverOldSecretValue.mjs" "$backup_file" "$passfile" "$var_name" 2>/dev/null)" || rc=$?
+  gapssa_secrets_shred "$passfile"
+  gapssa_cleanup_pop_matching shred_plain "$passfile"
+  printf '%s' "$value"
+  return "$rc"
+}
+
+# Extrae UNA variable del backup cifrado correcto de $gate (ver
+# _resolve_backup_for_gate), en streaming (openssl descifra hacia stdout,
+# nunca a un fichero) — nunca se crea un .env.gapssa descifrado completo en
+# disco. El valor solo vive en la variable bash devuelta al llamador, que
+# debe hacer `unset` inmediatamente después de usarlo. Vacío + return 1 si
+# no hay backup o ninguna frase descifra — el llamador NUNCA debe inventar
+# un valor en ese caso.
+#
+# Frases por puerta (incidencia S9, 2026-08-21): S2/S3/S4/S5 pueden haberse
+# rotado en procesos separados, cada uno con su propia frase de
+# recuperación — una única $BACKUP_PASSPHRASE de la sesión de S9 nunca
+# puede garantizar que descifra los cuatro backups a la vez. Se intenta
+# PRIMERO la frase ya conocida de esta sesión (la que ensure_backup_
+# passphrase_known ya estableció, en memoria); solo si ESE backup en
+# concreto no descifra con ella (rc=4 — frase incorrecta o corrupción,
+# nunca un problema de esquema/variable que una frase distinta no
+# arreglaría) se pide explícitamente la frase DE ESE BACKUP, oculta
+# (`read -s`), con un máximo de intentos acotado — nunca se genera una
+# frase nueva para esto, eso solo tiene sentido al CREAR un backup, jamás
+# al leer uno que ya existe. Ninguna frase escrita se conserva más allá de
+# su único intento; el mensaje de error es siempre el mismo, nunca revela
+# si la causa fue el padding de openssl, el esquema del backup o una
+# variable ausente — evita que un atacante use los reintentos como oráculo.
 recover_old_secret_value() {
   local gate="$1" var_name="$2"
-  local latest
-  latest="$(ls -t "$BACKUP_DIR/${gate}-"*.env.gapssa.enc 2>/dev/null | head -n1 || true)"
-  if [ -z "$latest" ]; then
+  local backup_file
+  backup_file="$(_resolve_backup_for_gate "$gate")"
+  if [ -z "$backup_file" ]; then
     say "No hay ningún backup de la puerta $gate en $BACKUP_DIR — no se puede demostrar el valor anterior de $var_name." >&2
     return 1
   fi
   ensure_backup_passphrase_known
-  local passfile
-  passfile="$(_backup_passfile)"
-  # lib/recoverOldSecretValue.mjs coordina descifrado + parseo en UN SOLO
-  # proceso Node (openssl corre como hijo suyo) — el valor NUNCA toca un
-  # fichero regular, ni siquiera temporal: viaja únicamente por el stdout
-  # de ese proceso hacia esta sustitución de comando. No hace falta
-  # PIPESTATUS aquí porque no hay ninguna tubería de bash de por medio —
-  # `$?` tras la asignación ya es el código de salida real de ese único
-  # proceso (openssl falló -> exit 4; parseo/esquema inválido -> exit 2;
-  # variable ausente -> exit 3).
+
+  # Bloque 6 (sin cambios con esta corrección, solo reubicado): el éxito
+  # se decide EXCLUSIVAMENTE por rc=0, nunca por "$value" no vacío — un
+  # valor VACÍO recuperado con éxito (ESPOCRM_API_KEY antes de la primera
+  # vez que S4 la genera) es legítimo y distinto de un fallo de
+  # descifrado; tratarlo como fallo bloquearía S9 permanentemente en una
+  # instalación nueva. Cada llamador decide qué significa "vacío" para SU
+  # secreto (ver el de S4 en gate_s9()).
   local value rc=0
-  value="$(node "$SCRIPT_DIR/lib/recoverOldSecretValue.mjs" "$latest" "$passfile" "$var_name" 2>/dev/null)" || rc=$?
-  gapssa_secrets_shred "$passfile"
-  if [ "$rc" != 0 ]; then
+  value="$(_try_decrypt_old_secret_value "$backup_file" "$var_name" "$BACKUP_PASSPHRASE")" || rc=$?
+  if [ "$rc" = 0 ]; then
+    printf '%s' "$value"
     unset value
-    say "No se pudo recuperar $var_name del backup de $gate (frase incorrecta, backup corrupto, formato de esquema no reconocido o variable ausente) — no se puede demostrar el valor anterior." >&2
+    return 0
+  fi
+  if [ "$rc" != 4 ]; then
+    unset value
+    say "No se pudo recuperar $var_name del backup de $gate — no se puede demostrar el valor anterior." >&2
     return 1
   fi
-  # Bloque 6: un valor VACÍO recuperado con éxito (nunca "frase
-  # incorrecta"/"backup corrupto"/etc.) es distinto de un fallo de
-  # recuperación — ESPOCRM_API_KEY, en concreto, empieza legítimamente
-  # vacío hasta la primerísima vez que S4 lo genera (instalación nueva,
-  # sin API Key configurada antes). Tratar ese "vacío genuino" como si
-  # fuera un fallo de descifrado bloqueaba S9 PERMANENTEMENTE en ese
-  # caso real — hallazgo del ensayo integral, Bloque 6. Cada llamador
-  # decide qué significa "vacío" para SU secreto (ver el de S4 más
-  # abajo); los demás (contraseñas de infraestructura) nunca están
-  # vacíos en la práctica, así que este cambio no les afecta.
-  printf '%s' "$value"
-  unset value
-  return 0
+
+  local attempt max_attempts=3 gate_phrase
+  for attempt in $(seq 1 "$max_attempts"); do
+    say "" >&2
+    say "La frase de recuperación de esta sesión no descifra el backup de $gate." >&2
+    read -r -s -p "Frase de recuperación del backup de $gate (intento $attempt/$max_attempts, entrada oculta): " gate_phrase >&2
+    echo >&2
+    if [ -z "$gate_phrase" ]; then
+      continue
+    fi
+    rc=0
+    value="$(_try_decrypt_old_secret_value "$backup_file" "$var_name" "$gate_phrase")" || rc=$?
+    unset gate_phrase
+    if [ "$rc" = 0 ]; then
+      printf '%s' "$value"
+      unset value
+      return 0
+    fi
+    if [ "$rc" != 4 ]; then
+      unset value
+      say "No se pudo recuperar $var_name del backup de $gate — no se puede demostrar el valor anterior." >&2
+      return 1
+    fi
+  done
+  unset value gate_phrase
+  say "No se pudo recuperar $var_name del backup de $gate tras $max_attempts intentos — no se puede demostrar el valor anterior." >&2
+  return 1
 }
 
 restore_secrets_file_from_latest_backup() {

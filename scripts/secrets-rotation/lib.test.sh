@@ -332,6 +332,49 @@ assert_exit_code \
   1 \
   bash -c "source '$SCRIPT_DIR/lib.sh'; gapssa_secrets_state_set '$STATUS_FILE_TEST' S2 no-es-un-estado-valido"
 
+# --- metadatos NO sensibles (gapssa_secrets_meta_set/_get), incidencia S9
+#     2026-08-21 -- comparte fichero con la máquina de estados pero un
+#     espacio de claves separado (sufijo __meta), sin la validación de
+#     estados (un nombre de fichero de backup nunca es un estado válido).
+result="$(bash -c "source '$SCRIPT_DIR/lib.sh'; gapssa_secrets_meta_get '$STATUS_FILE_TEST' S2_BACKUP")"
+if [ "$result" = "" ]; then
+  echo "ok   - metadato sin registro previo reporta cadena vacía (nunca 'pending', eso es de la máquina de estados)"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - debería reportar vacío, dio '$result'"
+  FAIL=$((FAIL + 1))
+fi
+
+bash -c "source '$SCRIPT_DIR/lib.sh'; gapssa_secrets_meta_set '$STATUS_FILE_TEST' S2_BACKUP 'S2-20260101T000000Z-aaaa.env.gapssa.enc'"
+result="$(bash -c "source '$SCRIPT_DIR/lib.sh'; gapssa_secrets_meta_get '$STATUS_FILE_TEST' S2_BACKUP")"
+if [ "$result" = "S2-20260101T000000Z-aaaa.env.gapssa.enc" ]; then
+  echo "ok   - gapssa_secrets_meta_set/_get: escritura y lectura del identificador de backup persisten"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - debería devolver el nombre de fichero persistido, dio '$result'"
+  FAIL=$((FAIL + 1))
+fi
+
+result="$(bash -c "source '$SCRIPT_DIR/lib.sh'; gapssa_secrets_state_get '$STATUS_FILE_TEST' S2")"
+if [ "$result" = "pending" ]; then
+  echo "ok   - la clave de metadato 'S2_BACKUP__meta' nunca colisiona con el estado real de la puerta 'S2'"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - gapssa_secrets_meta_set contaminó el estado de S2, dio '$result'"
+  FAIL=$((FAIL + 1))
+fi
+
+bash -c "source '$SCRIPT_DIR/lib.sh'; gapssa_secrets_meta_set '$STATUS_FILE_TEST' S2_BACKUP 'S2-20260102T000000Z-bbbb.env.gapssa.enc'"
+result="$(bash -c "source '$SCRIPT_DIR/lib.sh'; gapssa_secrets_meta_get '$STATUS_FILE_TEST' S2_BACKUP")"
+meta_lines="$(grep -c '^S2_BACKUP__meta=' "$STATUS_FILE_TEST" || true)"
+if [ "$result" = "S2-20260102T000000Z-bbbb.env.gapssa.enc" ] && [ "$meta_lines" = "1" ]; then
+  echo "ok   - un segundo backup_secrets_file() para la misma puerta reemplaza (no duplica) el identificador anterior"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - debería reemplazar sin duplicar, resultado='$result' líneas=$meta_lines"
+  FAIL=$((FAIL + 1))
+fi
+
 assert_exit_code \
   "gapssa_secrets_state_set rechaza escribir el estado dentro del workspace" \
   1 \
@@ -2166,6 +2209,271 @@ else
   [ -n "$QSTOP_CHILD_PID" ] && kill -9 "$QSTOP_CHILD_PID" 2>/dev/null || true
 fi
 rm -rf "$QSTOP_DIR"
+
+# ---------------------------------------------------------------------------
+# Incidencia S9 2026-08-21 — frases de recuperación por puerta/backup.
+# S9 recuperó las credenciales anteriores de S3/S4/S5 sin problema pero
+# falló al recuperar la de S2: los backups de S2-S5 pueden haberse creado
+# en procesos independientes, cada uno con su propia frase de recuperación
+# de sesión (ensure_backup_passphrase_known genera o pide una frase NUEVA
+# por proceso) — una única $BACKUP_PASSPHRASE de la sesión de S9 nunca
+# puede garantizar que descifra los cuatro backups a la vez. Regresión de
+# _resolve_backup_for_gate()/_try_decrypt_old_secret_value()/
+# recover_old_secret_value() (rotate-all-interactive.sh) contra fixtures
+# desechables cifradas con el mismo `openssl enc -aes-256-cbc -pbkdf2` real
+# (nunca backups/almacén reales). Extrae las funciones REALES (mismo
+# patrón que BLOQUE 12).
+# ---------------------------------------------------------------------------
+RECOVERY_SNIPPET="$TMP_ROOT/recovery-fns.sh"
+{
+  awk '/^_resolve_backup_for_gate\(\) \{/,/^\}/' "$SCRIPT_DIR/rotate-all-interactive.sh"
+  awk '/^_try_decrypt_old_secret_value\(\) \{/,/^\}/' "$SCRIPT_DIR/rotate-all-interactive.sh"
+  awk '/^recover_old_secret_value\(\) \{/,/^\}/' "$SCRIPT_DIR/rotate-all-interactive.sh"
+} >"$RECOVERY_SNIPPET"
+RECOVERYFN_COUNT="$(grep -cE '^(_resolve_backup_for_gate|_try_decrypt_old_secret_value|recover_old_secret_value)\(\) \{' "$RECOVERY_SNIPPET" || true)"
+if [ "$RECOVERYFN_COUNT" = 3 ]; then
+  echo "ok   - recuperación por puerta: las 3 funciones se extrajeron de rotate-all-interactive.sh (snippet no vacío)"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - recuperación por puerta: extracción rota (se esperaban 3, se encontraron $RECOVERYFN_COUNT) -- revisa el patrón awk si rotate-all-interactive.sh cambió de forma"
+  FAIL=$((FAIL + 1))
+fi
+
+# Fixture: un backup cifrado válido (etiqueta de esquema + UNA variable)
+# con una frase dada -- nunca `-pass pass:...` (visible en ps), mismo
+# principio que el código real, aunque aquí sea una frase de prueba.
+_recovery_make_backup() {
+  local out="$1" phrase="$2" var_name="$3" var_value="$4"
+  local pf
+  pf="$(mktemp)"
+  printf '%s' "$phrase" >"$pf"
+  printf '__GAPSSA_BACKUP_SCHEMA_VERSION__=active\n%s=%s\n' "$var_name" "$var_value" |
+    openssl enc -aes-256-cbc -pbkdf2 -salt -out "$out" -pass "file:$pf" 2>/dev/null
+  rm -f "$pf"
+}
+_recovery_case_dir() {
+  local n="$1" d
+  d="$TMP_ROOT/recovery-case-$n"
+  rm -rf "$d"
+  mkdir -p "$d/backups" "$d/secure-tmp"
+  printf '%s' "$d"
+}
+_recovery_residual_secrets() {
+  # Cero ficheros de frase de backup deben sobrevivir NUNCA, éxito o
+  # fallo -- ver gapssa_cleanup_push en _try_decrypt_old_secret_value.
+  find "$1/secure-tmp" -name 'gapssa-backup-pass.*' 2>/dev/null | wc -l | tr -d ' '
+}
+
+# --- Caso A: misma frase de sesión para S2 y S3 -- ninguna necesita el
+#     prompt de retry. ---
+RC_A="$(_recovery_case_dir A)"
+_recovery_make_backup "$RC_A/backups/S2-20260101T000000Z-aaaa.env.gapssa.enc" "frase-comun-veinte-caracteres" POSTGRES_PASSWORD "old-pg-A"
+_recovery_make_backup "$RC_A/backups/S3-20260101T000000Z-bbbb.env.gapssa.enc" "frase-comun-veinte-caracteres" ESPOCRM_DB_PASSWORD "old-maria-A"
+CASE_A_RESULT="$(GAPSSA_SECRETS_TMPDIR="$RC_A/secure-tmp" bash -c '
+  set -euo pipefail
+  SCRIPT_DIR="$1"; BACKUP_DIR="$2/backups"; STATUS_FILE="$2/status"
+  source "$SCRIPT_DIR/lib.sh"
+  source "$3"
+  say() { :; }
+  ensure_backup_passphrase_known() { :; }
+  BACKUP_PASSPHRASE="frase-comun-veinte-caracteres"
+  v2="$(recover_old_secret_value S2 POSTGRES_PASSWORD)"
+  v3="$(recover_old_secret_value S3 ESPOCRM_DB_PASSWORD)"
+  printf "v2=%s v3=%s" "$v2" "$v3"
+' _ "$SCRIPT_DIR" "$RC_A" "$RECOVERY_SNIPPET" </dev/null)"
+if [ "$CASE_A_RESULT" = "v2=old-pg-A v3=old-maria-A" ] && [ "$(_recovery_residual_secrets "$RC_A")" = "0" ]; then
+  echo "ok   - recover_old_secret_value: misma frase de sesión descifra S2 y S3 sin prompt, cero frases residuales"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - Caso A (misma frase): $CASE_A_RESULT residuales=$(_recovery_residual_secrets "$RC_A")"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$RC_A"
+
+# --- Caso B: frase de sesión distinta de la del backup de S3 -- primer
+#     intento (la de sesión) falla, el prompt pide la frase de S3, un
+#     primer tecleo erróneo falla, el segundo (correcto) recupera el
+#     valor. Cubre "frases distintas por puerta" + "frase errónea y
+#     posterior correcta" en un único flujo real. ---
+RC_B="$(_recovery_case_dir B)"
+_recovery_make_backup "$RC_B/backups/S3-20260101T000000Z-cccc.env.gapssa.enc" "frase-de-S3-veinte-caracteres" ESPOCRM_DB_PASSWORD "old-maria-B"
+CASE_B_RESULT="$(printf 'intento-erroneo-veinte-c\nfrase-de-S3-veinte-caracteres\n' | GAPSSA_SECRETS_TMPDIR="$RC_B/secure-tmp" bash -c '
+  set -euo pipefail
+  SCRIPT_DIR="$1"; BACKUP_DIR="$2/backups"; STATUS_FILE="$2/status"
+  source "$SCRIPT_DIR/lib.sh"
+  source "$3"
+  say() { :; }
+  ensure_backup_passphrase_known() { :; }
+  BACKUP_PASSPHRASE="frase-de-sesion-de-S9-no-es-la-de-S3"
+  recover_old_secret_value S3 ESPOCRM_DB_PASSWORD
+' _ "$SCRIPT_DIR" "$RC_B" "$RECOVERY_SNIPPET")"
+if [ "$CASE_B_RESULT" = "old-maria-B" ] && [ "$(_recovery_residual_secrets "$RC_B")" = "0" ]; then
+  echo "ok   - recover_old_secret_value: frase de sesión falla para S3, prompt específico + reintento erróneo + correcto recupera el valor, cero frases residuales"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - Caso B (frase distinta + reintento): '$CASE_B_RESULT' residuales=$(_recovery_residual_secrets "$RC_B")"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$RC_B"
+
+# --- Caso C: frase perdida -- se agotan los 3 intentos, la puerta falla
+#     limpio, sin frases residuales. ---
+RC_C="$(_recovery_case_dir C)"
+_recovery_make_backup "$RC_C/backups/S2-20260101T000000Z-dddd.env.gapssa.enc" "frase-original-veinte-c" POSTGRES_PASSWORD "old-pg-C"
+CASE_C_LOG="$RC_C/say.log"
+: >"$CASE_C_LOG"
+CASE_C_RC=0
+printf 'perdida-1-veinte-caracteres\nperdida-2-veinte-caracteres\nperdida-3-veinte-caracteres\n' | GAPSSA_SECRETS_TMPDIR="$RC_C/secure-tmp" bash -c '
+  set -euo pipefail
+  SCRIPT_DIR="$1"; BACKUP_DIR="$2/backups"; STATUS_FILE="$2/status"
+  source "$SCRIPT_DIR/lib.sh"
+  source "$3"
+  qr_say_log="$4"
+  say() { printf "%s\n" "$*" >>"$qr_say_log"; }
+  ensure_backup_passphrase_known() { :; }
+  BACKUP_PASSPHRASE="frase-que-no-es-veinte-c"
+  recover_old_secret_value S2 POSTGRES_PASSWORD
+' _ "$SCRIPT_DIR" "$RC_C" "$RECOVERY_SNIPPET" "$CASE_C_LOG" >/dev/null 2>>"$CASE_C_LOG" || CASE_C_RC=$?
+if [ "$CASE_C_RC" != 0 ] && grep -q "tras 3 intentos" "$CASE_C_LOG" && [ "$(_recovery_residual_secrets "$RC_C")" = "0" ]; then
+  echo "ok   - recover_old_secret_value: frase perdida agota los 3 intentos y falla limpio, cero frases residuales"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - Caso C (frase perdida): rc=$CASE_C_RC log=[$(cat "$CASE_C_LOG")] residuales=$(_recovery_residual_secrets "$RC_C")"
+  FAIL=$((FAIL + 1))
+fi
+
+# --- Caso D: backup corrupto -- el mensaje de fallo es EXACTAMENTE el
+#     mismo que el de una frase incorrecta (Caso C): nunca revela si la
+#     causa fue el padding de openssl, el esquema o una variable ausente.
+RC_D="$(_recovery_case_dir D)"
+printf 'esto-no-es-un-backup-cifrado-real' >"$RC_D/backups/S2-20260101T000000Z-eeee.env.gapssa.enc"
+CASE_D_LOG="$RC_D/say.log"
+: >"$CASE_D_LOG"
+CASE_D_RC=0
+printf 'cualquier-frase-veinte-car\ncualquier-frase-veinte-car\ncualquier-frase-veinte-car\n' | GAPSSA_SECRETS_TMPDIR="$RC_D/secure-tmp" bash -c '
+  set -euo pipefail
+  SCRIPT_DIR="$1"; BACKUP_DIR="$2/backups"; STATUS_FILE="$2/status"
+  source "$SCRIPT_DIR/lib.sh"
+  source "$3"
+  qr_say_log="$4"
+  say() { printf "%s\n" "$*" >>"$qr_say_log"; }
+  ensure_backup_passphrase_known() { :; }
+  BACKUP_PASSPHRASE="frase-de-sesion-veinte-carac"
+  recover_old_secret_value S2 POSTGRES_PASSWORD
+' _ "$SCRIPT_DIR" "$RC_D" "$RECOVERY_SNIPPET" "$CASE_D_LOG" >/dev/null 2>>"$CASE_D_LOG" || CASE_D_RC=$?
+if [ "$CASE_D_RC" != 0 ] && ! grep -qiE "padding|esquema|schema|variable" "$CASE_D_LOG" && diff <(sed 's/S2/GATE/;s/3 intentos/N intentos/' "$CASE_C_LOG") <(sed 's/S2/GATE/;s/3 intentos/N intentos/' "$CASE_D_LOG") >/dev/null 2>&1; then
+  echo "ok   - recover_old_secret_value: backup corrupto falla con el MISMO mensaje genérico que una frase incorrecta, nunca revela la causa exacta"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - Caso D (backup corrupto): rc=$CASE_D_RC log=[$(cat "$CASE_D_LOG")]"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$RC_C" "$RC_D"
+
+# --- Caso E: dos backups de S5 -- uno de un intento cancelado/fallido
+#     (mtime más RECIENTE a propósito, para demostrar que el heurístico
+#     de timestamp por sí solo elegiría MAL) y otro del intento que sí
+#     completó la rotación real. El identificador persistido
+#     (S5_BACKUP__meta) debe ganar SIEMPRE sobre el heurístico. ---
+RC_E="$(_recovery_case_dir E)"
+_recovery_make_backup "$RC_E/backups/S5-20260101T000000Z-cancelado.env.gapssa.enc" "frase-e-veinte-caracteres01" REDIS_PASSWORD "old-redis-CANCELADO"
+_recovery_make_backup "$RC_E/backups/S5-20260101T000100Z-exitoso.env.gapssa.enc" "frase-e-veinte-caracteres01" REDIS_PASSWORD "old-redis-EXITOSO"
+# mtime del "cancelado" DELIBERADAMENTE más reciente que el "exitoso" --
+# el heurístico ingenuo de "el más nuevo" elegiría el cancelado.
+touch -t 202601010200 "$RC_E/backups/S5-20260101T000000Z-cancelado.env.gapssa.enc"
+touch -t 202601010100 "$RC_E/backups/S5-20260101T000100Z-exitoso.env.gapssa.enc"
+bash -c "source '$SCRIPT_DIR/lib.sh'; gapssa_secrets_meta_set '$RC_E/status' S5_BACKUP 'S5-20260101T000000Z-cancelado.env.gapssa.enc'"
+bash -c "source '$SCRIPT_DIR/lib.sh'; gapssa_secrets_meta_set '$RC_E/status' S5_BACKUP 'S5-20260101T000100Z-exitoso.env.gapssa.enc'"
+CASE_E_RESULT="$(GAPSSA_SECRETS_TMPDIR="$RC_E/secure-tmp" bash -c '
+  set -euo pipefail
+  SCRIPT_DIR="$1"; BACKUP_DIR="$2/backups"; STATUS_FILE="$2/status"
+  source "$SCRIPT_DIR/lib.sh"
+  source "$3"
+  say() { :; }
+  ensure_backup_passphrase_known() { :; }
+  BACKUP_PASSPHRASE="frase-e-veinte-caracteres01"
+  recover_old_secret_value S5 REDIS_PASSWORD
+' _ "$SCRIPT_DIR" "$RC_E" "$RECOVERY_SNIPPET" </dev/null)"
+if [ "$CASE_E_RESULT" = "old-redis-EXITOSO" ]; then
+  echo "ok   - _resolve_backup_for_gate: el identificador persistido (backup_secrets_file) gana SIEMPRE sobre 'el más reciente por timestamp', incluso cuando un intento cancelado/fallido dejó un backup con mtime más nuevo"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - Caso E (prioridad de metadato sobre heurístico): esperado 'old-redis-EXITOSO', dio '$CASE_E_RESULT'"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$RC_E"
+
+# --- Caso F: sin identificador persistido (backups anteriores a esta
+#     corrección) y dos candidatos con el MISMO mtime -- ambigüedad real,
+#     nunca se elige al azar: falla cerrado. ---
+RC_F="$(_recovery_case_dir F)"
+_recovery_make_backup "$RC_F/backups/S4-20260101T000000Z-uno.env.gapssa.enc" "frase-f" ESPOCRM_API_KEY "old-key-1"
+_recovery_make_backup "$RC_F/backups/S4-20260101T000000Z-dos.env.gapssa.enc" "frase-f" ESPOCRM_API_KEY "old-key-2"
+touch -t 202601010000 "$RC_F/backups/S4-20260101T000000Z-uno.env.gapssa.enc" "$RC_F/backups/S4-20260101T000000Z-dos.env.gapssa.enc"
+assert_exit_code \
+  "_resolve_backup_for_gate falla cerrado ante dos candidatos con timestamp EMPATADO y sin identificador persistido (nunca elige al azar)" \
+  1 \
+  bash -c "SCRIPT_DIR='$SCRIPT_DIR'; BACKUP_DIR='$RC_F/backups'; STATUS_FILE='$RC_F/status'; source '$SCRIPT_DIR/lib.sh'; source '$RECOVERY_SNIPPET'; say() { :; }; _resolve_backup_for_gate S4 >/dev/null"
+rm -rf "$RC_F"
+
+# --- Caso G: sin identificador persistido, dos candidatos con mtime
+#     DISTINTO -- compatibilidad con el historial anterior a esta
+#     corrección: se resuelve por timestamp (mismo resultado que antes),
+#     nunca en silencio. ---
+RC_G="$(_recovery_case_dir G)"
+_recovery_make_backup "$RC_G/backups/S4-20260101T000000Z-viejo.env.gapssa.enc" "frase-g" ESPOCRM_API_KEY "old-key-viejo"
+_recovery_make_backup "$RC_G/backups/S4-20260101T010000Z-nuevo.env.gapssa.enc" "frase-g" ESPOCRM_API_KEY "old-key-nuevo"
+touch -t 202601010000 "$RC_G/backups/S4-20260101T000000Z-viejo.env.gapssa.enc"
+touch -t 202601010100 "$RC_G/backups/S4-20260101T010000Z-nuevo.env.gapssa.enc"
+CASE_G_LOG="$RC_G/say.log"
+: >"$CASE_G_LOG"
+CASE_G_RESULT="$(bash -c "SCRIPT_DIR='$SCRIPT_DIR'; BACKUP_DIR='$RC_G/backups'; STATUS_FILE='$RC_G/status'; source '$SCRIPT_DIR/lib.sh'; source '$RECOVERY_SNIPPET'; say() { printf '%s\n' \"\$*\" >>'$CASE_G_LOG'; }; _resolve_backup_for_gate S4")"
+if [ "$(basename "$CASE_G_RESULT")" = "S4-20260101T010000Z-nuevo.env.gapssa.enc" ] && grep -q "AVISO" "$CASE_G_LOG"; then
+  echo "ok   - _resolve_backup_for_gate: sin identificador persistido, dos candidatos con timestamp distinto resuelven por el más reciente CON aviso explícito (nunca en silencio)"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - Caso G (heurístico de compatibilidad): resultado='$CASE_G_RESULT' log=[$(cat "$CASE_G_LOG")]"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$RC_G"
+
+# --- Caso H: la entrada se corta mientras el proceso está bloqueado en el
+#     prompt de la frase específica de la puerta (stdin cerrado/agotado,
+#     sin línea de respuesta) -- el mismo estado, a nivel de datos, que
+#     deja un SIGINT real a mitad de un `read -s -p` interactivo (el
+#     `read` nunca completa, `gate_phrase` nunca se puebla con nada
+#     escrito por el operador). Reproducir la ENTREGA de la señal en sí
+#     desde un arnés no interactivo resultó frágil (bash IGNORA SIGINT en
+#     jobs en segundo plano por diseño -- comprobado empíricamente,
+#     colgando un intento con FIFO+kill real) -- exactamente la clase de
+#     prueba que este proyecto ya reserva para su propio driver de
+#     pseudo-terminal (tests/pty_driver.py), no para este arnés bash. Lo
+#     que SÍ se puede probar aquí, de forma determinista y sin depender de
+#     un tty real, es la propiedad de seguridad que de verdad importa:
+#     ninguna frase parcial/incompleta se usa NUNCA para un intento de
+#     descifrado, y cero frases quedan residentes en disco cuando la
+#     entrada nunca llega. ---
+RC_H="$(_recovery_case_dir H)"
+_recovery_make_backup "$RC_H/backups/S2-20260101T000000Z-ffff.env.gapssa.enc" "frase-h-veinte-caracteres" POSTGRES_PASSWORD "old-pg-H"
+CASE_H_RC=0
+GAPSSA_SECRETS_TMPDIR="$RC_H/secure-tmp" bash -c '
+  set -euo pipefail
+  SCRIPT_DIR="$1"; BACKUP_DIR="$2/backups"; STATUS_FILE="$2/status"
+  source "$SCRIPT_DIR/lib.sh"
+  source "$3"
+  say() { :; }
+  ensure_backup_passphrase_known() { :; }
+  BACKUP_PASSPHRASE="frase-de-sesion-que-no-descifra"
+  recover_old_secret_value S2 POSTGRES_PASSWORD
+' _ "$SCRIPT_DIR" "$RC_H" "$RECOVERY_SNIPPET" </dev/null >/dev/null 2>&1 || CASE_H_RC=$?
+if [ "$CASE_H_RC" != 0 ] && [ "$(_recovery_residual_secrets "$RC_H")" = "0" ]; then
+  echo "ok   - recover_old_secret_value: entrada cortada mientras el prompt de la frase específica de la puerta está pendiente (mismo estado de datos que un SIGINT real a mitad de read) falla limpio, cero frases residuales"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL - Caso H (entrada cortada durante el prompt): rc=$CASE_H_RC residuales=$(_recovery_residual_secrets "$RC_H")"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$RC_H"
 
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"

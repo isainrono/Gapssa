@@ -1139,25 +1139,28 @@ gapssa_secrets_state_is_valid() {
   return 1
 }
 
-gapssa_secrets_state_get() {
-  local status_file="$1" gate="$2"
+# Primitiva compartida KEY=VALUE de $status_file -- `gapssa_secrets_state_*`
+# (validada contra la máquina de estados) y `gapssa_secrets_meta_*` (sin
+# validar, para metadatos NO sensibles como el nombre de un fichero de
+# backup) son ambas una fina capa sobre esta misma lectura/escritura, para
+# que compartan exactamente la misma disciplina de fichero (700/600,
+# escritura vía temporal + `mv`, nunca dos escrituras concurrentes
+# divergentes) sin duplicar código.
+_gapssa_secrets_kv_get() {
+  local status_file="$1" key="$2" default="${3:-}"
   if [ -f "$status_file" ]; then
     local line
-    line="$(grep "^$gate=" "$status_file" 2>/dev/null | tail -n1 || true)"
+    line="$(grep "^$key=" "$status_file" 2>/dev/null | tail -n1 || true)"
     if [ -n "$line" ]; then
       printf '%s' "${line#*=}"
       return 0
     fi
   fi
-  printf 'pending'
+  printf '%s' "$default"
 }
 
-gapssa_secrets_state_set() {
-  local status_file="$1" gate="$2" state="$3"
-  if ! gapssa_secrets_state_is_valid "$state"; then
-    echo "ERROR: estado '$state' no es un estado válido de la máquina de estados." >&2
-    exit 1
-  fi
+_gapssa_secrets_kv_set() {
+  local status_file="$1" key="$2" value="$3"
   gapssa_secrets_abort_if_inside_workspace "$status_file"
   local dir
   dir="$(dirname "$status_file")"
@@ -1167,9 +1170,41 @@ gapssa_secrets_state_set() {
   chmod 600 "$status_file"
   local tmp
   tmp="$(mktemp "${dir%/}/.status.XXXXXXXX")"
-  { grep -v "^$gate=" "$status_file" 2>/dev/null || true; printf '%s=%s\n' "$gate" "$state"; } >"$tmp"
+  { grep -v "^$key=" "$status_file" 2>/dev/null || true; printf '%s=%s\n' "$key" "$value"; } >"$tmp"
   mv "$tmp" "$status_file"
   chmod 600 "$status_file"
+}
+
+gapssa_secrets_state_get() {
+  _gapssa_secrets_kv_get "$1" "$2" "pending"
+}
+
+gapssa_secrets_state_set() {
+  local status_file="$1" gate="$2" state="$3"
+  if ! gapssa_secrets_state_is_valid "$state"; then
+    echo "ERROR: estado '$state' no es un estado válido de la máquina de estados." >&2
+    exit 1
+  fi
+  _gapssa_secrets_kv_set "$status_file" "$gate" "$state"
+}
+
+# gapssa_secrets_meta_get/_set -- metadatos NO sensibles, un espacio de
+# claves separado del de la máquina de estados (sufijo `__meta`, nunca
+# puede colisionar con un nombre de puerta real como "S2" o "S3A") y sin
+# la validación de `_GAPSSA_VALID_STATES`: un nombre de fichero de backup
+# nunca es un estado válido, así que reutilizar gapssa_secrets_state_set
+# para esto abortaría siempre. Usado por backup_secrets_file() para
+# recordar, junto al propio backup y en el momento exacto de tomarlo, qué
+# fichero le corresponde a cada puerta -- así una ejecución de S9 futura
+# puede resolverlo por identidad en vez de adivinar por timestamp. Nunca
+# contiene un valor secreto: solo el nombre de un fichero cifrado.
+gapssa_secrets_meta_get() {
+  _gapssa_secrets_kv_get "$1" "${2}__meta" ""
+}
+
+gapssa_secrets_meta_set() {
+  local status_file="$1" key="$2" value="$3"
+  _gapssa_secrets_kv_set "$status_file" "${key}__meta" "$value"
 }
 
 # gapssa_health_port_from_start_json <start_json>
