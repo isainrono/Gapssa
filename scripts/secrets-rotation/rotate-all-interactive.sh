@@ -1365,11 +1365,28 @@ confirm_gate() {
     say "AVISO: la puerta $code quedó en 'forward_recovery_required' — al menos un sub-secreto IRREVERSIBLE (p.ej. una API Key ya invalidada) se recuperó generando un valor NUEVO, nunca restaurando el antiguo. Disponibilidad recuperada con ese valor nuevo, pero esto NO es una rotación completa. Volver a ejecutarla generará secretos nuevos para el resto de sub-secretos."
     ;;
   rollback_required)
-    say "AVISO: la puerta $code quedó en 'rollback_required' tras una interrupción anterior."
-    if ask_yes_no "¿Intentar restaurar el backup más reciente de $code antes de continuar?"; then
-      restore_secrets_file_from_latest_backup "$code" || true
-      say "Puerta $code queda en 'recovery_required', 'forward_recovery_required' o 'server_coordination_required' según lo que se pudo verificar (o sin cambios si la restauración no se completó) — no se continúa automáticamente, vuelve a lanzarla cuando quieras generar un secreto nuevo."
-      return 1
+    if [ "$code" = "S7" ]; then
+      # S7 NUNCA ofrece restaurar el backup tras una interrupción — a
+      # diferencia de S2-S5 (un solo secreto, sin dependencias en BD),
+      # S7 puede haber migrado/reindexado filas REALES de Postgres a v3
+      # ANTES de interrumpirse; restaurar un archivo anterior a esa
+      # migración dejaría esas filas cifradas/firmadas con una versión
+      # que el archivo restaurado ya no contendría (requisito de
+      # recuperación hacia delante — nunca hacia atrás, para S7).
+      # Recuperación siempre HACIA DELANTE: relanzar S7 es seguro y
+      # completo — cada paso de escritura es individualmente idempotente
+      # (nunca regenera un v3 que ya exista en un mapa, nunca retira una
+      # versión vieja fuera de la comprobación de recuento fresco) y la
+      # migración/reindexado de Postgres es igualmente reanudable.
+      say "AVISO: la puerta S7 quedó en 'rollback_required' tras una interrupción anterior. S7 NUNCA restaura backup (una fila de Postgres puede ya depender de v3, que un archivo anterior no contendría) — vuelve a lanzar esta puerta: cada paso es idempotente y reanuda hacia delante de forma segura, sin pérdida de datos."
+      state_set "S7" applying
+    else
+      say "AVISO: la puerta $code quedó en 'rollback_required' tras una interrupción anterior."
+      if ask_yes_no "¿Intentar restaurar el backup más reciente de $code antes de continuar?"; then
+        restore_secrets_file_from_latest_backup "$code" || true
+        say "Puerta $code queda en 'recovery_required', 'forward_recovery_required' o 'server_coordination_required' según lo que se pudo verificar (o sin cambios si la restauración no se completó) — no se continúa automáticamente, vuelve a lanzarla cuando quieras generar un secreto nuevo."
+        return 1
+      fi
     fi
     ;;
   blocked)
@@ -1568,7 +1585,7 @@ gate_s2() {
   local old_pw
   old_pw="$(field_from_secrets_file POSTGRES_PASSWORD)"
 
-  if ! bash "$SCRIPT_DIR/02-generate-secret.sh" "$SECRETS_FILE" --set-line POSTGRES_PASSWORD --format hex --bytes 32 $([ "$DRY_RUN" = true ] && printf -- '--dry-run'); then
+  if ! bash "$SCRIPT_DIR/02-generate-secret.sh" "$SECRETS_FILE" --set-line POSTGRES_PASSWORD --format hex --bytes 32 --schema-version "$(current_secrets_schema_version)" $([ "$DRY_RUN" = true ] && printf -- '--dry-run'); then
     leave_gate_failed "S2" "no se pudo generar POSTGRES_PASSWORD."
     unset old_pw
     return 1
@@ -1734,12 +1751,12 @@ gate_s3() {
   local old_espocrm_db_pw
   old_espocrm_db_pw="$(field_from_secrets_file ESPOCRM_DB_PASSWORD)"
 
-  if ! bash "$SCRIPT_DIR/02-generate-secret.sh" "$SECRETS_FILE" --set-line ESPOCRM_DB_PASSWORD --format hex --bytes 32; then
+  if ! bash "$SCRIPT_DIR/02-generate-secret.sh" "$SECRETS_FILE" --set-line ESPOCRM_DB_PASSWORD --format hex --bytes 32 --schema-version "$(current_secrets_schema_version)"; then
     leave_gate_failed "S3" "no se pudo generar ESPOCRM_DB_PASSWORD."
     unset old_root_pw old_espocrm_db_pw
     return 1
   fi
-  if ! bash "$SCRIPT_DIR/02-generate-secret.sh" "$SECRETS_FILE" --set-line ESPOCRM_DB_ROOT_PASSWORD --format hex --bytes 32; then
+  if ! bash "$SCRIPT_DIR/02-generate-secret.sh" "$SECRETS_FILE" --set-line ESPOCRM_DB_ROOT_PASSWORD --format hex --bytes 32 --schema-version "$(current_secrets_schema_version)"; then
     leave_gate_failed "S3" "no se pudo generar ESPOCRM_DB_ROOT_PASSWORD."
     unset old_root_pw old_espocrm_db_pw
     return 1
@@ -2560,7 +2577,7 @@ gate_s4() {
     return 1
   fi
 
-  if ! bash "$SCRIPT_DIR/02-generate-secret.sh" "$SECRETS_FILE" --set-line ESPOCRM_ADMIN_PASSWORD --format base64 --bytes 24 $([ "$DRY_RUN" = true ] && printf -- '--dry-run'); then
+  if ! bash "$SCRIPT_DIR/02-generate-secret.sh" "$SECRETS_FILE" --set-line ESPOCRM_ADMIN_PASSWORD --format base64 --bytes 24 --schema-version "$(current_secrets_schema_version)" $([ "$DRY_RUN" = true ] && printf -- '--dry-run'); then
     leave_gate_failed "S4" "no se pudo generar ESPOCRM_ADMIN_PASSWORD."
     return 1
   fi
@@ -3058,7 +3075,7 @@ gate_s6() {
   say "Artefactos de prueba creados (fuera del workspace, modo 600, sin PII, sin ningún secreto)."
 
   for var in PAYLOAD_SECRET OTP_HMAC_SECRET AUTH_RATE_LIMIT_HMAC_SECRET; do
-    if ! bash "$SCRIPT_DIR/02-generate-secret.sh" "$SECRETS_FILE" --set-line "$var" --format base64 --bytes 32; then
+    if ! bash "$SCRIPT_DIR/02-generate-secret.sh" "$SECRETS_FILE" --set-line "$var" --format base64 --bytes 32 --schema-version "$(current_secrets_schema_version)"; then
       leave_gate_failed "S6" "no se pudo generar $var. El artefacto de prueba se conserva (nunca se retira aquí) — S9 nunca podrá promover con este estado 'failed', pero si necesitas reintentar S6 desde cero, la puerta quedará bloqueada por el artefacto residual hasta resolverlo manualmente."
       return 1
     fi
@@ -3133,6 +3150,82 @@ run_s6_dynamic_verification() {
 }
 
 # ---------------------------------------------------------------------------
+# Bloque 9 — helpers de escritura atómica de gate_s7() (S7 atómico y
+# reanudable). Sustituyen los `python3 - <<PYEOF ... os.O_TRUNC ...`
+# anteriores: cada uno fija un temporal 600 junto a $SECRETS_FILE, lo
+# registra en la pila de limpieza global (shred si el proceso se
+# interrumpe a mitad — mismo patrón que gate_s5 con REDIS_PASSWORD/
+# REDIS_URL), y delega la escritura real en
+# lib/atomicSecretsFileMutate.mjs o lib/migrateLegacySecretsFileToActive.mjs
+# — nunca una reescritura O_TRUNC de este script.
+# ---------------------------------------------------------------------------
+
+# _s7_pin_secrets_tmp <label>
+# Deja el resultado en S7_PIN_TMP/S7_PIN_DIR/S7_PIN_DEV/S7_PIN_INO/
+# S7_PIN_UID/S7_PIN_MODE. El llamador DEBE invocar _s7_unpin_secrets_tmp
+# tras usarlo (éxito o fallo).
+_s7_pin_secrets_tmp() {
+  local label="$1"
+  local pin_lines
+  if ! pin_lines="$(gapssa_secrets_mktemp_secure_same_dir "$SECRETS_FILE" "$label")"; then
+    return 1
+  fi
+  {
+    read -r S7_PIN_TMP
+    read -r S7_PIN_DIR
+    read -r S7_PIN_DEV S7_PIN_INO S7_PIN_UID S7_PIN_MODE
+  } <<<"$pin_lines"
+  if ! gapssa_secrets_verify_pinned_tmp "$S7_PIN_TMP" "$S7_PIN_DIR" "$S7_PIN_DEV" "$S7_PIN_INO" "$S7_PIN_UID" "$S7_PIN_MODE"; then
+    return 1
+  fi
+  gapssa_cleanup_push shred_pinned_tmp "$S7_PIN_TMP" "$S7_PIN_DIR" "$S7_PIN_DEV" "$S7_PIN_INO" "$S7_PIN_UID" "$S7_PIN_MODE"
+  return 0
+}
+
+_s7_unpin_secrets_tmp() {
+  gapssa_cleanup_pop_matching shred_pinned_tmp "$S7_PIN_TMP" "$S7_PIN_DIR" "$S7_PIN_DEV" "$S7_PIN_INO" "$S7_PIN_UID" "$S7_PIN_MODE"
+}
+
+# _s7_apply_mutations <mutations_json> <label>
+# Aplica <mutations_json> (array JSON de mutaciones — ver cabecera de
+# atomicSecretsFileMutate.mjs) a $SECRETS_FILE en una única reescritura
+# atómica. rc=0: escribió algo (resumen impreso vía `say`). rc=20:
+# no-op — TODAS las mutaciones ya estaban aplicadas (reanudación segura
+# tras una interrupción anterior; nunca regenera un valor ya activo).
+# Ambos se tratan como éxito por el llamador. rc=1: fallo real (mensaje ya
+# impreso a stderr por el propio script Node).
+_s7_apply_mutations() {
+  local mutations_json="$1" label="$2"
+  if ! _s7_pin_secrets_tmp "$label"; then
+    echo "ERROR: no se pudo fijar el temporal para '$label'." >&2
+    return 1
+  fi
+  local rc=0 summary
+  summary="$(printf '%s' "$mutations_json" | node "$SCRIPT_DIR/lib/atomicSecretsFileMutate.mjs" "$SECRETS_FILE" "$S7_PIN_TMP" "$S7_PIN_DEV" "$S7_PIN_INO" "$S7_PIN_UID" "$S7_PIN_MODE" "$(current_secrets_schema_version)")" || rc=$?
+  _s7_unpin_secrets_tmp
+  if [ "$rc" -eq 0 ] || [ "$rc" -eq 20 ]; then
+    say "  $label: $summary"
+  fi
+  return "$rc"
+}
+
+# _s7_migrate_legacy_schema — invoca migrateLegacySecretsFileToActive.mjs
+# con un temporal fijado (mismo patrón que arriba). rc=0/20 = éxito
+# (20 = ya estaba en "active", no-op defensivo — no debería ocurrir aquí,
+# el llamador ya comprobó el esquema antes, pero se trata igual que
+# cualquier otro no-op idempotente). rc=1 = fallo real.
+_s7_migrate_legacy_schema() {
+  if ! _s7_pin_secrets_tmp "legacy-migrate"; then
+    echo "ERROR: no se pudo fijar el temporal para la migración legacy-pre-s7 -> active." >&2
+    return 1
+  fi
+  local rc=0
+  node "$SCRIPT_DIR/lib/migrateLegacySecretsFileToActive.mjs" "$SECRETS_FILE" "$S7_PIN_TMP" "$S7_PIN_DEV" "$S7_PIN_INO" "$S7_PIN_UID" "$S7_PIN_MODE" || rc=$?
+  _s7_unpin_secrets_tmp
+  [ "$rc" -eq 0 ] || [ "$rc" -eq 20 ]
+}
+
+# ---------------------------------------------------------------------------
 # S7 — Booking: los cinco secretos, con comprobaciones de seguridad reales
 # antes de sustituir/retirar nada, y retirada obligatoria de v1/v2 dentro
 # de esta misma puerta en cuanto el conteo real lo permita.
@@ -3175,7 +3268,7 @@ gate_s7() {
     say "esquema de mapa versionado (el valor legacy queda preservado EXACTO como versión v1;"
     say "cualquier HMAC/ciphertext ya calculado con él sigue siendo verificable bajo esa misma"
     say "versión — nunca se pierde verificabilidad histórica)..."
-    if ! node "$SCRIPT_DIR/lib/migrateLegacySecretsFileToActive.mjs" "$SECRETS_FILE"; then
+    if ! _s7_migrate_legacy_schema; then
       leave_gate_failed "S7" "no se pudo migrar el esquema legacy-pre-s7 a active (ver mensaje de arriba) — ningún secreto se generó todavía, el archivo externo no se modificó."
       return 1
     fi
@@ -3183,48 +3276,67 @@ gate_s7() {
     say "son mapas versionados (v1 = valor legacy); las claves singulares ya no existen en el archivo."
   fi
 
-  # --- generar + activar v3 SIEMPRE para los 4 secretos versionados -----
+  # --- generar + añadir v3 SIEMPRE a los 4 mapas versionados, en UNA
+  # sola reescritura atómica (nunca 4 escrituras independientes). Cada
+  # generación es individualmente idempotente: si v3 ya existe en un
+  # mapa (reanudación tras interrupción), esa mutación concreta es un
+  # no-op — el valor v3 YA usado para recifrar filas reales de Postgres
+  # nunca se sustituye por uno nuevo. ---
+  local generate_v3_mutations
+  generate_v3_mutations='[
+    {"op":"json-map-generate","key":"BOOKING_FIELD_ENCRYPTION_KEYS","versionKey":"v3","bytes":32,"format":"base64"},
+    {"op":"json-map-generate","key":"BOOKING_IDENTITY_FINGERPRINT_HMAC_SECRETS","versionKey":"v3","bytes":32,"format":"base64"},
+    {"op":"json-map-generate","key":"BOOKING_EMAIL_LOOKUP_HMAC_SECRETS","versionKey":"v3","bytes":32,"format":"base64"},
+    {"op":"json-map-generate","key":"BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRETS","versionKey":"v3","bytes":32,"format":"base64"}
+  ]'
+  say "Generando y añadiendo v3 a los 4 mapas versionados (una sola reescritura atómica;"
+  say "reanudable — nunca regenera un v3 que ya exista en un mapa)..."
+  local gen_rc=0
+  _s7_apply_mutations "$generate_v3_mutations" "generar-v3" || gen_rc=$?
+  if [ "$gen_rc" -ne 0 ] && [ "$gen_rc" -ne 20 ]; then
+    leave_gate_failed "S7" "no se pudo generar/añadir v3 a los 4 mapas versionados (código $gen_rc)."
+    return 1
+  fi
+
+  say "Verificando que los 4 mapas quedan en convivencia dual (v3 recién añadido junto a las"
+  say "versiones viejas — activar más abajo nunca invalida nada todavía vivo)..."
+  local dual_map_ok=true
   for pair in \
     "BOOKING_FIELD_ENCRYPTION_KEYS" \
     "BOOKING_IDENTITY_FINGERPRINT_HMAC_SECRETS" \
     "BOOKING_EMAIL_LOOKUP_HMAC_SECRETS" \
     "BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRETS"; do
-    if ! bash "$SCRIPT_DIR/02-generate-secret.sh" "$SECRETS_FILE" --set-json-map "$pair" v3 --format base64 --bytes 32; then
-      leave_gate_failed "S7" "no se pudo generar $pair v3."
-      return 1
+    if ! grep -q "^${pair}=.*\"v3\"" "$SECRETS_FILE"; then
+      dual_map_ok=false
+      say "  FALLO: $pair no contiene v3 tras el paso de generación."
     fi
   done
+  if [ "$dual_map_ok" != true ]; then
+    leave_gate_failed "S7" "al menos uno de los 4 mapas versionados no contiene v3 tras generarlo — nunca se activa v3 sin verificar antes que los 4 mapas lo tienen."
+    return 1
+  fi
 
+  # --- activar v3 SIEMPRE para los 4 secretos versionados, en UNA sola
+  # reescritura atómica — SEPARADA de la generación de arriba y de la
+  # retirada de abajo (nunca se retira una versión vieja en la misma
+  # operación que activa v3). Activar nunca invalida nada vivo: las
+  # versiones viejas se conservan en cada mapa hasta su retirada
+  # explícita, más abajo, condicionada a un recuento fresco en cero. ---
+  local activate_v3_mutations
+  activate_v3_mutations='[
+    {"op":"set-line","key":"BOOKING_FIELD_ENCRYPTION_ACTIVE_KEY_VERSION","value":"v3"},
+    {"op":"set-line","key":"BOOKING_IDENTITY_FINGERPRINT_ACTIVE_KEY_VERSION","value":"v3"},
+    {"op":"set-line","key":"BOOKING_EMAIL_LOOKUP_HMAC_ACTIVE_KEY_VERSION","value":"v3"},
+    {"op":"set-line","key":"BOOKING_REQUEST_ACCESS_TOKEN_HMAC_ACTIVE_KEY_VERSION","value":"v3"}
+  ]'
   say "Activando v3 como versión ACTIVA de los 4 secretos versionados (las versiones"
   say "viejas se conservan en cada mapa hasta que su conteo real de dependientes sea 0)..."
-  python3 - "$SECRETS_FILE" <<'PYEOF'
-import sys, os
-target = sys.argv[1]
-with open(target, "r", encoding="utf-8") as f:
-    lines = f.readlines()
-targets = {
-    "BOOKING_FIELD_ENCRYPTION_ACTIVE_KEY_VERSION=": "v3\n",
-    "BOOKING_IDENTITY_FINGERPRINT_ACTIVE_KEY_VERSION=": "v3\n",
-    "BOOKING_EMAIL_LOOKUP_HMAC_ACTIVE_KEY_VERSION=": "v3\n",
-    "BOOKING_REQUEST_ACCESS_TOKEN_HMAC_ACTIVE_KEY_VERSION=": "v3\n",
-}
-found = set()
-out = []
-for line in lines:
-    matched = next((p for p in targets if line.startswith(p)), None)
-    if matched:
-        out.append(matched + targets[matched])
-        found.add(matched)
-    else:
-        out.append(line)
-for p, v in targets.items():
-    if p not in found:
-        out.append(p + v)
-fd = os.open(target, os.O_WRONLY | os.O_TRUNC, 0o600)
-with os.fdopen(fd, "w") as f:
-    f.writelines(out)
-print("active_version_sync_ok=true")
-PYEOF
+  local activate_rc=0
+  _s7_apply_mutations "$activate_v3_mutations" "activar-v3" || activate_rc=$?
+  if [ "$activate_rc" -ne 0 ] && [ "$activate_rc" -ne 20 ]; then
+    leave_gate_failed "S7" "no se pudo activar v3 en los 4 secretos versionados (código $activate_rc)."
+    return 1
+  fi
 
   # --- migración/reindexado + auditoría de allowlist + recuentos FRESCOS,
   # todo en una única invocación de tsx (un solo round-trip contra Postgres) --
@@ -3259,23 +3371,12 @@ PYEOF
   # --- AES ---
   if [ "$aes_v1" = "0" ] && [ "$aes_v2" = "0" ] && [ "$aes_decrypt_ok" = "True" ]; then
     say "0 filas dependen ya de v1/v2 (AES) y el descifrado completo con el mapa final (solo v3) es válido — retirando v1/v2 AHORA."
-    python3 - "$SECRETS_FILE" <<'PYEOF'
-import sys, json, os
-target = sys.argv[1]
-with open(target, "r", encoding="utf-8") as f:
-    lines = f.readlines()
-out = []
-for line in lines:
-    if line.startswith("BOOKING_FIELD_ENCRYPTION_KEYS="):
-        m = json.loads(line.rstrip("\n").split("=", 1)[1])
-        m = {"v3": m["v3"]} if "v3" in m else m
-        line = "BOOKING_FIELD_ENCRYPTION_KEYS=" + json.dumps(m, separators=(",", ":")) + "\n"
-    out.append(line)
-fd = os.open(target, os.O_WRONLY | os.O_TRUNC, 0o600)
-with os.fdopen(fd, "w") as f:
-    f.writelines(out)
-print("aes_retirement_ok=true")
-PYEOF
+    local rc=0
+    _s7_apply_mutations '[{"op":"json-map-retain","key":"BOOKING_FIELD_ENCRYPTION_KEYS","versions":["v3"]}]' "retirar-aes" || rc=$?
+    if [ "$rc" -ne 0 ] && [ "$rc" -ne 20 ]; then
+      leave_gate_failed "S7" "no se pudo retirar v1/v2 de BOOKING_FIELD_ENCRYPTION_KEYS (código $rc)."
+      return 1
+    fi
   else
     s7_blocked=true
     s7_blocked_reasons="${s7_blocked_reasons}AES (v1=$aes_v1, v2=$aes_v2, descifradoFinalOk=$aes_decrypt_ok); "
@@ -3285,23 +3386,12 @@ PYEOF
   # --- fingerprint ---
   if [ "$fp_remaining" = "0" ]; then
     say "0 solicitudes vivas referencian v1/v2 de fingerprint (recuento EN FRESCO) — retirando AHORA."
-    python3 - "$SECRETS_FILE" <<'PYEOF'
-import sys, json, os
-target = sys.argv[1]
-with open(target, "r", encoding="utf-8") as f:
-    lines = f.readlines()
-out = []
-for line in lines:
-    if line.startswith("BOOKING_IDENTITY_FINGERPRINT_HMAC_SECRETS="):
-        m = json.loads(line.rstrip("\n").split("=", 1)[1])
-        m = {"v3": m["v3"]} if "v3" in m else m
-        line = "BOOKING_IDENTITY_FINGERPRINT_HMAC_SECRETS=" + json.dumps(m, separators=(",", ":")) + "\n"
-    out.append(line)
-fd = os.open(target, os.O_WRONLY | os.O_TRUNC, 0o600)
-with os.fdopen(fd, "w") as f:
-    f.writelines(out)
-print("fingerprint_retirement_ok=true")
-PYEOF
+    local rc=0
+    _s7_apply_mutations '[{"op":"json-map-retain","key":"BOOKING_IDENTITY_FINGERPRINT_HMAC_SECRETS","versions":["v3"]}]' "retirar-fingerprint" || rc=$?
+    if [ "$rc" -ne 0 ] && [ "$rc" -ne 20 ]; then
+      leave_gate_failed "S7" "no se pudo retirar v1/v2 de BOOKING_IDENTITY_FINGERPRINT_HMAC_SECRETS (código $rc)."
+      return 1
+    fi
   else
     s7_blocked=true
     s7_blocked_reasons="${s7_blocked_reasons}fingerprint ($fp_remaining solicitud(es) viva(s) referencian v1/v2); "
@@ -3311,23 +3401,12 @@ PYEOF
   # --- email-lookup ---
   if [ "$email_v1" = "0" ]; then
     say "0 identidades activas dependen ya de v1 (email-lookup) — retirando AHORA."
-    python3 - "$SECRETS_FILE" <<'PYEOF'
-import sys, json, os
-target = sys.argv[1]
-with open(target, "r", encoding="utf-8") as f:
-    lines = f.readlines()
-out = []
-for line in lines:
-    if line.startswith("BOOKING_EMAIL_LOOKUP_HMAC_SECRETS="):
-        m = json.loads(line.rstrip("\n").split("=", 1)[1])
-        m = {"v3": m["v3"]} if "v3" in m else m
-        line = "BOOKING_EMAIL_LOOKUP_HMAC_SECRETS=" + json.dumps(m, separators=(",", ":")) + "\n"
-    out.append(line)
-fd = os.open(target, os.O_WRONLY | os.O_TRUNC, 0o600)
-with os.fdopen(fd, "w") as f:
-    f.writelines(out)
-print("email_lookup_retirement_ok=true")
-PYEOF
+    local rc=0
+    _s7_apply_mutations '[{"op":"json-map-retain","key":"BOOKING_EMAIL_LOOKUP_HMAC_SECRETS","versions":["v3"]}]' "retirar-email-lookup" || rc=$?
+    if [ "$rc" -ne 0 ] && [ "$rc" -ne 20 ]; then
+      leave_gate_failed "S7" "no se pudo retirar v1 de BOOKING_EMAIL_LOOKUP_HMAC_SECRETS (código $rc)."
+      return 1
+    fi
   else
     s7_blocked=true
     s7_blocked_reasons="${s7_blocked_reasons}email-lookup ($email_v1 identidad(es) activa(s) sin reindexar en v1 — no debería pasar, el reindexado recorre hasta vaciar el lote); "
@@ -3337,23 +3416,12 @@ PYEOF
   # --- access token ---
   if [ "$at_remaining" = "0" ]; then
     say "0 solicitudes vivas referencian v1 de access-token (recuento EN FRESCO, por versión exacta guardada en cada fila) — retirando AHORA."
-    python3 - "$SECRETS_FILE" <<'PYEOF'
-import sys, json, os
-target = sys.argv[1]
-with open(target, "r", encoding="utf-8") as f:
-    lines = f.readlines()
-out = []
-for line in lines:
-    if line.startswith("BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRETS="):
-        m = json.loads(line.rstrip("\n").split("=", 1)[1])
-        m = {"v3": m["v3"]} if "v3" in m else m
-        line = "BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRETS=" + json.dumps(m, separators=(",", ":")) + "\n"
-    out.append(line)
-fd = os.open(target, os.O_WRONLY | os.O_TRUNC, 0o600)
-with os.fdopen(fd, "w") as f:
-    f.writelines(out)
-print("access_token_retirement_ok=true")
-PYEOF
+    local rc=0
+    _s7_apply_mutations '[{"op":"json-map-retain","key":"BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRETS","versions":["v3"]}]' "retirar-access-token" || rc=$?
+    if [ "$rc" -ne 0 ] && [ "$rc" -ne 20 ]; then
+      leave_gate_failed "S7" "no se pudo retirar v1 de BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRETS (código $rc)."
+      return 1
+    fi
   else
     s7_blocked=true
     s7_blocked_reasons="${s7_blocked_reasons}access-token ($at_remaining solicitud(es) viva(s) referencian v1 — su token, firmado con v1, sigue vigente hasta que se resuelvan); "
@@ -3365,7 +3433,7 @@ PYEOF
   # sweep real), con el valor ANTERIOR solo en memoria de este proceso ---
   local old_internal_api
   old_internal_api="$(field_from_secrets_file BOOKING_INTERNAL_API_SECRET)"
-  if ! bash "$SCRIPT_DIR/02-generate-secret.sh" "$SECRETS_FILE" --set-line BOOKING_INTERNAL_API_SECRET --format base64 --bytes 32; then
+  if ! bash "$SCRIPT_DIR/02-generate-secret.sh" "$SECRETS_FILE" --set-line BOOKING_INTERNAL_API_SECRET --format base64 --bytes 32 --schema-version "$(current_secrets_schema_version)"; then
     unset old_internal_api
     leave_gate_failed "S7" "no se pudo generar BOOKING_INTERNAL_API_SECRET."
     return 1

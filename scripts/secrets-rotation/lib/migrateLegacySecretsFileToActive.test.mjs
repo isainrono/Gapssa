@@ -4,7 +4,7 @@
 // y el CLI completo (spawnSync, ficheros SINTÉTICOS temporales, nunca
 // $SECRETS_FILE/.env reales, nunca S6/S7 real).
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, statSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path, { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -52,8 +52,22 @@ function fullActiveBody() {
   return SECRETS_FILE_KEY_INVENTORY.map((k) => `${k}=${fictitiousValueFor(k)}`).join('\n') + '\n'
 }
 
-function runCli(filePath) {
-  return spawnSync(process.execPath, [CLI_PATH, filePath], { encoding: 'utf8' })
+function pinOf(p) {
+  const st = statSync(p)
+  return [st.dev, st.ino, st.uid, (st.mode & 0o777).toString(8)]
+}
+
+function newTemp(name) {
+  const p = path.join(tmpDir, name)
+  writeFileSync(p, '', { mode: 0o600 })
+  return p
+}
+
+function runCli(filePath, tmpName) {
+  const tmp = newTemp(tmpName ?? `${path.basename(filePath)}.tmp`)
+  const [dev, ino, uid, mode] = pinOf(tmp)
+  const res = spawnSync(process.execPath, [CLI_PATH, filePath, tmp, String(dev), String(ino), String(uid), mode], { encoding: 'utf8' })
+  return { ...res, tmp }
 }
 
 // --- función pura: legacy completo -> migra, preserva el valor bajo "v1" ---
@@ -117,14 +131,15 @@ function runCli(filePath) {
   ok('CLI: stderr nunca contiene el valor legacy real', !result.stderr.includes(fictitiousValueFor('BOOKING_EMAIL_LOOKUP_HMAC_SECRET')))
 }
 
-// --- CLI completo: ya activo -> no-op, exit 0, archivo BYTE A BYTE intacto ---
+// --- CLI completo: ya activo -> no-op, exit 20, archivo BYTE A BYTE intacto, temporal SIN consumir ---
 {
   const filePath = writeSecretsFile('cli-active.env', fullActiveBody())
   const before = readFileSync(filePath)
   const result = runCli(filePath)
   const after = readFileSync(filePath)
-  ok('CLI sobre esquema ya "active": exit 0', result.status === 0)
+  ok('CLI sobre esquema ya "active": exit 20 (no-op)', result.status === 20)
   ok('CLI sobre esquema ya "active": archivo BYTE A BYTE intacto (no-op real, nunca un truncate+rewrite idéntico)', Buffer.compare(before, after) === 0)
+  ok('CLI sobre esquema ya "active": el temporal pre-creado por el llamador NUNCA se consume', existsSync(result.tmp))
 }
 
 // --- CLI: mezcla plural+singular del mismo campo -> exit 2, archivo intacto ---

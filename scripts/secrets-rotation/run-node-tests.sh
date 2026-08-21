@@ -23,7 +23,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-FILES="lib/backupSchema.test.mjs
+FILES="lib/atomicSecretsFileMutate.test.mjs
+lib/backupSchema.test.mjs
 lib/decideRecoveryPlan.test.mjs
 lib/digestStream.test.mjs
 lib/extractEnvValueFromStdin.test.mjs

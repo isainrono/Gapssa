@@ -261,6 +261,22 @@ def assert_no_secret_in_transcript(transcript, secrets, label):
     return True
 
 
+def pin_temp_next_to(target_path, label):
+    """Crea un temporal 600 en el MISMO directorio que <target_path> y
+    devuelve (tmp_path, dev, ino, uid, modo-octal) — mismo contrato que
+    gapssa_secrets_mktemp_secure_same_dir (lib.sh), para invocar desde
+    Python los CLIs Node que ahora EXIGEN un temporal pre-pinneado por el
+    llamador (atomicSecretsFileMutate.mjs, migrateLegacySecretsFileToActive.mjs,
+    Bloque 9)."""
+    d = os.path.dirname(target_path)
+    base = os.path.basename(target_path)
+    fd, tmp_path = tempfile.mkstemp(prefix=f".{base}.{label}-", dir=d)
+    os.close(fd)
+    os.chmod(tmp_path, 0o600)
+    st = os.stat(tmp_path)
+    return tmp_path, str(st.st_dev), str(st.st_ino), str(st.st_uid), oct(stat.S_IMODE(st.st_mode))[2:]
+
+
 def respond_to_backup_passphrase_prompt(p):
     """La PRIMERA puerta de cada proceso que crea un backup real dispara
     ensure_backup_passphrase_known() (rotate-all-interactive.sh) — elige
@@ -729,12 +745,17 @@ def _run_s3_divergence_case(name_suffix, provide_root_password, expected_final_s
             return
         p.close()
 
-        def type_root_password(p):
-            p.expect(r"Contrase.a ROOT actual de MariaDB:")
-            p.send_line(FIXTURE_ENV["ESPOCRM_DB_ROOT_PASSWORD"])
-
+        # Nota (pre-existente, no relacionada con Bloque 9): gate_s3()
+        # prueba primero EN SILENCIO la contraseña ROOT ya almacenada
+        # (ver "Probando primero, EN SILENCIO..." en rotate-all-interactive.sh)
+        # antes de pedirla a mano — como seed_docker_state() siembra
+        # mariadb_pw_root exactamente con FIXTURE_ENV["ESPOCRM_DB_ROOT_PASSWORD"]
+        # (la misma que S1 acaba de copiar al almacén externo), esa
+        # comprobación silenciosa SIEMPRE tiene éxito aquí y el prompt
+        # manual nunca aparece — no hace falta (ni hay que esperar) una
+        # entrada manual de la contraseña ROOT en esta preparación.
         try:
-            _interrupt_gate_after_backup(sr_dir, env, repo, "S3", passphrase, extra_before_sigint=type_root_password)
+            _interrupt_gate_after_backup(sr_dir, env, repo, "S3", passphrase)
         except TimeoutError as exc:
             report(name + " (interrupción S3)", False, str(exc))
             return
@@ -921,8 +942,10 @@ def scenario_s1_s3_mariadb():
             p2.expect(r"\[si/no/salir\]")
             p2.send_line("si")
             respond_to_backup_passphrase_prompt(p2)
-            p2.expect(r"Contrase.a ROOT actual de MariaDB:")
-            p2.send_line(FIXTURE_ENV["ESPOCRM_DB_ROOT_PASSWORD"])
+            # gate_s3() prueba primero EN SILENCIO la contraseña ROOT ya
+            # almacenada (seed_docker_state() la siembra idéntica a la que
+            # S1 acaba de copiar al almacén externo) — el prompt manual
+            # nunca aparece aquí, no hace falta responderlo.
             p2.expect("confirmo fuera de claude code")
             p2.send_line("confirmo fuera de claude code")
             p2.expect("confirmo fuera de claude code")
@@ -1807,12 +1830,17 @@ def scenario_restore_real_backup_s3_recovery_required():
             return
         p.close()
 
-        def type_root_password(p):
-            p.expect(r"Contrase.a ROOT actual de MariaDB:")
-            p.send_line(FIXTURE_ENV["ESPOCRM_DB_ROOT_PASSWORD"])
-
+        # Nota (pre-existente, no relacionada con Bloque 9): gate_s3()
+        # prueba primero EN SILENCIO la contraseña ROOT ya almacenada
+        # (ver "Probando primero, EN SILENCIO..." en rotate-all-interactive.sh)
+        # antes de pedirla a mano — como seed_docker_state() siembra
+        # mariadb_pw_root exactamente con FIXTURE_ENV["ESPOCRM_DB_ROOT_PASSWORD"]
+        # (la misma que S1 acaba de copiar al almacén externo), esa
+        # comprobación silenciosa SIEMPRE tiene éxito aquí y el prompt
+        # manual nunca aparece — no hace falta (ni hay que esperar) una
+        # entrada manual de la contraseña ROOT en esta preparación.
         try:
-            _interrupt_gate_after_backup(sr_dir, env, repo, "S3", passphrase, extra_before_sigint=type_root_password)
+            _interrupt_gate_after_backup(sr_dir, env, repo, "S3", passphrase)
         except TimeoutError as exc:
             report(name + " (interrupción S3)", False, str(exc))
             return
@@ -2394,8 +2422,10 @@ def scenario_s6_s7_s9_transitional_rehearsal():
             report(name + " — paso 1b: stderr saneado (sin traza de Node)", True)
 
         # --- Paso 2 (S7, único punto autorizado a leer las legacy): migra
-        #     el MISMO archivo con el CLI real. ---
-        proc_migrate = subprocess.run(["node", migrate, secrets_file], capture_output=True, text=True, timeout=20)
+        #     el MISMO archivo con el CLI real (Bloque 9: exige un
+        #     temporal pre-pinneado por el llamador, igual que bash). ---
+        tmp_path, tmp_dev, tmp_ino, tmp_uid, tmp_mode = pin_temp_next_to(secrets_file, "legacy-migrate")
+        proc_migrate = subprocess.run(["node", migrate, secrets_file, tmp_path, tmp_dev, tmp_ino, tmp_uid, tmp_mode], capture_output=True, text=True, timeout=20)
         if proc_migrate.returncode != 0:
             report(name + " — paso 2 (S7 migra legacy-pre-s7 -> active): exit 0", False, f"rc={proc_migrate.returncode} stderr={proc_migrate.stderr!r}")
             ok = False
@@ -2433,15 +2463,20 @@ def scenario_s6_s7_s9_transitional_rehearsal():
 
         # --- Paso 4: repetir la migración sobre el archivo YA migrado es
         #     un no-op idempotente (nunca un segundo intento de leer una
-        #     legacy que ya no existe). ---
+        #     legacy que ya no existe) — Bloque 9: el no-op ahora se
+        #     señaliza con exit 20 (nunca 0), y el temporal pre-creado
+        #     por el llamador NUNCA se consume en ese caso. ---
         before_second = migrated_content
-        proc_migrate_again = subprocess.run(["node", migrate, secrets_file], capture_output=True, text=True, timeout=20)
+        tmp_path2, tmp_dev2, tmp_ino2, tmp_uid2, tmp_mode2 = pin_temp_next_to(secrets_file, "legacy-migrate-again")
+        proc_migrate_again = subprocess.run(["node", migrate, secrets_file, tmp_path2, tmp_dev2, tmp_ino2, tmp_uid2, tmp_mode2], capture_output=True, text=True, timeout=20)
         with open(secrets_file, encoding="utf-8") as f:
             after_second = f.read()
-        if proc_migrate_again.returncode == 0 and after_second == before_second:
-            report(name + " — paso 4: repetir la migración sobre un archivo ya activo es no-op (idempotente)", True)
+        if proc_migrate_again.returncode == 20 and after_second == before_second and os.path.exists(tmp_path2):
+            report(name + " — paso 4: repetir la migración sobre un archivo ya activo es no-op (idempotente, exit 20, temporal sin consumir)", True)
         else:
-            report(name + " — paso 4: repetir la migración sobre un archivo ya activo es no-op (idempotente)", False, f"rc={proc_migrate_again.returncode} changed={after_second != before_second}")
+            report(name + " — paso 4: repetir la migración sobre un archivo ya activo es no-op (idempotente, exit 20, temporal sin consumir)", False, f"rc={proc_migrate_again.returncode} changed={after_second != before_second} tmp_exists={os.path.exists(tmp_path2)}")
+        if os.path.exists(tmp_path2):
+            os.remove(tmp_path2)
             ok = False
 
         if ok:

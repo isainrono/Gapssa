@@ -20,20 +20,43 @@
 // Lee $SECRETS_FILE con `parseSecretsFile(..., { allowLegacyPreS7: true })`
 // (lib/loadSecretsEnv.mjs) — mismo inventario cerrado, mismo rechazo de
 // cualquier clave desconocida o mezcla — transforma en memoria, y
-// reescribe el archivo EN EL SITIO preservando verbatim cualquier otra
-// línea (orden, comentarios, blancos): solo las 2 líneas legacy se
-// sustituyen, cada una por sus 2 líneas activas equivalentes. Idempotente:
-// si el archivo ya está en esquema "active", no escribe nada.
+// reescribe el archivo preservando verbatim cualquier otra línea (orden,
+// comentarios, blancos): solo las 2 líneas legacy se sustituyen, cada una
+// por sus 2 líneas activas equivalentes. Idempotente: si el archivo ya
+// está en esquema "active", no escribe nada.
 //
-// Uso: node migrateLegacySecretsFileToActive.mjs <secretsFilePath>
-//   exit 0 = migrado con éxito, o el archivo YA estaba en esquema
-//            "active" (no-op idempotente)
-//   exit 1 = uso incorrecto
-//   exit 2 = el archivo no está en un esquema reconocible para esta
-//            operación (mezcla, clave desconocida, legacy incompleta) —
-//            rechazado, nunca escrito
+// Bloque 9 (S7 atómico y reanudable): la escritura ya NUNCA usa
+// `openSync(path, 'w')` (equivalente a O_TRUNC — sin temporal, sin
+// fsync, sin rename, sin fsync de directorio) — reutiliza EXACTAMENTE el
+// mismo patrón atómico que updateSecretsFileField.mjs/
+// atomicSecretsFileMutate.mjs: el llamador en bash crea y fija un
+// temporal 600 en el MISMO directorio ANTES de invocar este script
+// (gapssa_secrets_mktemp_secure_same_dir), este script lo abre con
+// O_NOFOLLOW, verifica su identidad por fstat contra el pin, escribe +
+// fsync, revalida por lstat justo antes del rename, hace el rename
+// atómico, verifica el destino, hace fsync del directorio contenedor, y
+// relee el documento completo para confirmar que lo que quedó en disco
+// es exactamente lo escrito.
+//
+// Uso: node migrateLegacySecretsFileToActive.mjs <secretsFilePath> <tempPath> <dev> <ino> <uid> <modo-octal>
+//   exit 0  = migrado con éxito, o el archivo YA estaba en esquema
+//             "active" (no-op idempotente — el temporal pre-creado por
+//             el llamador NUNCA se consume en este caso, hay que
+//             borrarlo)
+//   exit 1  = uso incorrecto
+//   exit 2  = el archivo no está en un esquema reconocible para esta
+//             operación (mezcla, clave desconocida, legacy incompleta) —
+//             rechazado, nunca escrito
+//   exit 10 = identidad del temporal no coincide con el pin ANTES de
+//             escribir — nada se ha escrito
+//   exit 11 = identidad del temporal no coincide con el pin JUSTO ANTES
+//             del rename — el rename NUNCA se ejecuta en este caso
+//   exit 12 = el propio rename falló
+//   exit 13 = el destino tras el rename no corresponde al inodo
+//             esperado, o la relectura final no coincide con lo escrito
 
-import { readFileSync, realpathSync, openSync, writeSync, closeSync, fsyncSync } from 'node:fs'
+import { readFileSync, realpathSync, openSync, closeSync, fstatSync, lstatSync, ftruncateSync, writeSync, fsyncSync, renameSync, constants } from 'node:fs'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { parseSecretsFile, SecretsFileParseError, LEGACY_ONLY_KEYS } from './loadSecretsEnv.mjs'
@@ -101,22 +124,121 @@ function readAndValidate(secretsFilePath) {
   return { rawText, entries }
 }
 
-function writeInPlace(secretsFilePath, text) {
-  const fd = openSync(secretsFilePath, 'w')
+function matchesPinFactory(expectedDev, expectedIno, expectedUid, expectedMode) {
+  return (st) => st.isFile() && st.dev === expectedDev && st.ino === expectedIno && st.uid === expectedUid && (st.mode & 0o777) === expectedMode
+}
+
+/**
+ * Escribe `text` en `secretsFilePath` con el patrón atómico completo
+ * (temporal ya pinneado por el llamador -> fsync -> revalidar -> rename
+ * -> verificar destino -> fsync de directorio -> relectura). Termina el
+ * proceso con el código de salida correspondiente en cualquier fallo —
+ * nunca deja el temporal a medio escribir ni el destino sin verificar.
+ */
+function writeInPlaceAtomic(secretsFilePath, tempPath, matchesPin, expectedDev, text) {
+  let fd
   try {
-    writeSync(fd, text)
-    fsyncSync(fd)
-  } finally {
+    fd = openSync(tempPath, constants.O_WRONLY | constants.O_NOFOLLOW)
+  } catch (err) {
+    console.error(`ERROR: no se pudo abrir el temporal (${err.code ?? err.message}).`)
+    process.exit(10)
+  }
+  try {
+    const st = fstatSync(fd)
+    if (!matchesPin(st)) {
+      console.error('ERROR: el temporal cambió de identidad (device/inode/propietario/modo no coinciden) — posible sustitución. Nada se ha escrito.')
+      closeSync(fd)
+      process.exit(10)
+    }
+  } catch (err) {
+    console.error(`ERROR al verificar la identidad del temporal: ${err.message}`)
     closeSync(fd)
+    process.exit(10)
+  }
+
+  const buffer = Buffer.from(text, 'utf8')
+  try {
+    ftruncateSync(fd, 0)
+    let written = 0
+    while (written < buffer.length) {
+      written += writeSync(fd, buffer, written, buffer.length - written, written)
+    }
+    fsyncSync(fd)
+  } catch (err) {
+    console.error(`ERROR al escribir/fsync el temporal: ${err.message}`)
+    closeSync(fd)
+    process.exit(4)
+  }
+
+  try {
+    const st = lstatSync(tempPath)
+    if (!matchesPin(st)) {
+      console.error('ERROR: el temporal cambió de identidad justo antes del rename (posible sustitución) — rename NUNCA ejecutado.')
+      closeSync(fd)
+      process.exit(11)
+    }
+  } catch (err) {
+    console.error(`ERROR al revalidar el temporal antes del rename: ${err.message}`)
+    closeSync(fd)
+    process.exit(11)
+  }
+
+  try {
+    renameSync(tempPath, secretsFilePath)
+  } catch (err) {
+    console.error(`ERROR: el rename atómico falló: ${err.message}`)
+    closeSync(fd)
+    process.exit(12)
+  }
+
+  let destOk = false
+  try {
+    const destSt = lstatSync(secretsFilePath)
+    destOk = destSt.isFile() && destSt.dev === expectedDev
+  } catch {
+    destOk = false
+  }
+  closeSync(fd)
+  if (!destOk) {
+    console.error('AVISO: el rename se ejecutó pero el destino no corresponde al dispositivo esperado al reverificarlo — trátalo como evidencia de posible interferencia externa.')
+    process.exit(13)
+  }
+
+  try {
+    const dirFd = openSync(path.dirname(secretsFilePath), constants.O_RDONLY)
+    try {
+      fsyncSync(dirFd)
+    } finally {
+      closeSync(dirFd)
+    }
+  } catch {
+    // Mejor esfuerzo (misma limitación de plataforma documentada en
+    // fsyncPath.mjs — el fichero ya está renombrado de forma atómica).
+  }
+
+  try {
+    const finalBuffer = readFileSync(secretsFilePath)
+    if (!finalBuffer.equals(buffer)) {
+      console.error('ERROR: la relectura completa tras el rename no coincide con lo escrito — trátalo como evidencia de interferencia externa.')
+      process.exit(13)
+    }
+  } catch (err) {
+    console.error(`ERROR en la relectura final: ${err instanceof Error ? err.message : 'error desconocido'}`)
+    process.exit(13)
   }
 }
 
 function main() {
-  const [, , secretsFilePath] = process.argv
-  if (!secretsFilePath) {
-    console.error('Uso: migrateLegacySecretsFileToActive.mjs <secretsFilePath>')
+  const [, , secretsFilePath, tempPath, expectedDevArg, expectedInoArg, expectedUidArg, expectedModeArg] = process.argv
+  if (!secretsFilePath || !tempPath || !expectedDevArg || !expectedInoArg || !expectedUidArg || !expectedModeArg) {
+    console.error('Uso: migrateLegacySecretsFileToActive.mjs <secretsFilePath> <tempPath> <dev> <ino> <uid> <modo-octal>')
     process.exit(1)
   }
+  const expectedDev = Number(expectedDevArg)
+  const expectedIno = Number(expectedInoArg)
+  const expectedUid = Number(expectedUidArg)
+  const expectedMode = parseInt(expectedModeArg, 8)
+  const matchesPin = matchesPinFactory(expectedDev, expectedIno, expectedUid, expectedMode)
 
   let rawText, entries
   try {
@@ -137,16 +259,11 @@ function main() {
   }
 
   if (!result.changed) {
-    console.error('El archivo externo ya está en esquema "active" — nada que migrar (no-op).')
-    process.exit(0)
+    console.error('El archivo externo ya está en esquema "active" — nada que migrar (no-op). El temporal pre-creado por el llamador queda SIN USAR, bórralo.')
+    process.exit(20)
   }
 
-  try {
-    writeInPlace(secretsFilePath, result.text)
-  } catch (err) {
-    console.error(`ERROR al escribir el archivo externo migrado: ${err instanceof Error ? err.message : 'error desconocido'}`)
-    process.exit(2)
-  }
+  writeInPlaceAtomic(secretsFilePath, tempPath, matchesPin, expectedDev, result.text)
 
   console.error('Migración completada: esquema legacy-pre-s7 -> active (v1 = valor legacy preservado, verificabilidad histórica intacta).')
   process.exit(0)

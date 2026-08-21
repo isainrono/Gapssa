@@ -853,11 +853,26 @@ aviso explícito que apunta a S3B si el fichero quedó desincronizado.
   lo cargan los demás scripts con `source`.
 - `01-init-external-store.sh <ruta-externa> [--dry-run]` — crea el
   directorio externo (modo `700`). Puerta S1 del plan.
-- `02-generate-secret.sh <archivo-externo> --set-line VAR [--dry-run]` /
-  `02-generate-secret.sh <archivo-externo> --set-json-map VAR VERSION [--dry-run]`
+- `02-generate-secret.sh <archivo-externo> --set-line VAR --schema-version <v> [--dry-run]`
   — genera un secreto CSPRNG y lo escribe directamente en el archivo
-  externo indicado (nunca lo imprime). Usar en las puertas S2–S7 según la
-  variable.
+  externo indicado (nunca lo imprime), delegando la escritura en
+  `lib/atomicSecretsFileMutate.mjs` (Bloque 9 — nunca `os.O_TRUNC`). Usar
+  en las puertas S2–S7 según la variable. El modo `--set-json-map`
+  (añadir una versión a un mapa) se retiró: su único llamador real,
+  `gate_s7()`, ahora invoca `lib/atomicSecretsFileMutate.mjs` directamente
+  para añadir v3 a los 4 mapas de booking en una única reescritura
+  atómica (ver Bloque 9).
+- `lib/atomicSecretsFileMutate.mjs` (+ `.test.mjs`, 46 aserciones) —
+  Bloque 9: única herramienta que reescribe `$SECRETS_FILE` con VARIAS
+  mutaciones de campo (sustituir una línea, generar+sustituir una línea,
+  generar+añadir una versión a un mapa JSON, retirar versiones de un mapa
+  JSON) en una sola lectura+reescritura atómica (temporal 600 fijado,
+  `O_NOFOLLOW`+`fstat` contra el pin, `fsync`, revalidación, `rename`
+  atómico, `fsync` de directorio, relectura completa). La generación de
+  una versión ya presente en un mapa (`json-map-generate`) es SIEMPRE un
+  no-op — nunca regenera un valor ya usado para recifrar filas reales de
+  Postgres. Sustituye los `python3 - <<PYEOF ... os.O_TRUNC ...` que
+  `gate_s7()` y `02-generate-secret.sh` usaban antes.
 - `rotate-all-interactive.sh [--dry-run] [--only Sx]` — asistente único que
   encadena las puertas S1–S9 en orden, pidiendo confirmación explícita
   antes de cada una, automatizando todo lo que es seguro automatizar (ver
@@ -1243,6 +1258,183 @@ S6 completa igual (nunca exige que S7 ya haya corrido); la migración de
 las 2 claves legacy ocurre la primera vez que se lanza `--only S7` (o el
 recorrido continuo sin `--only`), antes de generar/activar ninguna
 versión nueva.
+
+### Bloque 9 — S7 atómico y reanudable (auditoría y endurecimiento previos a ejecutar S7)
+
+**Hallazgo bloqueante que motivó este bloque**: `gate_s7()`
+(`rotate-all-interactive.sh`) contenía SEIS reescrituras `python3 -
+<<PYEOF ... os.O_TRUNC ...` independientes del almacén externo (activar
+v3 en los 4 mapas; retirar v1/v2 de cada uno de los 4 mapas por
+separado), más CINCO llamadas a `02-generate-secret.sh` cuya propia
+implementación interna usaba el mismo patrón `os.O_TRUNC` inseguro
+(generar v3 para los 4 mapas + rotar `BOOKING_INTERNAL_API_SECRET`), y
+`lib/migrateLegacySecretsFileToActive.mjs::writeInPlace` usaba
+`openSync(path, 'w')` (equivalente a `O_TRUNC`). Ninguna de estas
+escrituras usaba el patrón atómico (temporal 600 fijado, `O_NOFOLLOW`,
+`fsync`, `rename`, `fsync` de directorio) que el resto de este
+directorio ya exige — hasta 10 puntos de interrupción sin protección
+en una sola ejecución de S7. Peor que la falta de atomicidad frente a un
+crash: **relanzar `02-generate-secret.sh --set-json-map v3` tras
+CUALQUIER interrupción sustituía en silencio el valor v3 por uno
+CSPRNG nuevo**, aunque filas reales de Postgres ya se hubieran recifrado
+con el v3 anterior — huérfanas para siempre, sin ningún error visible.
+
+**Corrección — una única herramienta atómica y validada**
+(`lib/atomicSecretsFileMutate.mjs`, generaliza el patrón ya aceptado de
+`updateSecretsFileField.mjs`): aplica VARIAS mutaciones de campo
+(`set-line`, `set-line-generate`, `json-map-generate`,
+`json-map-retain`) a `$SECRETS_FILE` en una sola lectura+reescritura —
+temporal FIJADO por el llamador en bash (`gapssa_secrets_mktemp_secure_same_dir`,
+mismo patrón que S5/redis), abierto con `O_NOFOLLOW`, identidad
+verificada por `fstat` contra el pin, documento completo validado contra
+el inventario/obligatorias de la versión de esquema activa, escritura +
+`fsync`, revalidación por `lstat` justo antes del `rename`, `rename`
+atómico, verificación del destino, `fsync` del directorio contenedor, y
+**relectura completa del documento final** para confirmar que lo escrito
+en disco coincide exactamente con lo reconstruido. Propietario/modo
+600 se conservan en todo momento (el temporal nace 600, el `rename`
+nunca cambia inodo del destino salvo el esperado).
+
+**Idempotencia crítica** (`json-map-generate`): si la versión pedida
+(p. ej. `v3`) YA está presente en el mapa, la mutación es un NO-OP —
+NUNCA regenera un valor ya usado para recifrar filas reales. Probado
+explícitamente en `lib/atomicSecretsFileMutate.test.mjs` ("idempotencia
+crítica vía CLI"): generar v3, simular una interrupción y relanzar con un
+temporal DISTINTO (como haría bash de verdad) produce exit 20 (no-op) y
+el valor v3 es BYTE A BYTE idéntico al de la primera ejecución.
+
+**`gate_s7()` reescrita** para usar exclusivamente esta herramienta, en
+el orden exigido (backup → generar+añadir v3 a los 4 mapas EN UNA sola
+escritura → verificar convivencia dual real por `grep` antes de seguir →
+activar v3 EN UNA sola escritura, SIEMPRE separada de generar/retirar →
+migrar/reindexar Postgres + auditar allowlist + recontar EN FRESCO (sin
+cambios — ya transaccional por fila y reanudable, ver auditoría abajo) →
+verificar descifrado con el mapa final (`aesDecryptOk`, ya existente) →
+retirar cada uno de los 4 mapas EN SU PROPIA escritura, solo si su
+recuento fresco es 0 → rotar `BOOKING_INTERNAL_API_SECRET` (vía
+`02-generate-secret.sh`, ahora también atómico) → verificar
+`isValidInternalApiSecret` con el valor nuevo aceptado/anterior
+rechazado/ausente rechazado). Nunca se retira una versión vieja en la
+misma operación que activa v3 — son escrituras atómicas separadas,
+en ese orden.
+
+**Recuperación hacia delante, nunca hacia atrás, para S7**
+(`confirm_gate()`): a diferencia de S2–S5 (un solo secreto, sin
+dependencia en Postgres), S7 puede haber migrado/reindexado filas REALES
+a v3 antes de interrumpirse — restaurar un backup anterior dejaría esas
+filas cifradas/firmadas con una versión que el archivo restaurado ya no
+contendría. `confirm_gate()` ahora NUNCA ofrece restaurar backup para S7
+tras `rollback_required`: informa y devuelve el estado a `applying`,
+porque cada paso de escritura es individualmente idempotente y la
+migración/reindexado de Postgres ya era transaccional/reanudable —
+relanzar `--only S7` siempre es seguro y completo.
+
+**Auditoría de las cinco familias de secretos** (confirmado, sin
+cambios necesarios más allá de lo de arriba):
+- `BOOKING_FIELD_ENCRYPTION_KEYS` / `BOOKING_IDENTITY_FINGERPRINT_HMAC_SECRETS`
+  / `BOOKING_EMAIL_LOOKUP_HMAC_SECRETS` / `BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRETS`
+  (+ sus 4 `*_ACTIVE_KEY_VERSION`): mapas versionados, migración/reindexado
+  y recuento en `apps/web/src/server/booking/fieldEncryptionRotation.ts`
+  y `emailLookupHmacRotation.ts` — **transaccionales por FILA**
+  (`db.transaction(...)` con `SELECT ... FOR UPDATE` que re-lee la fila
+  DENTRO de la transacción antes de escribir) e **idempotentes**
+  (re-comprueban `keyVersion === fromVersion` desde la fila recién leída
+  en la transacción, nunca desde el listado exterior — una fila ya
+  migrada se salta en silencio en una reejecución). Los recuentos de
+  `rotationSafetyChecks.ts` distinguen correctamente filas vivas
+  (`status != 'resolved'`) de históricas/resueltas.
+- `BOOKING_INTERNAL_API_SECRET`: consumidores identificados —
+  `apps/web/src/server/booking/internalAuth.ts` (`isValidInternalApiSecret`,
+  comparación de tiempo constante contra la cabecera
+  `x-internal-api-secret`) protege las 6 rutas internas de booking
+  (`/api/booking/v1/internal/decisions`, `/reviews`, `/reviews/[id]`,
+  `/reviews/[id]/resolve`, `/reviews/[id]/reject`, `/sweep`) — ninguna
+  otra ruta ni `integrations/n8n/` lo consume. Rotación coordinada:
+  sustitución directa (sin filas dependientes por diseño — es una
+  credencial de servicio, no versionada) + verificación real de
+  `isValidInternalApiSecret` (nuevo aceptado, anterior rechazado, ausente
+  rechazado) vía `probes/s7InternalApiAuthCheck.mts`, con el valor
+  ANTERIOR solo en memoria de este proceso (temporal `600` triturado tras
+  usarse). Nunca en argv/env/logs. `apps/web` real nunca arranca en S7
+  (solo S9 lo arranca).
+
+**Pruebas nuevas**: `lib/atomicSecretsFileMutate.test.mjs` (46
+aserciones — pruebas puras de `applyMutations`/`validateMutationsList` +
+camino CLI completo con temporal real: cada tipo de mutación, la
+idempotencia crítica descrita arriba, no-op completo con el temporal SIN
+consumir, preimagen symlink/modo≠600 rechazadas, identidad de temporal
+no coincidente, `O_NOFOLLOW` contra un temporal symlink, mutaciones JSON
+malformadas/vacías, cero valores en stdout/stderr).
+`lib/migrateLegacySecretsFileToActive.test.mjs` actualizado al nuevo
+contrato CLI (temporal pre-pinneado; no-op ahora exit 20, temporal sin
+consumir). `tests/run_scenarios.py::scenario_s6_s7_s9_transitional_rehearsal`
+actualizado igual y sigue en verde (10 aserciones, migración real vía
+`tsx`).
+
+**Tres pruebas preexistentes, no relacionadas con este bloque, dejaban
+de reflejar el comportamiento real de `gate_s3()`** (encontradas al
+correr la regresión completa de `tests/run_scenarios.py`, antes en 0
+FAIL tras este bloque): `scenario_s1_s3_mariadb` y las dos ramas de
+`_run_s3_divergence_case` (`scenario_s3_divergence_root_declined`/
+`_provided`) esperaban el prompt manual "Contraseña ROOT actual de
+MariaDB:" incondicionalmente, pero `gate_s3()` prueba primero, EN
+SILENCIO, la contraseña ROOT ya almacenada (lógica añadida en un bloque
+anterior, "add recoverable MariaDB root reconciliation") — como
+`seed_docker_state()` siembra esa contraseña idéntica a la que S1 acaba
+de copiar al almacén externo, la comprobación silenciosa SIEMPRE tiene
+éxito en estos fixtures y el prompt manual nunca aparece. Estos 3 puntos
+de prueba (documentados como "4 fallos preexistentes... no relacionados,
+fuera del alcance" en el Bloque 8 anterior) quedan corregidos: se retiró
+la expectativa del prompt manual donde el camino silencioso siempre
+gana. `tests/run_scenarios.py` 142/142 (antes 133 relevantes + varias
+aserciones en cascada fallando por los 3 puntos de arriba).
+
+**Regresión completa de este bloque** (última ejecución limpia):
+`run-node-tests.sh` 22/22 ficheros (incluido el nuevo
+`atomicSecretsFileMutate.test.mjs`), `lib.test.sh` 128/128 (sin cambios),
+`tests/static_bash32_compat_guard.sh` 24/24, `tests/run_scenarios.py`
+142/142 (0 fallos, incluidas las 3 correcciones de arriba),
+`tests/s1_s9_full_rehearsal.py` — ensayo integral REAL S1→S9 completo
+contra Postgres 18 + MariaDB 11.4 + Redis 8 + EspoCRM 10.0.3
+DESECHABLES (nunca infraestructura GAPSSA real): las 9 puertas terminan
+`done`, los 4 `*_ACTIVE_KEY_VERSION` de booking quedan en `v3`, ACL real
+verificada, informe saneado sin secretos, teardown limpio (cero
+contenedores/networks/volumes residuales) — `fail_count=0`.
+
+**Límite reconocido de este bloque**: el ensayo integral de arriba
+demuestra el camino feliz completo (sin filas de `booking_request`/
+`pending_guest_identities` vivas en el fixture, así que las 4 familias
+retiran v1/v2 en la misma pasada). Queda como trabajo de seguimiento
+recomendado, NO bloqueante para este commit, un ensayo desechable
+DEDICADO que siembre filas reales v1/v2 (incluida al menos una fila
+"corrupta"/no descifrable y al menos una solicitud viva que mantenga un
+recuento distinto de cero) y fuerce una interrupción real (`SIGINT`) en
+cada frontera de `gate_s7()` para demostrar en vivo, contra Postgres
+desechable real: convivencia dual tras interrupción, reanudación sin
+regenerar v3, bloqueo parcial (`blocked`) con recuento distinto de cero
+en una familia mientras las demás retiran con normalidad, y recuperación
+hacia delante nunca hacia atrás. La atomicidad/idempotencia de cada
+escritura individual (la causa raíz del hallazgo bloqueante) SÍ queda
+demostrada de forma directa y determinista por
+`lib/atomicSecretsFileMutate.test.mjs`, sin depender de Docker.
+
+**Procedimiento para reintentar ÚNICAMENTE S7**: `bash
+rotate-all-interactive.sh --only S7`. Precondiciones operativas (no
+todas verificadas automáticamente por la propia puerta — S9, no S7, es
+la puerta que exige S1-S8 `done`; ver "Quién convierte cada clave
+legacy" arriba sobre por qué S7 no duplica esa comprobación): S1-S5
+`done` y S6 en `prepared` o `done`, `apps/web` (puerto 3000) DETENIDO
+(S7 solo ejecuta sondas `tsx` de un solo uso, nunca el servidor Next.js —
+pero una instancia externa ya escuchando podría escribir a la misma BD
+concurrentemente), Redis y Postgres reales sanos, y
+`current_secrets_schema_version()` en `"active"` o `"legacy-pre-s7"`
+(nunca una mezcla — `gate_s7()` migra automáticamente si hace falta,
+antes de generar/activar nada). Si una ejecución anterior quedó
+`blocked` (alguna familia con dependientes vivos) o se interrumpió
+(`rollback_required`, ahora recuperado siempre hacia delante), relanzar
+la misma puerta es seguro: cada paso reanuda exactamente donde quedó,
+sin regenerar ninguna versión ya activa ni retirar nada fuera de la
+comprobación de recuento fresco.
 
 ## Lo que este directorio NUNCA hace por sí mismo
 

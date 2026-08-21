@@ -1,25 +1,38 @@
 #!/usr/bin/env bash
 # Genera un secreto CSPRNG nuevo y lo escribe DIRECTAMENTE en el archivo
 # externo indicado — nunca lo imprime, nunca lo devuelve por stdout, nunca
-# lo deja en una variable de shell más tiempo del necesario para escribirlo.
-#
-# Dos modos:
+# lo deja en una variable de shell (el propio valor nunca sale del proceso
+# Node que lo genera Y lo escribe — ver lib/atomicSecretsFileMutate.mjs).
 #
 #   --set-line VAR_NAME [--bytes N] [--format hex|base64]
-#     Escribe/reemplaza una línea "VAR_NAME=<valor nuevo>" completa en el
-#     archivo destino. Para secretos NO versionados (ej. PAYLOAD_SECRET,
+#     Genera un valor nuevo y sustituye la línea "VAR_NAME=..." COMPLETA
+#     en el archivo destino — <VAR_NAME> debe existir ya (nunca añade una
+#     clave nueva). Para secretos NO versionados (ej. PAYLOAD_SECRET,
 #     REDIS_PASSWORD, BOOKING_INTERNAL_API_SECRET).
 #
-#   --set-json-map VAR_NAME VERSION_KEY [--bytes N] [--format hex|base64]
-#     Añade {"VERSION_KEY": "<valor nuevo>"} al mapa JSON ya existente en
-#     esa variable dentro del archivo destino (preserva las versiones que
-#     ya estén ahí) — para secretos versionados (BOOKING_FIELD_ENCRYPTION_KEYS,
-#     BOOKING_IDENTITY_FINGERPRINT_HMAC_SECRETS). Si la variable no existe
-#     todavía en el archivo, crea el mapa con esa única versión.
+# Bloque 9 (S7 atómico y reanudable): la escritura ya NUNCA usa
+# `os.open(..., O_TRUNC)` — delega en lib/atomicSecretsFileMutate.mjs
+# (temporal FIJADO en el mismo directorio, O_NOFOLLOW + fstat contra el
+# pin, fsync, revalidación, rename atómico, fsync de directorio,
+# relectura completa) exactamente igual que updateSecretsFileField.mjs.
+# El modo `--set-json-map` (añadir una versión nueva a un mapa JSON
+# versionado) se retiró de este script: su único llamador real
+# (gate_s7(), rotate-all-interactive.sh) ahora invoca
+# lib/atomicSecretsFileMutate.mjs directamente para añadir v3 a los
+# CUATRO mapas de booking en una única reescritura atómica (ver su
+# comentario de cabecera) — necesita esa idempotencia de "nunca
+# regenerar una versión que ya existe" para poder reanudarse tras una
+# interrupción sin huérfanos, algo que este script de un solo campo no
+# necesitaba resolver antes.
 #
 # Uso:
-#   ./02-generate-secret.sh <archivo-externo> --set-line VAR_NAME [--dry-run]
-#   ./02-generate-secret.sh <archivo-externo> --set-json-map VAR_NAME VERSION [--dry-run]
+#   ./02-generate-secret.sh <archivo-externo> --set-line VAR_NAME --schema-version <versión> [--bytes N] [--format hex|base64] [--dry-run]
+#
+# <versión> es SIEMPRE explícita (una de lib/backupSchema.mjs::KNOWN_SCHEMA_VERSIONS)
+# — el llamador en bash SIEMPRE debe derivarla de current_secrets_schema_version(),
+# igual que el resto de escritores atómicos de este directorio (nunca se
+# asume "active" a ciegas: S2/S3/S4/S6 pueden ejecutarse antes de que S7
+# haya migrado el archivo al esquema versionado).
 #
 # AES-256-GCM (BOOKING_FIELD_ENCRYPTION_KEYS) requiere exactamente 32 bytes
 # — usa --bytes 32 --format base64 para esa variable.
@@ -32,8 +45,7 @@ source "$SCRIPT_DIR/lib.sh"
 if [ "$#" -lt 3 ]; then
   cat >&2 <<'EOF'
 Uso:
-  02-generate-secret.sh <archivo-externo> --set-line VAR_NAME [--bytes N] [--format hex|base64] [--dry-run]
-  02-generate-secret.sh <archivo-externo> --set-json-map VAR_NAME VERSION_KEY [--bytes N] [--format hex|base64] [--dry-run]
+  02-generate-secret.sh <archivo-externo> --set-line VAR_NAME --schema-version <versión> [--bytes N] [--format hex|base64] [--dry-run]
 EOF
   exit 1
 fi
@@ -47,20 +59,15 @@ BYTES=32
 FORMAT="base64"
 DRY_RUN=false
 VAR_NAME=""
-VERSION_KEY=""
+SCHEMA_VERSION=""
 
 case "$MODE" in
 --set-line)
   VAR_NAME="$1"
   shift
   ;;
---set-json-map)
-  VAR_NAME="$1"
-  VERSION_KEY="$2"
-  shift 2
-  ;;
 *)
-  echo "ERROR: modo desconocido '$MODE' (usa --set-line o --set-json-map)." >&2
+  echo "ERROR: modo desconocido '$MODE' (solo se admite --set-line)." >&2
   exit 1
   ;;
 esac
@@ -73,6 +80,10 @@ while [ "$#" -gt 0 ]; do
     ;;
   --format)
     FORMAT="$2"
+    shift 2
+    ;;
+  --schema-version)
+    SCHEMA_VERSION="$2"
     shift 2
     ;;
   --dry-run)
@@ -100,9 +111,6 @@ gapssa_secrets_require_interactive_confirmation
 # debe imponer una física adicional en modo simulado.
 echo "mode=$MODE"
 echo "var_name=$VAR_NAME"
-if [ -n "$VERSION_KEY" ]; then
-  echo "version_key=$VERSION_KEY"
-fi
 echo "bytes=$BYTES"
 echo "format=$FORMAT"
 echo "dry_run=$DRY_RUN"
@@ -111,6 +119,11 @@ if [ "$DRY_RUN" = true ]; then
   echo "would_write_to=$TARGET_FILE"
   echo "S_DRY_RUN_OK=true"
   exit 0
+fi
+
+if [ -z "$SCHEMA_VERSION" ]; then
+  echo "ERROR: falta --schema-version (nunca se asume 'active' a ciegas)." >&2
+  exit 1
 fi
 
 if [ ! -f "$TARGET_FILE" ]; then
@@ -126,61 +139,64 @@ if [ "$file_mode_ok" != "true" ]; then
   exit 1
 fi
 
-# El valor nunca sale de este subshell salvo para escribirse en el archivo
-# destino — nunca a stdout, nunca a una variable exportada, nunca a un log.
-python3 - "$TARGET_FILE" "$MODE" "$VAR_NAME" "$VERSION_KEY" "$BYTES" "$FORMAT" <<'PYEOF'
-import sys, os, re, json, secrets, base64
+pin_lines="$(gapssa_secrets_mktemp_secure_same_dir "$TARGET_FILE" gensecret)"
+tmp_path="$(printf '%s\n' "$pin_lines" | sed -n '1p')"
+tmp_dir="$(printf '%s\n' "$pin_lines" | sed -n '2p')"
+tmp_stat="$(printf '%s\n' "$pin_lines" | sed -n '3p')"
+tmp_dev="$(printf '%s\n' "$tmp_stat" | awk '{print $1}')"
+tmp_ino="$(printf '%s\n' "$tmp_stat" | awk '{print $2}')"
+tmp_uid="$(printf '%s\n' "$tmp_stat" | awk '{print $3}')"
+tmp_mode="$(printf '%s\n' "$tmp_stat" | awk '{print $4}')"
 
-target_file, mode, var_name, version_key, bytes_n, fmt = sys.argv[1:7]
-bytes_n = int(bytes_n)
+if ! gapssa_secrets_verify_pinned_tmp "$tmp_path" "$tmp_dir" "$tmp_dev" "$tmp_ino" "$tmp_uid" "$tmp_mode"; then
+  echo "ERROR: el temporal recién creado ya no coincide con su propio pin — abortado." >&2
+  rm -f -- "$tmp_path" 2>/dev/null || true
+  exit 1
+fi
 
-raw = secrets.token_bytes(bytes_n)
-if fmt == "hex":
-    value = raw.hex()
-elif fmt == "base64":
-    value = base64.b64encode(raw).decode("ascii")
-else:
-    print(f"ERROR: formato desconocido '{fmt}'", file=sys.stderr)
-    sys.exit(1)
+# VAR_NAME/BYTES/FORMAT se validan aquí ANTES de interpolarlos en JSON a
+# mano (nunca llevan comillas/backslash — alfabeto cerrado comprobado
+# explícitamente, así que no hace falta un escapador JSON genérico) —
+# atomicSecretsFileMutate.mjs vuelve a validarlos de forma estricta antes
+# de aplicarlos, esto es solo para construir un documento bien formado.
+if ! [[ "$VAR_NAME" =~ ^[A-Z_][A-Z0-9_]*$ ]]; then
+  rm -f -- "$tmp_path" 2>/dev/null || true
+  echo "ERROR: VAR_NAME '$VAR_NAME' no tiene forma MAYUSCULA_CON_GUIONES_BAJOS." >&2
+  exit 1
+fi
+if ! [[ "$BYTES" =~ ^[0-9]+$ ]]; then
+  rm -f -- "$tmp_path" 2>/dev/null || true
+  echo "ERROR: --bytes '$BYTES' no es un entero." >&2
+  exit 1
+fi
+case "$FORMAT" in
+hex | base64) ;;
+*)
+  rm -f -- "$tmp_path" 2>/dev/null || true
+  echo "ERROR: --format '$FORMAT' desconocido (usa hex o base64)." >&2
+  exit 1
+  ;;
+esac
 
-with open(target_file, "r", encoding="utf-8") as f:
-    lines = f.readlines()
+mutations_json="$(printf '[{"op":"set-line-generate","key":"%s","bytes":%s,"format":"%s"}]' "$VAR_NAME" "$BYTES" "$FORMAT")"
 
-idx = None
-for i, line in enumerate(lines):
-    if re.match(rf"^{re.escape(var_name)}=", line):
-        idx = i
-        break
+write_rc=0
+write_summary="$(printf '%s' "$mutations_json" | node "$SCRIPT_DIR/lib/atomicSecretsFileMutate.mjs" "$TARGET_FILE" "$tmp_path" "$tmp_dev" "$tmp_ino" "$tmp_uid" "$tmp_mode" "$SCHEMA_VERSION")" || write_rc=$?
 
-if mode == "--set-line":
-    new_line = f"{var_name}={value}\n"
-    if idx is None:
-        lines.append(new_line)
-    else:
-        lines[idx] = new_line
-elif mode == "--set-json-map":
-    if idx is None:
-        current_map = {}
-    else:
-        existing_value = lines[idx].rstrip("\n")[len(var_name) + 1:]
-        current_map = json.loads(existing_value) if existing_value else {}
-    current_map[version_key] = value
-    new_line = f"{var_name}={json.dumps(current_map, separators=(',', ':'))}\n"
-    if idx is None:
-        lines.append(new_line)
-    else:
-        lines[idx] = new_line
-else:
-    print(f"ERROR: modo desconocido '{mode}'", file=sys.stderr)
-    sys.exit(1)
+if [ "$write_rc" -eq 20 ]; then
+  # No-op (nunca debería ocurrir para --set-line-generate, que siempre
+  # cambia el valor — ver comentario de cabecera de
+  # atomicSecretsFileMutate.mjs; se trata igual que un caso real por si
+  # acaso) — el temporal nunca se consumió, hay que limpiarlo.
+  rm -f -- "$tmp_path" 2>/dev/null || true
+  echo "ERROR: la escritura no cambió nada (inesperado para --set-line, que siempre rota el valor)." >&2
+  exit 1
+fi
+if [ "$write_rc" -ne 0 ]; then
+  rm -f -- "$tmp_path" 2>/dev/null || true
+  echo "ERROR: no se pudo escribir '$VAR_NAME' de forma atómica (código $write_rc)." >&2
+  exit 1
+fi
 
-fd = os.open(target_file, os.O_WRONLY | os.O_TRUNC, 0o600)
-with os.fdopen(fd, "w") as f:
-    f.writelines(lines)
-
-value = None
-raw = None
-print("write_completed=true")
-PYEOF
-
+echo "write_summary=$write_summary"
 echo "S_WRITE_OK=true"
