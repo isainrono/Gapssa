@@ -16,6 +16,7 @@
 // booleanos/errores.
 
 import { readFileSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
 
 /** Variables del entorno del propio operador que SÍ se heredan tal cual — cerrado, nunca `...process.env`. */
 export const BASE_ENV_ALLOWLIST = ['PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'TERM', 'NODE_ENV']
@@ -259,21 +260,111 @@ const LINE_PATTERN = /^([A-Z_][A-Z0-9_]*)=(.*)$/
 
 export class SecretsFileParseError extends Error {}
 
+// ---------------------------------------------------------------------------
+// Esquema TRANSICIONAL (Bloque 8) — S1 siempre crea `$SECRETS_FILE` a
+// partir de `.env.example`, que ya nace en forma "active" (nombres
+// plurales/versionados de booking-email/access-token) — pero un almacén
+// externo REAL preexistente de una instalación anterior al rediseño
+// versionado de S7 puede llegar todavía en forma "legacy-pre-s7" (nombres
+// singulares sin versión). `SECRETS_FILE_KEY_INVENTORY` de arriba es y
+// sigue siendo estrictamente "active" — nunca se amplía con las claves
+// legacy: ampliarlo indiscriminadamente aceptaría, para SIEMPRE y en
+// CUALQUIER proceso (incluida la S9 real vía `start-apps-web.mjs`), un
+// archivo que mezcla ambas formas sin que nada lo detecte. En su lugar,
+// `parseSecretsFile`/`buildChildEnv` aceptan un flag EXPLÍCITO
+// (`allowLegacyPreS7`, por defecto `false`) que activa un SEGUNDO
+// inventario cerrado — `LEGACY_PRE_S7_KEY_INVENTORY` — elegido en tiempo
+// de parseo según el CONTENIDO real del archivo (nunca por confianza
+// ciega): la puerta S6 (que corre siempre ANTES que S7 en el recorrido
+// S1..S9, y nunca toca ningún secreto de booking) es la única llamadora
+// que pasa `allowLegacyPreS7:true`, y lo hace a través de
+// `buildS6CryptoProbeEnv` — una proyección MÍNIMA que nunca reenvía el valor
+// legacy real a ningún proceso hijo. `start-apps-web.mjs` (S9) sigue
+// llamando a `buildChildEnv`/`parseSecretsFile` SIN este flag — sigue
+// exigiendo, sin excepción, el inventario "active" puro.
+//
+// Los dos nombres de clave "legacy-pre-s7" siguen el mismo patrón de
+// duplicación deliberada (nunca importada en vivo) que
+// `lib/backupSchema.mjs` ya documenta para `MANDATORY_INFRA_KEYS` — este
+// módulo NO importa de `backupSchema.mjs` porque `backupSchema.mjs` ya
+// importa de ESTE módulo (`SECRETS_FILE_KEY_INVENTORY`); crear el sentido
+// contrario formaría un ciclo. `lib/loadSecretsEnv.test.mjs` prueba que
+// ambas copias coinciden exactamente, para detectar cualquier deriva.
+export const ACTIVE_SCHEMA_VERSION = 'active'
+export const LEGACY_PRE_S7_SCHEMA_VERSION = 'legacy-pre-s7'
+
+/** Las dos claves EXACTAS y CONOCIDAS de la forma anterior a S7 — cerrado, nunca una tercera. */
+export const LEGACY_ONLY_KEYS = ['BOOKING_EMAIL_LOOKUP_HMAC_SECRET', 'BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRET']
+
+/** Las claves "active" que las de arriba sustituyen — nunca conviven con ellas en el mismo archivo. */
+const ACTIVE_ONLY_KEYS_REPLACED_BY_LEGACY = [
+  'BOOKING_EMAIL_LOOKUP_HMAC_SECRETS',
+  'BOOKING_EMAIL_LOOKUP_HMAC_ACTIVE_KEY_VERSION',
+  'BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRETS',
+  'BOOKING_REQUEST_ACCESS_TOKEN_HMAC_ACTIVE_KEY_VERSION',
+]
+
+/** Inventario cerrado "legacy-pre-s7": el activo menos esas 4 claves, más las 2 legacy singulares — nunca ambas formas a la vez. */
+export const LEGACY_PRE_S7_KEY_INVENTORY = [
+  ...SECRETS_FILE_KEY_INVENTORY.filter((k) => !ACTIVE_ONLY_KEYS_REPLACED_BY_LEGACY.includes(k)),
+  ...LEGACY_ONLY_KEYS,
+]
+
 /**
- * Parsea `secretsFilePath` como pares `KEY=VALUE` estrictos — el valor se
- * toma LITERAL (nunca se interpola/evalúa), así que `$(...)`/backticks/
- * comillas en un valor son inertes por construcción, no por escape.
- * Lanza `SecretsFileParseError` (nunca continúa "por si acaso") ante:
- * línea mal formada, clave duplicada, clave fuera de
- * `SECRETS_FILE_KEY_INVENTORY`, o valor con byte NUL. Los mensajes de
- * error nunca incluyen el valor — como mucho el número de línea y el
- * nombre de la clave.
+ * Clasificación cerrada de las 2 claves legacy — SEPARADA de
+ * `SECRET_KEY_CLASSIFICATION` (que sigue cubriendo EXACTAMENTE las 80
+ * claves "active", sin cambios: el escáner de fugas de S9 nunca debería
+ * ver una clave legacy, porque S9 exige el inventario final sin ellas).
+ * Existe únicamente para que quede constancia explícita de que, cuando
+ * SÍ se aceptan (bajo `allowLegacyPreS7`), se tratan como material
+ * secreto — nunca como configuración no sensible.
  */
-export function parseSecretsFile(secretsFilePath) {
-  const raw = readFileSync(secretsFilePath, 'utf8')
-  const lines = raw.split('\n')
+export const LEGACY_KEY_CLASSIFICATION = Object.freeze({
+  BOOKING_EMAIL_LOOKUP_HMAC_SECRET: SECRET_CLASS.SECRET,
+  BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRET: SECRET_CLASS.SECRET,
+})
+
+const ACTIVE_MARKER_KEYS = ['BOOKING_EMAIL_LOOKUP_HMAC_SECRETS', 'BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRETS']
+const LEGACY_MARKER_KEYS = LEGACY_ONLY_KEYS
+
+/**
+ * Función pura: dado el conjunto de claves PRESENTES en un archivo (ya
+ * tokenizado, nunca valores), decide a qué esquema pertenece mirando
+ * ÚNICAMENTE los 2 pares de claves marcador (booking-email/access-token
+ * plural vs. singular) — mismo criterio que
+ * `lib/detectSecretsSchemaVersion.mjs` usa sobre el `$SECRETS_FILE` real
+ * completo (duplicado deliberadamente, no importado, por la misma razón
+ * de ciclo de arriba). Lanza `SecretsFileParseError` si el archivo mezcla
+ * ambas formas a la vez — nunca "adivina" cuál manda. Si no encuentra
+ * NINGÚN marcador (archivo incompleto/inválido), devuelve `active` por
+ * defecto — el propio inventario "active" seguirá rechazando cualquier
+ * otra clave desconocida, y la comprobación de obligatorias aguas abajo
+ * (fuera de este módulo) sigue siendo quien detecta la ausencia real.
+ */
+export function detectSchemaVersionFromKeys(presentKeys) {
+  const keys = presentKeys instanceof Set ? presentKeys : new Set(presentKeys)
+  const hasActive = ACTIVE_MARKER_KEYS.some((k) => keys.has(k))
+  const hasLegacy = LEGACY_MARKER_KEYS.some((k) => keys.has(k))
+  if (hasActive && hasLegacy) {
+    throw new SecretsFileParseError(
+      'El archivo externo mezcla claves de booking-email/access-token plurales Y singulares a la vez — estado ambiguo, rechazado.',
+    )
+  }
+  return hasLegacy ? LEGACY_PRE_S7_SCHEMA_VERSION : ACTIVE_SCHEMA_VERSION
+}
+
+/**
+ * Tokeniza `lines` en pares `KEY=VALUE` — SOLO las comprobaciones de
+ * FORMATO que no dependen de qué inventario aplica (línea mal formada,
+ * clave duplicada, byte NUL): la comprobación de "¿está esta clave en el
+ * inventario cerrado?" vive en `parseSecretsFile`, una vez decidido QUÉ
+ * inventario usar. El valor se toma siempre LITERAL — nunca se interpola/
+ * evalúa, así que `$(...)`/backticks/comillas son inertes por
+ * construcción, no por escape.
+ */
+function tokenizeSecretsFileLines(lines) {
   const seen = new Set()
-  const result = {}
+  const tokens = []
 
   lines.forEach((line, index) => {
     const lineNumber = index + 1
@@ -288,15 +379,49 @@ export function parseSecretsFile(secretsFilePath) {
     if (seen.has(key)) {
       throw new SecretsFileParseError(`Clave duplicada "${key}" (línea ${lineNumber}).`)
     }
-    if (!SECRETS_FILE_KEY_INVENTORY.includes(key)) {
-      throw new SecretsFileParseError(`Clave "${key}" (línea ${lineNumber}) no está en el inventario cerrado — rechazada.`)
-    }
     if (value.includes('\0')) {
       throw new SecretsFileParseError(`El valor de "${key}" (línea ${lineNumber}) contiene un byte NUL — rechazado.`)
     }
     seen.add(key)
-    result[key] = value
+    tokens.push({ key, value, lineNumber })
   })
+
+  return tokens
+}
+
+/**
+ * Parsea `secretsFilePath` como pares `KEY=VALUE` estrictos. Por defecto
+ * (`allowLegacyPreS7` ausente/`false` — TODOS los llamadores existentes,
+ * incluida `start-apps-web.mjs` de S9, sin ningún cambio de
+ * comportamiento) exige el inventario "active" puro, exactamente como
+ * antes. Con `{ allowLegacyPreS7: true }` (solo `buildS6CryptoProbeEnv`, más
+ * abajo), detecta primero el esquema real del archivo
+ * (`detectSchemaVersionFromKeys`) y valida contra el inventario cerrado
+ * correspondiente — nunca contra una unión de ambos. Lanza
+ * `SecretsFileParseError` (nunca continúa "por si acaso") ante: línea mal
+ * formada, clave duplicada, clave fuera del inventario cerrado elegido,
+ * mezcla legacy/active, o valor con byte NUL. Los mensajes de error nunca
+ * incluyen el valor — como mucho el número de línea y el nombre de la
+ * clave.
+ */
+export function parseSecretsFile(secretsFilePath, options = {}) {
+  const allowLegacyPreS7 = options.allowLegacyPreS7 === true
+  const raw = readFileSync(secretsFilePath, 'utf8')
+  const tokens = tokenizeSecretsFileLines(raw.split('\n'))
+
+  let inventory = SECRETS_FILE_KEY_INVENTORY
+  if (allowLegacyPreS7) {
+    const presentKeys = new Set(tokens.map((t) => t.key))
+    inventory = detectSchemaVersionFromKeys(presentKeys) === LEGACY_PRE_S7_SCHEMA_VERSION ? LEGACY_PRE_S7_KEY_INVENTORY : SECRETS_FILE_KEY_INVENTORY
+  }
+
+  const result = {}
+  for (const { key, value, lineNumber } of tokens) {
+    if (!inventory.includes(key)) {
+      throw new SecretsFileParseError(`Clave "${key}" (línea ${lineNumber}) no está en el inventario cerrado — rechazada.`)
+    }
+    result[key] = value
+  }
 
   return result
 }
@@ -306,10 +431,12 @@ export function parseSecretsFile(secretsFilePath) {
  * allowlist base del propio operador (`BASE_ENV_ALLOWLIST`) + las claves
  * de `$SECRETS_FILE` (ya validadas por `parseSecretsFile`) + los
  * `extraVars` explícitos que el propio orquestador quiera fijar (p. ej.
- * `PORT`/`HOST`) — nunca `...process.env` sin filtrar.
+ * `PORT`/`HOST`) — nunca `...process.env` sin filtrar. `options` se
+ * reenvía tal cual a `parseSecretsFile` (ver `allowLegacyPreS7` arriba);
+ * ausente, el comportamiento es idéntico al de siempre.
  */
-export function buildChildEnv(secretsFilePath, extraVars = {}) {
-  const secrets = parseSecretsFile(secretsFilePath)
+export function buildChildEnv(secretsFilePath, extraVars = {}, options = {}) {
+  const secrets = parseSecretsFile(secretsFilePath, options)
   const env = {}
   for (const key of BASE_ENV_ALLOWLIST) {
     if (process.env[key] !== undefined) {
@@ -317,5 +444,123 @@ export function buildChildEnv(secretsFilePath, extraVars = {}) {
     }
   }
   Object.assign(env, secrets, extraVars)
+  return env
+}
+
+/**
+ * Entorno del proceso hijo de `probes/s6ArtifactMaintenance.mts`
+ * (`inspect`/`remove`, vía `run-tsx.mjs`) — la sonda MÁS mínima de las
+ * cuatro de S6: importa ÚNICAMENTE `shared/secureArtifact.mts` (nunca
+ * `server/env.ts`, nunca `otpService.ts`/`redis.ts`), así que no necesita
+ * NINGÚN secreto — solo la allowlist base del operador. Valida
+ * `$SECRETS_FILE` COMPLETO contra el inventario cerrado que corresponda
+ * (`allowLegacyPreS7:true` — S6 corre siempre ANTES que S7, nunca puede
+ * exigir que S7 ya haya migrado nada), pero no exige que ninguna clave en
+ * particular esté presente ni copia nada de su contenido al hijo — a
+ * propósito distinta de `buildS6CryptoProbeEnv` (más abajo): exigir aquí las
+ * mismas claves "reales" que sí necesitan las sondas criptográficas
+ * bloquearía la propia inspección del artefacto (que se ejecuta ANTES de
+ * `enter_gate`, precisamente para poder fallar sin tocar nada) ante
+ * cualquier archivo incompleto, no solo uno realmente legacy.
+ */
+export function buildS6ArtifactProbeEnv(secretsFilePath, extraVars = {}) {
+  parseSecretsFile(secretsFilePath, { allowLegacyPreS7: true })
+  const env = {}
+  for (const key of BASE_ENV_ALLOWLIST) {
+    if (process.env[key] !== undefined) {
+      env[key] = process.env[key]
+    }
+  }
+  Object.assign(env, extraVars)
+  return env
+}
+
+/**
+ * Claves REALES (nunca un placeholder) que las sondas CRIPTOGRÁFICAS de
+ * la puerta S6 (`s6PreRotationProbe.mts`/`s6PostRotationVerification.mts`
+ * — nunca `s6ArtifactMaintenance.mts`, ver `buildS6ArtifactProbeEnv`
+ * arriba) sí necesitan — ver la auditoría de impacto citada en
+ * `gate_s6()` (rotate-all-interactive.sh): únicamente
+ * PAYLOAD_SECRET/OTP_HMAC_SECRET/AUTH_RATE_LIMIT_HMAC_SECRET, más lo que
+ * Redis/Postgres/Payload necesitan para que `server/env.ts` (Zod) pueda
+ * resolver un `serverEnv` válido en el proceso hijo. Auditado import por
+ * import (`s6PreRotationProbe.mts`/`s6PostRotationVerification.mts` y sus
+ * dependencias transitivas, `otpService.ts`/`rateLimit.ts`/`redis.ts`/
+ * `payload.env.ts`): NINGUNO importa `server/booking/db/client.ts` ni
+ * `server/crypto/fieldCrypto.ts` — ningún secreto de booking se lee ni se
+ * usa jamás.
+ */
+const S6_PROJECTION_KEYS = [
+  'DATABASE_URL_CMS',
+  'DATABASE_URL_AUTH',
+  'DATABASE_URL_BOOKING',
+  'REDIS_URL',
+  'REDIS_KEY_PREFIX',
+  'PAYLOAD_SECRET',
+  'OTP_HMAC_SECRET',
+  'AUTH_RATE_LIMIT_HMAC_SECRET',
+]
+
+/**
+ * Los 9 campos de booking que `server/env.ts` (Zod, `restEnvSchema`)
+ * exige SIN valor por defecto — así que importar `serverEnv` (que
+ * `otpService.ts`/`redis.ts`/las propias sondas hacen, transitivamente,
+ * siempre) falla si faltan, aunque la sonda en cuestión nunca los lea.
+ * Placeholders CERRADOS, generados por CSPRNG en memoria en cada
+ * llamada — NUNCA derivados de ningún valor real (ni legacy ni activo)
+ * del archivo externo, nunca escritos a disco, nunca reenviados fuera
+ * del `env` de este único proceso hijo desechable. Solo satisfacen la
+ * FORMA que Zod exige (JSON `{"<versión>":"<secreto>"}` con la versión
+ * activa presente en el mapa, longitudes mínimas) — ninguna sonda de S6
+ * los lee jamás (ver `S6_PROJECTION_KEYS` de arriba, que los excluye a
+ * propósito).
+ */
+function buildS6BookingPlaceholders() {
+  const version = 's6-placeholder'
+  const aesKey = () => randomBytes(32).toString('base64')
+  const hmacSecret = () => randomBytes(32).toString('base64')
+  return {
+    BOOKING_FIELD_ENCRYPTION_KEYS: JSON.stringify({ [version]: aesKey() }),
+    BOOKING_FIELD_ENCRYPTION_ACTIVE_KEY_VERSION: version,
+    BOOKING_EMAIL_LOOKUP_HMAC_SECRETS: JSON.stringify({ [version]: hmacSecret() }),
+    BOOKING_EMAIL_LOOKUP_HMAC_ACTIVE_KEY_VERSION: version,
+    BOOKING_IDENTITY_FINGERPRINT_HMAC_SECRETS: JSON.stringify({ [version]: hmacSecret() }),
+    BOOKING_IDENTITY_FINGERPRINT_ACTIVE_KEY_VERSION: version,
+    BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRETS: JSON.stringify({ [version]: hmacSecret() }),
+    BOOKING_REQUEST_ACCESS_TOKEN_HMAC_ACTIVE_KEY_VERSION: version,
+    BOOKING_INTERNAL_API_SECRET: hmacSecret(),
+  }
+}
+
+/**
+ * Entorno del proceso hijo EXCLUSIVO de las sondas de S6
+ * (`probes/s6*.mts`, vía `run-tsx.mjs`) — la proyección MÍNIMA que pide
+ * el Bloque 8: acepta `$SECRETS_FILE` en esquema "active" O
+ * "legacy-pre-s7" (`allowLegacyPreS7:true` — S6 corre siempre ANTES que
+ * S7 en el recorrido S1..S9, así que nunca puede exigir que S7 ya haya
+ * migrado nada), valida el archivo COMPLETO contra el inventario cerrado
+ * que corresponda (rechaza cualquier clave desconocida, igual que
+ * siempre), pero SOLO copia al hijo las claves de `S6_PROJECTION_KEYS` —
+ * los dos secretos legacy de booking-email/access-token, si están
+ * presentes, se VALIDAN pero JAMÁS se propagan a este proceso, que no los
+ * necesita. Los 9 campos de booking que Zod exige incondicionalmente se
+ * rellenan con placeholders opacos (`buildS6BookingPlaceholders`) — nunca
+ * con el valor real, legacy o activo.
+ */
+export function buildS6CryptoProbeEnv(secretsFilePath, extraVars = {}) {
+  const secrets = parseSecretsFile(secretsFilePath, { allowLegacyPreS7: true })
+  const env = {}
+  for (const key of BASE_ENV_ALLOWLIST) {
+    if (process.env[key] !== undefined) {
+      env[key] = process.env[key]
+    }
+  }
+  for (const key of S6_PROJECTION_KEYS) {
+    if (secrets[key] === undefined) {
+      throw new SecretsFileParseError(`Falta la clave obligatoria "${key}" para construir la proyección mínima de S6.`)
+    }
+    env[key] = secrets[key]
+  }
+  Object.assign(env, buildS6BookingPlaceholders(), extraVars)
   return env
 }

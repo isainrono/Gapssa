@@ -2933,6 +2933,30 @@ print('true' if ok else 'false')
 }
 
 # ---------------------------------------------------------------------------
+# run_probe_and_validate <schemaName> <run-tsx arg>...
+#
+# Envoltorio único de las 6 llamadas `lib/run-tsx.mjs | lib/validateProbeJson.mjs`
+# de S6/S7 (Bloque 8) — captura el stdout de run-tsx.mjs y comprueba su
+# código de salida EXPLÍCITAMENTE, en un paso separado: si run-tsx.mjs
+# falla (p. ej. `$SECRETS_FILE` con una clave desconocida — el fallo real
+# que motivó este bloque), esta función devuelve ese mismo código de
+# salida SIN invocar jamás a validateProbeJson.mjs — nunca lo alimenta con
+# un stdin vacío (el propio run-tsx.mjs ya imprimió su propio mensaje
+# saneado a stderr, sin stack trace ni valores). Solo si run-tsx.mjs
+# termina en 0 se valida su salida contra `schemaName`.
+# ---------------------------------------------------------------------------
+run_probe_and_validate() {
+  local schema_name="$1"
+  shift
+  local probe_output probe_rc=0
+  probe_output="$(node "$SCRIPT_DIR/lib/run-tsx.mjs" "$REPO_ROOT" "$SECRETS_FILE" "$@")" || probe_rc=$?
+  if [ "$probe_rc" -ne 0 ]; then
+    return "$probe_rc"
+  fi
+  printf '%s' "$probe_output" | node "$SCRIPT_DIR/lib/validateProbeJson.mjs" "$schema_name"
+}
+
+# ---------------------------------------------------------------------------
 # S6 — Payload / Auth / OTP — auditoría real (código citado, no una
 # afirmación), verificación dinámica diferida a S9 (requiere apps/web
 # arrancado, que este script no hace fuera de S9)
@@ -2997,7 +3021,7 @@ gate_s6() {
   #     verificación dinámica completada. ---
   say "Comprobando si ya existe un artefacto de prueba previo de un intento anterior..."
   local inspect_json
-  if ! inspect_json="$(node "$SCRIPT_DIR/lib/run-tsx.mjs" "$REPO_ROOT" "$SECRETS_FILE" "$SCRIPT_DIR/probes/s6ArtifactMaintenance.mts" inspect "$otp_probe_file" "$artifact_dir" | node "$SCRIPT_DIR/lib/validateProbeJson.mjs" s6-artifact-inspect)"; then
+  if ! inspect_json="$(GAPSSA_ROTATION_ENV_PROJECTION=s6-artifact run_probe_and_validate s6-artifact-inspect "$SCRIPT_DIR/probes/s6ArtifactMaintenance.mts" inspect "$otp_probe_file" "$artifact_dir")"; then
     say "ERROR: no se pudo inspeccionar el estado del artefacto de prueba previo (ver mensaje de arriba). El estado de S6 no se modifica."
     return 1
   fi
@@ -3027,7 +3051,7 @@ gate_s6() {
   say "de los tres secretos ANTIGUOS se guarda nunca en disco, solo estas salidas de"
   say "un solo sentido..."
   local probe_status_json
-  if ! probe_status_json="$(node "$SCRIPT_DIR/lib/run-tsx.mjs" "$REPO_ROOT" "$SECRETS_FILE" "$SCRIPT_DIR/probes/s6PreRotationProbe.mts" "$otp_probe_file" "$artifact_dir" | node "$SCRIPT_DIR/lib/validateProbeJson.mjs" s6-pre)"; then
+  if ! probe_status_json="$(GAPSSA_ROTATION_ENV_PROJECTION=s6-crypto run_probe_and_validate s6-pre "$SCRIPT_DIR/probes/s6PreRotationProbe.mts" "$otp_probe_file" "$artifact_dir")"; then
     leave_gate_failed "S6" "no se pudieron crear los artefactos de prueba previos a la rotación, o su salida no superó la validación de contrato JSON."
     return 1
   fi
@@ -3064,7 +3088,7 @@ run_s6_dynamic_verification() {
   fi
 
   local result_json
-  if ! result_json="$(node "$SCRIPT_DIR/lib/run-tsx.mjs" "$REPO_ROOT" "$SECRETS_FILE" "$SCRIPT_DIR/probes/s6PostRotationVerification.mts" "$otp_probe_file" "$artifact_dir" | node "$SCRIPT_DIR/lib/validateProbeJson.mjs" s6-post)"; then
+  if ! result_json="$(GAPSSA_ROTATION_ENV_PROJECTION=s6-crypto run_probe_and_validate s6-post "$SCRIPT_DIR/probes/s6PostRotationVerification.mts" "$otp_probe_file" "$artifact_dir")"; then
     say "  FALLO S6: la verificación dinámica post-rotación no pudo ejecutarse (ver mensaje de arriba) — el artefacto se conserva para un reintento posterior (esta rama NO está autorizada a retirarlo: la verificación nunca llegó a completarse). S6 permanece 'prepared'."
     return 1
   fi
@@ -3090,7 +3114,7 @@ run_s6_dynamic_verification() {
   say "  JWT de Payload nuevo funciona: $payload_new"
 
   local remove_json remove_ok=true removed=false
-  remove_json="$(node "$SCRIPT_DIR/lib/run-tsx.mjs" "$REPO_ROOT" "$SECRETS_FILE" "$SCRIPT_DIR/probes/s6ArtifactMaintenance.mts" remove "$otp_probe_file" "$artifact_dir" | node "$SCRIPT_DIR/lib/validateProbeJson.mjs" s6-artifact-remove)" || remove_ok=false
+  remove_json="$(GAPSSA_ROTATION_ENV_PROJECTION=s6-artifact run_probe_and_validate s6-artifact-remove "$SCRIPT_DIR/probes/s6ArtifactMaintenance.mts" remove "$otp_probe_file" "$artifact_dir")" || remove_ok=false
   if [ "$remove_ok" = true ]; then
     removed="$(printf '%s' "$remove_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['removed'])")"
   fi
@@ -3131,6 +3155,32 @@ gate_s7() {
     say "[dry-run] no se crea ningún fichero temporal, no se genera/activa/migra/retira nada real."
     leave_gate_done "S7"
     return 0
+  fi
+
+  # --- precondición Bloque 8: si $SECRETS_FILE todavía está en esquema
+  #     legacy-pre-s7 (claves singulares BOOKING_EMAIL_LOOKUP_HMAC_SECRET/
+  #     BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRET, de una instalación
+  #     anterior al rediseño versionado), S7 es la ÚNICA puerta autorizada
+  #     a leerlas para migrarlas — nunca S6 (que ya corrió antes, con una
+  #     proyección mínima que nunca las toca) ni ninguna otra. El valor
+  #     legacy se preserva EXACTO bajo la versión "v1" (nunca se pierde ni
+  #     se sustituye aquí — eso lo hace el bloque de abajo, que genera y
+  #     activa v3 sobre el mapa ya migrado). Tras esto, current_secrets_schema_version()
+  #     vuelve a ser "active" — sin excepción, S8/S9 nunca ven una clave
+  #     legacy. Si el archivo YA está en "active" (caso normal: S1 siempre
+  #     copia de .env.example, que nace "active"), este paso es un no-op. -
+  if [ "$(current_secrets_schema_version)" = "legacy-pre-s7" ]; then
+    say "El archivo externo todavía usa el esquema anterior a S7 (BOOKING_EMAIL_LOOKUP_HMAC_SECRET/"
+    say "BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRET singulares, sin versión) — migrándolo AHORA al"
+    say "esquema de mapa versionado (el valor legacy queda preservado EXACTO como versión v1;"
+    say "cualquier HMAC/ciphertext ya calculado con él sigue siendo verificable bajo esa misma"
+    say "versión — nunca se pierde verificabilidad histórica)..."
+    if ! node "$SCRIPT_DIR/lib/migrateLegacySecretsFileToActive.mjs" "$SECRETS_FILE"; then
+      leave_gate_failed "S7" "no se pudo migrar el esquema legacy-pre-s7 a active (ver mensaje de arriba) — ningún secreto se generó todavía, el archivo externo no se modificó."
+      return 1
+    fi
+    say "Esquema migrado: BOOKING_EMAIL_LOOKUP_HMAC_SECRETS/BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRETS ahora"
+    say "son mapas versionados (v1 = valor legacy); las claves singulares ya no existen en el archivo."
   fi
 
   # --- generar + activar v3 SIEMPRE para los 4 secretos versionados -----
@@ -3182,7 +3232,7 @@ PYEOF
   say "auditoría de columnas cifradas y recuentos EN FRESCO (idempotente, reanudable,"
   say "transaccional por fila)..."
   local migrate_json
-  if ! migrate_json="$(node "$SCRIPT_DIR/lib/run-tsx.mjs" "$REPO_ROOT" "$SECRETS_FILE" "$SCRIPT_DIR/probes/s7MigrateAndAudit.mts" | node "$SCRIPT_DIR/lib/validateProbeJson.mjs" s7-migrate)"; then
+  if ! migrate_json="$(run_probe_and_validate s7-migrate "$SCRIPT_DIR/probes/s7MigrateAndAudit.mts")"; then
     leave_gate_failed "S7" "la migración/reindexado/auditoría falló, o su salida no superó la validación de contrato JSON — es reanudable, corrige el problema y vuelve a lanzar esta puerta."
     return 1
   fi
@@ -3330,7 +3380,7 @@ PYEOF
 
   local internal_check_json
   local internal_check_ok=true
-  internal_check_json="$(node "$SCRIPT_DIR/lib/run-tsx.mjs" "$REPO_ROOT" "$SECRETS_FILE" "$SCRIPT_DIR/probes/s7InternalApiAuthCheck.mts" "$old_internal_api_file" | node "$SCRIPT_DIR/lib/validateProbeJson.mjs" s7-internal-check)" || internal_check_ok=false
+  internal_check_json="$(run_probe_and_validate s7-internal-check "$SCRIPT_DIR/probes/s7InternalApiAuthCheck.mts" "$old_internal_api_file")" || internal_check_ok=false
   gapssa_secrets_shred "$old_internal_api_file"
   gapssa_cleanup_pop_matching shred_plain "$old_internal_api_file"
 

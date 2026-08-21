@@ -29,6 +29,8 @@ lib/digestStream.test.mjs
 lib/extractEnvValueFromStdin.test.mjs
 lib/extractLiveEnvValueFromStdin.test.mjs
 lib/fsyncPath.test.mjs
+lib/loadSecretsEnv.test.mjs
+lib/migrateLegacySecretsFileToActive.test.mjs
 lib/orphanRestoreTmp.test.mjs
 lib/recoverOldSecretValue.test.mjs
 lib/redisVerify.test.mjs

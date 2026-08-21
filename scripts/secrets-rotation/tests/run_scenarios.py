@@ -2306,6 +2306,149 @@ rm -f "$passfile_post"
 
 
 # ---------------------------------------------------------------------------
+# BLOQUE 8 — esquema TRANSICIONAL antes de S7: S6 debe poder inspeccionar
+# su artefacto de prueba contra un $SECRETS_FILE todavía "legacy-pre-s7"
+# (S6 corre siempre ANTES que S7 en el recorrido S1..S9, nunca puede
+# exigir que S7 ya haya migrado nada) SIN que loadSecretsEnv.mjs rechace
+# el archivo por las claves legacy — el fallo real reportado que motivó
+# este bloque. Ensayo COMPLETAMENTE DESECHABLE y encadenado S6->S7->S9:
+# ejecuta la sonda REAL de S6 (s6ArtifactMaintenance.mts, vía tsx real —
+# no necesita Redis/Postgres, solo importa secureArtifact.mts) contra el
+# archivo legacy, migra ESE MISMO archivo con el CLI real de S7
+# (migrateLegacySecretsFileToActive.mjs), y confirma que el resultado
+# satisface la precondición ESTRICTA de S9 (parseSecretsFile/buildChildEnv
+# SIN allowLegacyPreS7 — la misma que usa start-apps-web.mjs) — nunca
+# arranca apps/web real, nunca toca Docker/Postgres/Redis.
+# ---------------------------------------------------------------------------
+def scenario_s6_s7_s9_transitional_rehearsal():
+    name = "Escenario Bloque 8: S6->S7->S9 desechable con esquema legacy-pre-s7"
+    with tempfile.TemporaryDirectory(prefix="gapssa-rot-transitional-") as tmp:
+        repo = os.path.join(tmp, "repo")
+        os.makedirs(repo)
+        sr_dir = build_fixture_repo(repo)
+        secrets_file = os.path.join(tmp, "secrets.env")
+        # FIXTURE_ENV (forma legacy-pre-s7, sin REDIS_KEY_PREFIX -- a
+        # propósito: buildS6ArtifactProbeEnv nunca debe exigirla, solo
+        # buildS6CryptoProbeEnv la necesita) + REDIS_KEY_PREFIX explícita
+        # para poder ejercitar también la precondición de S9 al final.
+        with open(secrets_file, "w", encoding="utf-8") as f:
+            for k, v in FIXTURE_ENV.items():
+                f.write(f"{k}={v}\n")
+            f.write("REDIS_KEY_PREFIX=gapssafixture:\n")
+        os.chmod(secrets_file, 0o600)
+        legacy_email_value = FIXTURE_ENV["BOOKING_EMAIL_LOOKUP_HMAC_SECRET"]
+        legacy_access_token_value = FIXTURE_ENV["BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRET"]
+
+        node_lib = os.path.join(sr_dir, "lib")
+        run_tsx = os.path.join(node_lib, "run-tsx.mjs")
+        validate_probe_json = os.path.join(node_lib, "validateProbeJson.mjs")
+        migrate = os.path.join(node_lib, "migrateLegacySecretsFileToActive.mjs")
+        artifact_dir = os.path.join(tmp, "artifact-dir")
+        os.makedirs(artifact_dir, exist_ok=True)
+        artifact_path = os.path.join(artifact_dir, "s6-otp-probe.json")
+
+        ok = True
+
+        # --- Paso 1 (S6, ANTES de S7): inspect real contra el archivo
+        #     TODAVÍA legacy-pre-s7 -- exactamente el fallo reportado
+        #     ("S6 se detuvo de forma segura antes de enter_gate"), ahora
+        #     corregido. Real ejecución de tsx, sin Docker/Postgres/Redis. -
+        env_s6 = dict(os.environ)
+        env_s6["GAPSSA_ROTATION_ENV_PROJECTION"] = "s6-artifact"
+        proc = subprocess.run(
+            ["node", run_tsx, repo, secrets_file, os.path.join(sr_dir, "probes", "s6ArtifactMaintenance.mts"), "inspect", artifact_path, artifact_dir],
+            env=env_s6,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        validate = subprocess.run(["node", validate_probe_json, "s6-artifact-inspect"], input=proc.stdout, env=env_s6, capture_output=True, text=True, timeout=10)
+        if proc.returncode != 0 or validate.returncode != 0 or '"status":"absent"' not in validate.stdout:
+            report(name + " — paso 1 (S6 inspect real sobre legacy-pre-s7): éxito, status=absent", False, f"run-tsx rc={proc.returncode} stderr={proc.stderr!r}; validate rc={validate.returncode} stdout={validate.stdout!r} stderr={validate.stderr!r}")
+            ok = False
+        else:
+            report(name + " — paso 1 (S6 inspect real sobre legacy-pre-s7): éxito, status=absent", True)
+        if not assert_no_secret_in_transcript(proc.stdout + proc.stderr + validate.stdout + validate.stderr, [legacy_email_value, legacy_access_token_value], name + " — paso 1: el valor legacy real nunca aparece en la salida de la sonda"):
+            ok = False
+
+        # --- Paso 1b: la MISMA sonda, SIN la proyección s6-artifact (o
+        #     sea, buildChildEnv de siempre) debe seguir RECHAZANDO el
+        #     archivo legacy -- confirma que la tolerancia es exclusiva
+        #     de la proyección de S6, nunca el comportamiento por defecto.
+        proc_strict = subprocess.run(
+            ["node", run_tsx, repo, secrets_file, os.path.join(sr_dir, "probes", "s6ArtifactMaintenance.mts"), "inspect", artifact_path, artifact_dir],
+            env=os.environ,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if proc_strict.returncode == 0 or "no está en el inventario cerrado" not in proc_strict.stderr:
+            report(name + " — paso 1b (misma sonda SIN proyección S6): rechazada igual que siempre", False, f"rc={proc_strict.returncode} stderr={proc_strict.stderr!r}")
+            ok = False
+        else:
+            report(name + " — paso 1b (misma sonda SIN proyección S6): rechazada igual que siempre", True)
+        if "at " in proc_strict.stderr or run_tsx in proc_strict.stderr:
+            report(name + " — paso 1b: stderr saneado (sin traza de Node)", False, proc_strict.stderr)
+            ok = False
+        else:
+            report(name + " — paso 1b: stderr saneado (sin traza de Node)", True)
+
+        # --- Paso 2 (S7, único punto autorizado a leer las legacy): migra
+        #     el MISMO archivo con el CLI real. ---
+        proc_migrate = subprocess.run(["node", migrate, secrets_file], capture_output=True, text=True, timeout=20)
+        if proc_migrate.returncode != 0:
+            report(name + " — paso 2 (S7 migra legacy-pre-s7 -> active): exit 0", False, f"rc={proc_migrate.returncode} stderr={proc_migrate.stderr!r}")
+            ok = False
+        else:
+            report(name + " — paso 2 (S7 migra legacy-pre-s7 -> active): exit 0", True)
+        with open(secrets_file, encoding="utf-8") as f:
+            migrated_content = f.read()
+        expected_email_map = f'BOOKING_EMAIL_LOOKUP_HMAC_SECRETS={{"v1":"{legacy_email_value}"}}'
+        expected_at_map = f'BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRETS={{"v1":"{legacy_access_token_value}"}}'
+        if expected_email_map in migrated_content and expected_at_map in migrated_content:
+            report(name + " — paso 2: valor legacy preservado EXACTO bajo la versión v1 (verificabilidad histórica)", True)
+        else:
+            report(name + " — paso 2: valor legacy preservado EXACTO bajo la versión v1 (verificabilidad histórica)", False, migrated_content)
+            ok = False
+        if "BOOKING_EMAIL_LOOKUP_HMAC_SECRET=" + legacy_email_value in migrated_content.replace(expected_email_map, ""):
+            report(name + " — paso 2: la clave singular legacy ya NO existe en el archivo", False, migrated_content)
+            ok = False
+        else:
+            report(name + " — paso 2: la clave singular legacy ya NO existe en el archivo", True)
+
+        # --- Paso 3 (S9, precondición ESTRICTA): parseSecretsFile SIN
+        #     allowLegacyPreS7 (exactamente lo que start-apps-web.mjs usa)
+        #     debe aceptar el archivo YA migrado sin ningún flag especial. -
+        check_script = (
+            "import { parseSecretsFile } from " + repr(os.path.join(node_lib, "loadSecretsEnv.mjs")) + ";"
+            "const e = parseSecretsFile(" + repr(secrets_file) + ");"
+            "console.log(JSON.stringify({hasActive: typeof e.BOOKING_EMAIL_LOOKUP_HMAC_SECRETS === 'string', hasLegacy: e.BOOKING_EMAIL_LOOKUP_HMAC_SECRET !== undefined}));"
+        )
+        proc_s9 = subprocess.run(["node", "--input-type=module", "-e", check_script], capture_output=True, text=True, timeout=10)
+        if proc_s9.returncode != 0 or '"hasActive":true' not in proc_s9.stdout or '"hasLegacy":false' not in proc_s9.stdout:
+            report(name + " — paso 3 (precondición estricta de S9): el archivo migrado parsea SIN allowLegacyPreS7, sin legacy residual", False, f"rc={proc_s9.returncode} stdout={proc_s9.stdout!r} stderr={proc_s9.stderr!r}")
+            ok = False
+        else:
+            report(name + " — paso 3 (precondición estricta de S9): el archivo migrado parsea SIN allowLegacyPreS7, sin legacy residual", True)
+
+        # --- Paso 4: repetir la migración sobre el archivo YA migrado es
+        #     un no-op idempotente (nunca un segundo intento de leer una
+        #     legacy que ya no existe). ---
+        before_second = migrated_content
+        proc_migrate_again = subprocess.run(["node", migrate, secrets_file], capture_output=True, text=True, timeout=20)
+        with open(secrets_file, encoding="utf-8") as f:
+            after_second = f.read()
+        if proc_migrate_again.returncode == 0 and after_second == before_second:
+            report(name + " — paso 4: repetir la migración sobre un archivo ya activo es no-op (idempotente)", True)
+        else:
+            report(name + " — paso 4: repetir la migración sobre un archivo ya activo es no-op (idempotente)", False, f"rc={proc_migrate_again.returncode} changed={after_second != before_second}")
+            ok = False
+
+        if ok:
+            report(name, True)
+
+
+# ---------------------------------------------------------------------------
 # BLOQUE 3 — política de reejecución de S6 ante un artefacto existente:
 # absent siempre procede; valid+prepared bloquea (S9 debe consumirlo);
 # valid+cualquier otro estado bloquea y CONSERVA (nunca se retira en
@@ -2971,6 +3114,7 @@ def main():
     scenario_backup_rehearsal_no_plaintext_watcher()
     scenario_recover_old_secret_value_no_plaintext_watcher()
     scenario_backup_schema_tagging()
+    scenario_s6_s7_s9_transitional_rehearsal()
     scenario_s6_artifact_reexecution_policy()
     scenario_s6_missing_probe_script_fails_closed()
     scenario_s9_blocked_without_prior_gates()

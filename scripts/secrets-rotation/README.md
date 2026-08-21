@@ -1082,6 +1082,168 @@ compose` en la máquina, antes/después, diff automático). Última ejecución:
 `encryptedColumnsAllowlist.rotation`, `s6DynamicChecks.rotation`,
 `migration0008AccessTokenBackfill`.
 
+### Bloque 8 — esquema TRANSICIONAL antes de S7
+
+Un intento real de S6 contra un almacén externo todavía en formato
+anterior al rediseño versionado de S7 (`BOOKING_EMAIL_LOOKUP_HMAC_SECRET`/
+`BOOKING_REQUEST_ACCESS_TOKEN_HMAC_SECRET` singulares, sin versión —
+"legacy-pre-s7", ver `lib/backupSchema.mjs`) reprodujo el defecto que
+motiva este bloque: `lib/loadSecretsEnv.mjs::SECRETS_FILE_KEY_INVENTORY`
+es (y sigue siendo) estrictamente "active" — cualquier clave legacy en
+`$SECRETS_FILE` hacía que `buildChildEnv`/`parseSecretsFile` la
+rechazaran, y `run-tsx.mjs` no capturaba esa excepción: Node terminaba
+con una traza de pila sin sanear, sin imprimir ningún JSON, y el
+`validateProbeJson.mjs` de aguas abajo (conectado por una tubería) se
+quedaba leyendo un stdin vacío. Resultado observado: S6 se detenía de
+forma segura **antes** de `enter_gate` (la primera llamada de la puerta,
+`s6ArtifactMaintenance.mts inspect`, vive deliberadamente antes de esa
+frontera) — ningún backup, ningún cambio de estado, ningún secreto
+generado — pero con un mensaje de error que citaba una traza de Node en
+vez de un motivo claro.
+
+**Por qué el fallo era esperable, no un accidente**: `.env.example` (y por
+tanto todo `$SECRETS_FILE` que S1 crea copiándolo) nace ya en forma
+"active" desde el primer commit de este repo — así que el recorrido
+S1→S9 normal nunca ejercita el caso legacy. Este solo aparece cuando el
+almacén externo procede de una instalación anterior al rediseño
+versionado, y en ese caso concreto S6 (que corre siempre ANTES que S7)
+no puede exigir un esquema que todavía no existe.
+
+**Diseño del esquema transicional** (`lib/loadSecretsEnv.mjs` —
+`allowLegacyPreS7`, `LEGACY_PRE_S7_KEY_INVENTORY`,
+`detectSchemaVersionFromKeys`): `SECRETS_FILE_KEY_INVENTORY` NO se amplía
+— sigue siendo el inventario "active" puro, y todo llamador que no pase
+el flag (incluida `start-apps-web.mjs`, S9) conserva EXACTAMENTE el
+comportamiento de siempre: rechaza cualquier clave legacy, sin
+excepción. Un segundo inventario cerrado (`LEGACY_PRE_S7_KEY_INVENTORY`
+— el activo menos las 4 claves plurales/versionadas de booking-email/
+access-token, más las 2 legacy singulares) se activa solo con
+`{ allowLegacyPreS7: true }`, y solo tras detectar — por el CONTENIDO
+real del archivo, nunca por confianza ciega — que el archivo es
+"legacy-pre-s7" y no una mezcla ambigua de ambas formas.
+
+Dos proyecciones MÍNIMAS nuevas, exclusivas de las cuatro sondas de S6
+(nunca usadas por S7/S9):
+
+- `buildS6ArtifactProbeEnv` — `s6ArtifactMaintenance.mts`
+  (`inspect`/`remove`): esta sonda solo importa su módulo hermano
+  `secureArtifact.mts`, nunca `server/env.ts` — no necesita NINGÚN
+  secreto. Valida el archivo completo contra el inventario cerrado que
+  corresponda, pero no exige ni propaga nada de su contenido. Deliberado:
+  exigir aquí las mismas claves "reales" que sí necesitan las sondas
+  criptográficas bloquearía la propia inspección del artefacto — que se
+  ejecuta ANTES de `enter_gate` precisamente para poder fallar sin tocar
+  nada — ante cualquier archivo incompleto, no solo uno legacy (bug real
+  encontrado por `tests/run_scenarios.py::scenario_s6_artifact_reexecution_policy`
+  durante el desarrollo de este bloque: el fixture de esa prueba nunca
+  incluyó `REDIS_KEY_PREFIX`, y una primera versión de este cambio exigía
+  esa clave incluso para `inspect`).
+- `buildS6CryptoProbeEnv` — `s6PreRotationProbe.mts`/
+  `s6PostRotationVerification.mts`: estas sí importan `serverEnv`
+  transitivamente (`otpService.ts`/`redis.ts`/`payload.env.ts`), así que
+  necesitan que TODO el esquema Zod de `server/env.ts` valide, incluidos
+  7 campos de booking (9 variables) que ninguna de las dos sondas lee
+  jamás. Reciben los 8 valores REALES que sí usan
+  (`PAYLOAD_SECRET`/`OTP_HMAC_SECRET`/`AUTH_RATE_LIMIT_HMAC_SECRET` +
+  DSN/Redis) y placeholders opacos generados por CSPRNG en memoria (nunca
+  derivados de ningún valor real, legacy o activo) para el resto — el
+  valor legacy real de booking-email/access-token, si está presente en el
+  archivo, se VALIDA pero JAMÁS llega a ninguna de las cuatro sondas de
+  S6.
+
+`run-tsx.mjs` selecciona la proyección vía la variable de entorno del
+propio lanzador `GAPSSA_ROTATION_ENV_PROJECTION` (`s6-artifact` /
+`s6-crypto` / ausente = `buildChildEnv` de siempre) — nunca reenviada al
+proceso hijo. `gate_s6()` (rotate-all-interactive.sh) fija esa variable en
+sus 4 llamadas a `run-tsx.mjs`; S7/S9 no la fijan nunca. Construir el
+`env` puede lanzar (`SecretsFileParseError`) — se captura explícitamente
+en `run-tsx.mjs` para imprimir un único mensaje saneado (nunca una traza
+de Node, nunca un valor) y salir con el código 1 de siempre.
+
+**`run_probe_and_validate()`** (nueva función compartida en
+`rotate-all-interactive.sh`, sustituye las 6 tuberías
+`run-tsx.mjs | validateProbeJson.mjs` que gate_s6/gate_s7 ya tenían):
+captura la salida de `run-tsx.mjs` y comprueba su código de salida en un
+paso separado — si `run-tsx.mjs` falla, `validateProbeJson.mjs` NUNCA se
+invoca (antes sí, sobre un stdin vacío, produciendo el mensaje confuso
+"la salida no contiene ningún documento JSON" encima del error real).
+
+**Quién convierte cada clave legacy — precondición explícita S6→S7→S9**:
+ninguna puerta migraba el NOMBRE de las claves legacy en el archivo hasta
+este bloque (`s7MigrateAndAudit.mts`, la sonda de migración de S7, solo
+migra FILAS de la base de datos — asume que el archivo YA tiene forma de
+mapa versionado, porque transitivamente importa `serverEnv` igual que las
+sondas de S6). Nuevo módulo `lib/migrateLegacySecretsFileToActive.mjs`
+— el ÚNICO punto del sistema autorizado a leer las 2 claves legacy, y
+solo para migrarlas: `gate_s7()` lo invoca, ANTES de generar/activar
+ninguna versión nueva, si (y solo si) `current_secrets_schema_version()`
+todavía es "legacy-pre-s7". Preserva el valor legacy EXACTO bajo la
+versión `"v1"` del mapa correspondiente (nunca genera un valor nuevo aquí
+— cualquier HMAC/ciphertext ya calculado con ese valor sigue siendo
+verificable bajo esa misma versión, cero pérdida de verificabilidad
+histórica) y reescribe `$SECRETS_FILE` en el sitio, preservando verbatim
+cualquier otra línea (orden, comentarios, blancos). Idempotente: sobre un
+archivo ya "active" es un no-op que no escribe nada. Tras esto,
+`current_secrets_schema_version()` vuelve a ser "active" — S8/S9 nunca ven
+una clave legacy: `start-apps-web.mjs` (S9) sigue llamando a
+`buildChildEnv`/`parseSecretsFile` SIN `allowLegacyPreS7`, así que un
+archivo que todavía tuviera una clave legacy simplemente no arrancaría
+`apps/web` real, exactamente como antes de este bloque.
+
+**Pruebas nuevas** (ficheros SINTÉTICOS únicamente — ningún test de este
+bloque toca `.env`/`~/.gapssa-secrets` reales ni ejecuta S6/S7 real contra
+infraestructura): `lib/loadSecretsEnv.test.mjs` (34 aserciones —
+consistencia entre las dos copias independientes de
+`LEGACY_PRE_S7_KEY_INVENTORY`/versión de esquema, `detectSchemaVersionFromKeys`
+pura, `parseSecretsFile` con/sin `allowLegacyPreS7` incluida la mezcla
+plural+singular y la clave desconocida, `buildS6ArtifactProbeEnv` sin
+exigir ninguna clave real, `buildS6CryptoProbeEnv` con placeholders que
+nunca son el valor real y nunca fijos entre invocaciones);
+`lib/migrateLegacySecretsFileToActive.test.mjs` (23 aserciones — función
+pura y CLI completo: migración exitosa con preservación exacta del valor
+bajo v1, no-op sobre esquema ya activo con el archivo BYTE A BYTE
+intacto, legacy incompleta/vacía/mezclada rechazadas sin escribir nada,
+stderr saneado sin traza de Node). Nuevo escenario PTY/subproceso REAL
+`tests/run_scenarios.py::scenario_s6_s7_s9_transitional_rehearsal` (10
+aserciones) — encadena, contra tsx REAL (sin Docker/Postgres/Redis, la
+propia sonda de S6 no los necesita) y el CLI real de migración: sonda de
+S6 real sobre el archivo TODAVÍA legacy (status=absent, sin fuga del
+valor real) → la MISMA sonda sin la proyección de S6 sigue rechazando el
+archivo (confirma que la tolerancia es exclusiva de S6) → migración real
+con preservación bajo v1 → el archivo migrado satisface la precondición
+ESTRICTA de S9 sin ningún flag → repetir la migración es no-op.
+
+**Regresión real encontrada y corregida durante este bloque** (antes de
+llegar a verde): una primera versión de `buildS6CryptoProbeEnv` se usó,
+por error, para las CUATRO sondas de S6 (incluidas `inspect`/`remove`,
+que no necesitan ningún secreto) — `tests/run_scenarios.py::scenario_s6_artifact_reexecution_policy`
+(9 de sus aserciones) lo detectó: su fixture nunca incluyó
+`REDIS_KEY_PREFIX` (una clave sin relación alguna con legacy/active), y
+exigirla incondicionalmente rompía la propia inspección del artefacto —
+justo la operación que debe poder fallar SIN tocar nada. Corregido
+separando `buildS6ArtifactProbeEnv` (sin exigencias) de
+`buildS6CryptoProbeEnv` (exige solo lo que las sondas criptográficas
+usan de verdad).
+
+Última ejecución de este bloque: `run-node-tests.sh` 21/21 ficheros
+(incluidos los 2 nuevos), `lib.test.sh` 128/128 (sin cambios — este
+bloque no toca `lib.sh`), `tests/static_bash32_compat_guard.sh` 24/24,
+`tests/run_scenarios.py` 129/129 relevantes al cambio (4 fallos
+preexistentes de escenarios MariaDB/S3 reales, reproducidos idénticos
+contra el código sin este bloque — no relacionados, fuera del alcance de
+este bloque).
+
+**Procedimiento para reintentar ÚNICAMENTE S6** tras este bloque: `bash
+rotate-all-interactive.sh --only S6` — la inspección del artefacto (ahora
+tolerante a legacy-pre-s7) corre primero; si no hay artefacto pendiente,
+`enter_gate "S6"` toma backup (etiquetado con la versión de esquema REAL
+del archivo, activa o legacy-pre-s7) y las 3 sondas siguientes generan/
+verifican con la proyección mínima. Si el almacén sigue en legacy-pre-s7,
+S6 completa igual (nunca exige que S7 ya haya corrido); la migración de
+las 2 claves legacy ocurre la primera vez que se lanza `--only S7` (o el
+recorrido continuo sin `--only`), antes de generar/activar ninguna
+versión nueva.
+
 ## Lo que este directorio NUNCA hace por sí mismo
 
 - No decide cuándo rotar cada secreto sin preguntar — cada puerta exige tu

@@ -16,12 +16,38 @@
 //
 // El entorno del script hijo se construye con loadSecretsEnv.mjs — nunca
 // `...process.env` heredado sin filtrar, nunca un secreto en argv.
+//
+// `GAPSSA_ROTATION_ENV_PROJECTION` (variable del propio lanzador, NUNCA
+// reenviada al hijo) selecciona la proyección MÍNIMA de S6 (Bloque 8) en
+// vez de `buildChildEnv` — ambas toleran `$SECRETS_FILE` en esquema
+// "active" O "legacy-pre-s7" (S6 corre siempre ANTES que S7, nunca puede
+// exigir que S7 ya haya migrado nada), pero difieren en qué le pasan al
+// hijo:
+//   - "s6-artifact" -> `buildS6ArtifactProbeEnv` (s6ArtifactMaintenance.mts,
+//     inspect/remove): no necesita NINGÚN secreto (no importa
+//     `server/env.ts`) — solo valida el archivo, no exige ni copia nada
+//     de su contenido.
+//   - "s6-crypto"   -> `buildS6CryptoProbeEnv` (s6PreRotationProbe.mts/
+//     s6PostRotationVerification.mts): sí importa `serverEnv`
+//     transitivamente — recibe PAYLOAD_SECRET/OTP_HMAC_SECRET/
+//     AUTH_RATE_LIMIT_HMAC_SECRET reales más placeholders opacos para los
+//     campos de booking que Zod exige pero esta sonda nunca lee — nunca
+//     el valor legacy real.
+// Ausente/cualquier otro valor -> `buildChildEnv` de siempre, sin cambios
+// (S7/S9).
+//
+// Construir el `env` puede lanzar (`SecretsFileParseError` si
+// `$SECRETS_FILE` tiene una clave desconocida, mezcla legacy/active,
+// etc.) — se captura aquí explícitamente para imprimir SOLO un mensaje de
+// una línea (nunca la traza de Node, que citaría rutas/números de línea
+// del propio código fuente de este lanzador, no del archivo externo) y
+// salir con el mismo código 1 de siempre, nunca uno distinto.
 
 import { existsSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 
-import { buildChildEnv } from './loadSecretsEnv.mjs'
+import { buildChildEnv, buildS6ArtifactProbeEnv, buildS6CryptoProbeEnv } from './loadSecretsEnv.mjs'
 
 const [, , repoRoot, secretsFile, scriptPath, ...scriptArgs] = process.argv
 
@@ -38,13 +64,27 @@ if (!existsSync(tsxCliPath)) {
 }
 
 const appsWebDir = path.join(repoRoot, 'apps', 'web')
-const env = buildChildEnv(secretsFile, {
+const extraVars = {
   // Los scripts .mts desechables de S6/S7 importan módulos de
   // apps/web/src usando el mismo condition set que su propio dev server
   // (server/env.ts, etc.) — igual que la v2 ya hacía vía
   // NODE_OPTIONS=--conditions=react-server.
   NODE_OPTIONS: '--conditions=react-server',
-})
+}
+
+const PROJECTION_BUILDERS = {
+  's6-artifact': buildS6ArtifactProbeEnv,
+  's6-crypto': buildS6CryptoProbeEnv,
+}
+const buildEnv = PROJECTION_BUILDERS[process.env.GAPSSA_ROTATION_ENV_PROJECTION] ?? buildChildEnv
+
+let env
+try {
+  env = buildEnv(secretsFile, extraVars)
+} catch (err) {
+  console.error(`ERROR al construir el entorno del proceso hijo: ${err instanceof Error ? err.message : 'error desconocido'}`)
+  process.exit(1)
+}
 
 const child = spawn(process.execPath, [tsxCliPath, scriptPath, ...scriptArgs], {
   cwd: appsWebDir,
