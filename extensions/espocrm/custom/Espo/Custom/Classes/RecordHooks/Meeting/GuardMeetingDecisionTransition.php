@@ -101,6 +101,12 @@ class GuardMeetingDecisionTransition implements SaveHook
         // devolvería el mismo `$requested` para este atributo).
         $original = $entity->getFetched('cEstadoReserva');
 
+        if ($original !== MeetingDecisionTransitionPolicy::guardedSourceState()) {
+            // Si el estado de origen no es PendingCenterApproval, no es la transición
+            // de decisión web que esta guarda protege — se permite la edición libre.
+            return;
+        }
+
         if (
             is_string($original)
             && AtomicDecisionContext::authorizes((string) $entity->getId(), $original, $requested)

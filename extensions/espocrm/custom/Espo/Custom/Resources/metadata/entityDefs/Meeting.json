@@ -1,5 +1,17 @@
 {
     "fields": {
+        "duration": {
+            "options": [
+                900,
+                1800,
+                2700,
+                3600,
+                5400,
+                7200,
+                10800,
+                86400
+            ]
+        },
         "cBookingRequestId": {
             "type": "varchar",
             "required": false,
@@ -17,6 +29,7 @@
             "required": false,
             "audited": true,
             "options": [
+                "",
                 "RequestReceived",
                 "PendingGuardianAuthorization",
                 "PendingAssessment",
@@ -30,6 +43,8 @@
                 "RescheduleRequested",
                 "ScheduleConflict"
             ],
+            "default": null,
+            "isNullable": true,
             "style": [],
             "maxLength": 100,
             "isCustom": true
@@ -39,10 +54,13 @@
             "required": false,
             "audited": true,
             "options": [
+                "",
                 "Approved",
                 "RejectedByStaff",
                 "ApprovalExpired"
             ],
+            "default": null,
+            "isNullable": true,
             "style": [],
             "maxLength": 32,
             "isCustom": true

@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation'
 
 import { getFamilias } from '@/lib/content/familias'
 import { mediaUrl } from '@/lib/content/media'
-import { getTratamientos, precioLabel } from '@/lib/content/tratamientos'
+import { getTarifaTratamiento, getTratamientos, precioLabel } from '@/lib/content/tratamientos'
 import { publicEnv } from '@/lib/env.public'
 import { getDictionary } from '@/lib/i18n/dictionary'
 import { isLocale } from '@/lib/i18n/locales'
@@ -76,8 +76,9 @@ export default async function CatalogoPage({ params, searchParams }: Args) {
             ) : (
               <div className={styles.grid}>
                 {items.map((tratamiento) => {
-                  const imgUrl = mediaUrl(tratamiento.imagenes?.[0], 'card')
-                  const precio = precioLabel(tratamiento.indicadorPrecio, dict)
+                  const imgUrl = mediaUrl(tratamiento.imagenes?.[0], 'card') ?? mediaUrl(familia.imagen, 'card')
+                  const tarifa = getTarifaTratamiento(tratamiento.slug)
+                  const precio = tarifa?.precio ?? precioLabel(tratamiento.indicadorPrecio, dict)
                   return (
                     <article key={tratamiento.id} className={styles.card}>
                       {imgUrl ? (
@@ -88,11 +89,10 @@ export default async function CatalogoPage({ params, searchParams }: Args) {
                       <div className={styles.cardBody}>
                         <h3 className={styles.cardTitle}>{tratamiento.titulo}</h3>
                         {tratamiento.descripcion ? <p className={styles.cardDescripcion}>{tratamiento.descripcion}</p> : null}
-                        {precio ? (
-                          <div className={styles.cardFooter}>
-                            <span className={styles.cardPrecio}>{precio}</span>
-                          </div>
-                        ) : null}
+                        <div className={styles.cardFooter}>
+                          {precio ? <span className={styles.cardPrecio}>{precio}</span> : null}
+                          {tarifa?.duracion ? <span className={styles.cardDuracion}>⏱️ {tarifa.duracion}</span> : null}
+                        </div>
                         <Link href={`/${locale}/tratamientos/${tratamiento.slug}`} className={styles.cardLink}>
                           {dict.common.verMas}
                         </Link>

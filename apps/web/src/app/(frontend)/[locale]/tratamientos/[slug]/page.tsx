@@ -3,7 +3,7 @@ import Image from 'next/image'
 import { notFound } from 'next/navigation'
 
 import { mediaAlt, mediaUrl } from '@/lib/content/media'
-import { getTratamientoPorSlug, precioLabel } from '@/lib/content/tratamientos'
+import { getTarifaTratamiento, getTratamientoPorSlug, precioLabel } from '@/lib/content/tratamientos'
 import { publicEnv } from '@/lib/env.public'
 import { getDictionary } from '@/lib/i18n/dictionary'
 import { isLocale } from '@/lib/i18n/locales'
@@ -60,8 +60,10 @@ export default async function TratamientoDetallePage({ params }: Args) {
   }
 
   const familia = typeof tratamiento.familia === 'number' ? undefined : tratamiento.familia
-  const imgUrl = mediaUrl(tratamiento.imagenes?.[0], 'hero')
-  const precio = precioLabel(tratamiento.indicadorPrecio, dict)
+  const imagen = tratamiento.imagenes?.[0] ?? familia?.imagen
+  const imgUrl = mediaUrl(imagen, 'hero')
+  const tarifa = getTarifaTratamiento(slug)
+  const precio = tarifa?.precio ?? precioLabel(tratamiento.indicadorPrecio, dict)
 
   const breadcrumbItems = [
     { label: dict.common.inicioBreadcrumb, href: `/${locale}` },
@@ -81,7 +83,7 @@ export default async function TratamientoDetallePage({ params }: Args) {
 
       <div className={styles.grid}>
         <div className={styles.imageWrapper}>
-          {imgUrl ? <Image src={imgUrl} alt={mediaAlt(tratamiento.imagenes?.[0])} fill sizes="(min-width: 900px) 50vw, 100vw" /> : null}
+          {imgUrl ? <Image src={imgUrl} alt={mediaAlt(imagen)} fill sizes="(min-width: 900px) 50vw, 100vw" /> : null}
         </div>
 
         <div>
@@ -89,7 +91,10 @@ export default async function TratamientoDetallePage({ params }: Args) {
             <span className={styles.familiaBadge}>{familia.titulo}</span>
           ) : null}
           <h1 className={styles.titulo}>{tratamiento.titulo}</h1>
-          {precio ? <p className={styles.precio}>{precio}</p> : null}
+          <div className={styles.tarifaBlock}>
+            {precio ? <span className={styles.precio}>💳 {precio}</span> : null}
+            {tarifa?.duracion ? <span className={styles.duracion}>⏱️ {tarifa.duracion}</span> : null}
+          </div>
           {tratamiento.descripcion ? <p className={styles.descripcion}>{tratamiento.descripcion}</p> : null}
 
           <a href={`/${locale}/reservar?tratamiento=${tratamiento.slug}`} className={styles.reservarBoton}>

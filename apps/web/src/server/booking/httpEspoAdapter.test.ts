@@ -51,7 +51,9 @@ describe('autenticación', () => {
   it('una API key correcta permite leer el catálogo', async () => {
     server.treatments.push({ id: 't1', name: 'Masaje', familia: 'Masajes', duracionMinutos: 60, activo: 'true' })
     const result = await adapter.listTreatments()
-    expect(result).toEqual([{ id: 't1', name: 'Masaje', familia: 'Masajes', durationMinutes: 60 }])
+    expect(result).toEqual([
+      { id: 't1', name: 'Masaje', familia: 'Masajes', durationMinutes: 60, precioOrientativo: null, estadoPrecio: null },
+    ])
   })
 
   it('una API key incorrecta se rechaza con 401, nunca se filtra al mensaje de error', async () => {

@@ -524,11 +524,11 @@ export const TRATAMIENTOS_SEED: TratamientoSeed[] = [
     },
   },
 
-  // ── Aparatología ─────────────────────────────────────────────────────
+  // ── Aparatología Corporal (masajes) ──────────────────────────────────
   {
     slug: 'presoterapia',
-    familiaSlug: 'aparatologia',
-    orden: 1,
+    familiaSlug: 'masajes',
+    orden: 14,
     porLocale: {
       es: {
         titulo: 'Presoterapia',
@@ -564,8 +564,8 @@ export const TRATAMIENTOS_SEED: TratamientoSeed[] = [
   },
   {
     slug: 'presoterapia-masaje',
-    familiaSlug: 'aparatologia',
-    orden: 2,
+    familiaSlug: 'masajes',
+    orden: 15,
     porLocale: {
       es: {
         titulo: 'Presoterapia + masaje',
@@ -601,8 +601,8 @@ export const TRATAMIENTOS_SEED: TratamientoSeed[] = [
   },
   {
     slug: 'lipolaser-radiofrecuencia',
-    familiaSlug: 'aparatologia',
-    orden: 3,
+    familiaSlug: 'masajes',
+    orden: 16,
     destacado: true,
     porLocale: {
       es: {
@@ -639,8 +639,8 @@ export const TRATAMIENTOS_SEED: TratamientoSeed[] = [
   },
   {
     slug: 'vacum',
-    familiaSlug: 'aparatologia',
-    orden: 4,
+    familiaSlug: 'masajes',
+    orden: 17,
     porLocale: {
       es: {
         titulo: 'Vacum',
@@ -676,8 +676,8 @@ export const TRATAMIENTOS_SEED: TratamientoSeed[] = [
   },
   {
     slug: 'laser-fisio-dolor',
-    familiaSlug: 'aparatologia',
-    orden: 5,
+    familiaSlug: 'masajes',
+    orden: 18,
     porLocale: {
       es: {
         titulo: 'Láser fisio dolor',
@@ -1414,6 +1414,137 @@ export const TRATAMIENTOS_SEED: TratamientoSeed[] = [
         descripcion: 'Depilação da metade inferior da perna.',
         beneficios: ['Opção mais breve', 'Ideal para manutenção'],
       },
+    },
+  },
+  // ── Depilación Láser ──────────────────────────────────────────────────
+  {
+    slug: 'laser-patillas',
+    familiaSlug: 'depilacion-laser',
+    orden: 1,
+    porLocale: {
+      es: { titulo: 'Láser patillas', descripcion: 'Depilación láser en patillas para una definición facial precisa.', beneficios: ['Eliminación progresiva del vello', 'Sesión rápida de 15 min'] },
+      ca: { titulo: 'Làser patilles', descripcion: 'Depilació làser a les patilles per a una definició facial precisa.', beneficios: ['Eliminació progressiva del pèl', 'Sessió ràpida de 15 min'] },
+      en: { titulo: 'Laser sideburns', descripcion: 'Laser hair removal on sideburns for precise facial definition.', beneficios: ['Progressive hair removal', 'Quick 15 min session'] },
+      it: { titulo: 'Laser basette', descripcion: 'Depilazione laser sulle basette per una definición facciale precisa.', beneficios: ['Eliminazione progressiva dei peli', 'Seduta rapida da 15 min'] },
+      fr: { titulo: 'Laser favoris', descripcion: 'Épilation laser des favoris pour une définition faciale précise.', beneficios: ['Élimination progressive des poils', 'Séance rapide de 15 min'] },
+      pt: { titulo: 'Laser patilhas', descripcion: 'Depilação laser nas patilhas para uma definição facial precisa.', beneficios: ['Eliminação progressiva do pelo', 'Sessão rápida de 15 min'] },
+    },
+  },
+  {
+    slug: 'laser-menton',
+    familiaSlug: 'depilacion-laser',
+    orden: 2,
+    porLocale: {
+      es: { titulo: 'Láser mentón', descripcion: 'Tratamiento láser en mentón para piel suave y libre de vello.', beneficios: ['Resultados duraderos', 'Zona delicada tratada con cuidado'] },
+      ca: { titulo: 'Làser barbeta', descripcion: 'Tractament làser a la barbeta per a una pell suau i lliure de pèl.', beneficios: ['Resultats duradors', 'Zona delicada tractada amb cura'] },
+      en: { titulo: 'Laser chin', descripcion: 'Laser treatment on the chin for smooth, hair-free skin.', beneficios: ['Long-lasting results', 'Delicate area treated with care'] },
+      it: { titulo: 'Laser mento', descripcion: 'Trattamento laser sul mento per una pelle liscia e senza peli.', beneficios: ['Risultati duraturi', 'Zona delicata trattata con cura'] },
+      fr: { titulo: 'Laser menton', descripcion: 'Soin laser du menton pour une peau douce et sans poils.', beneficios: ['Résultats durables', 'Zone délicate traitée avec soin'] },
+      pt: { titulo: 'Laser queixo', descripcion: 'Tratamento laser no queixo para pele suave e livre de pelos.', beneficios: ['Resultados duradouros', 'Zona delicada tratada com cuidado'] },
+    },
+  },
+  {
+    slug: 'laser-axilas',
+    familiaSlug: 'depilacion-laser',
+    orden: 3,
+    porLocale: {
+      es: { titulo: 'Láser axilas', descripcion: 'Depilación láser de axilas eficaz y confortable.', beneficios: ['Piel suave y libre de irritaciones', 'Reducción duradera del vello'] },
+      ca: { titulo: 'Làser aixelles', descripcion: 'Depilació làser d’aixelles eficaç i confortable.', beneficios: ['Pell suau i lliure d’irritacions', 'Reducció duradora del pèl'] },
+      en: { titulo: 'Laser underarms', descripcion: 'Effective and comfortable underarm laser hair removal.', beneficios: ['Smooth, irritation-free skin', 'Long-lasting hair reduction'] },
+      it: { titulo: 'Laser ascelle', descripcion: 'Depilazione laser delle ascelle efficace e confortevole.', beneficios: ['Pelle liscia e senza irritazioni', 'Riduzione duratura dei peli'] },
+      fr: { titulo: 'Laser aisselles', descripcion: 'Épilation laser des aisselles efficace et confortable.', beneficios: ['Peau douce sans irritation', 'Réduction durable de la pilosité'] },
+      pt: { titulo: 'Laser axilas', descripcion: 'Depilação laser de axilas eficaz e confortável.', beneficios: ['Pele suave e sem irritações', 'Redução duradoura do pelo'] },
+    },
+  },
+  {
+    slug: 'laser-espalda',
+    familiaSlug: 'depilacion-laser',
+    orden: 4,
+    porLocale: {
+      es: { titulo: 'Láser espalda completa', descripcion: 'Depilación láser completa en la zona de la espalda.', beneficios: ['Cobertura completa', 'Piel limpia y renovada'] },
+      ca: { titulo: 'Làser esquena completa', descripcion: 'Depilació làser completa a la zona de l’esquena.', beneficios: ['Cobertura completa', 'Pell neta i renovada'] },
+      en: { titulo: 'Laser full back', descripcion: 'Full back laser hair removal.', beneficios: ['Complete coverage', 'Clean and refreshed skin'] },
+      it: { titulo: 'Laser schiena completa', descripcion: 'Depilazione laser completa sulla schiena.', beneficios: ['Copertura completa', 'Pelle pulita e rinnovata'] },
+      fr: { titulo: 'Laser dos complet', descripcion: 'Épilation laser complète du dos.', beneficios: ['Couverture complète', 'Peau nette et rénovée'] },
+      pt: { titulo: 'Laser costas completas', descripcion: 'Depilação laser completa na zona das costas.', beneficios: ['Cobertura completa', 'Pele limpa e renovada'] },
+    },
+  },
+  {
+    slug: 'laser-ingles-integrales',
+    familiaSlug: 'depilacion-laser',
+    orden: 5,
+    porLocale: {
+      es: { titulo: 'Láser ingles integrales', descripcion: 'Depilación láser completa de la zona íntima.', beneficios: ['Máxima comodidad y suavidad', 'Resultados duraderos'] },
+      ca: { titulo: 'Làser engonal integral', descripcion: 'Depilació làser completa de la zona íntima.', beneficios: ['Màxima comoditat i suavitat', 'Resultats duradors'] },
+      en: { titulo: 'Laser Hollywood bikini', descripcion: 'Full laser hair removal of the intimate area.', beneficios: ['Maximum comfort and smoothness', 'Long-lasting results'] },
+      it: { titulo: 'Laser inguine integrale', descripcion: 'Depilazione laser completa della zona intima.', beneficios: ['Massimo comfort e morbidezza', 'Risultati duraturi'] },
+      fr: { titulo: 'Laser maillot intégral', descripcion: 'Épilation laser complète de la zone intime.', beneficios: ['Confort et douceur maximales', 'Résultats durables'] },
+      pt: { titulo: 'Laser virilha integral', descripcion: 'Depilação laser completa da zona íntima.', beneficios: ['Conforto e suavidade máximos', 'Resultados duradouros'] },
+    },
+  },
+  {
+    slug: 'laser-labio',
+    familiaSlug: 'depilacion-laser',
+    orden: 6,
+    porLocale: {
+      es: { titulo: 'Láser labio superior', descripcion: 'Depilación láser de labio superior rápida y eficaz.', beneficios: ['Tratamiento express de 10 min', 'Piel tersa'] },
+      ca: { titulo: 'Làser llavi superior', descripcion: 'Depilació làser de llavi superior ràpida i eficaç.', beneficios: ['Tractament express de 10 min', 'Pell tersa'] },
+      en: { titulo: 'Laser upper lip', descripcion: 'Fast and effective upper lip laser hair removal.', beneficios: ['Express 10 min treatment', 'Smooth skin'] },
+      it: { titulo: 'Laser labbro superiore', descripcion: 'Depilazione laser del labbro superiore rapida ed efficace.', beneficios: ['Trattamento express da 10 min', 'Pelle liscia'] },
+      fr: { titulo: 'Laser lèvre supérieure', descripcion: 'Épilation laser de la lèvre supérieure rapide et efficace.', beneficios: ['Soin express de 10 min', 'Peau lisse'] },
+      pt: { titulo: 'Laser lábio superior', descripcion: 'Depilação laser de lábio superior rápida e eficaz.', beneficios: ['Tratamento express de 10 min', 'Pele suave'] },
+    },
+  },
+  {
+    slug: 'laser-medias-piernas',
+    familiaSlug: 'depilacion-laser',
+    orden: 7,
+    porLocale: {
+      es: { titulo: 'Láser medias piernas', descripcion: 'Depilación láser en gemelos y espinillas.', beneficios: ['Piernas suaves sin rasurado constante', 'Sensación de ligereza'] },
+      ca: { titulo: 'Làser mitges cames', descripcion: 'Depilació làser a bessons i espinelles.', beneficios: ['Cames suaus sense raspat constant', 'Sensació de lleugeresa'] },
+      en: { titulo: 'Laser half legs', descripcion: 'Laser hair removal on calves and shins.', beneficios: ['Smooth legs without constant shaving', 'Light feeling'] },
+      it: { titulo: 'Laser mezza gamba', descripcion: 'Depilazione laser su polpacci e stinchi.', beneficios: ['Gambe lisce senza rasatura costante', 'Sensazione di leggerezza'] },
+      fr: { titulo: 'Laser demi-jambes', descripcion: 'Épilation laser des mollets et tibias.', beneficios: ['Jambes douces sans rasage quotidien', 'Sensation de légèreté'] },
+      pt: { titulo: 'Laser meias pernas', descripcion: 'Depilação laser nas barrigas das pernas e canelas.', beneficios: ['Pernas suaves sem depilação constante', 'Sensação de leveza'] },
+    },
+  },
+  {
+    slug: 'laser-piernas-completas',
+    familiaSlug: 'depilacion-laser',
+    orden: 8,
+    porLocale: {
+      es: { titulo: 'Láser piernas completas', descripcion: 'Depilación láser en piernas enteras de muslo a tobillos.', beneficios: ['Tratamiento integral', 'Resultados visibles desde las primeras sesiones'] },
+      ca: { titulo: 'Làser cames completes', descripcion: 'Depilació làser a cames senceres de cuixa a tobells.', beneficios: ['Tractament integral', 'Resultats visibles des de les primeres sessions'] },
+      en: { titulo: 'Laser full legs', descripcion: 'Full leg laser hair removal from thighs to ankles.', beneficios: ['Comprehensive treatment', 'Visible results from early sessions'] },
+      it: { titulo: 'Laser gambe intere', descripcion: 'Depilazione laser su gambe intere dalle cosce alle caviglie.', beneficios: ['Trattamento integrale', 'Risultati visibili fin dalle prime sedute'] },
+      fr: { titulo: 'Laser jambes complètes', descripcion: 'Épilation laser complète des cuisses aux chevilles.', beneficios: ['Soin intégral', 'Résultats visibles dès les premières séances'] },
+      pt: { titulo: 'Laser pernas completas', descripcion: 'Depilação laser em pernas inteiras da coxa aos tornozelos.', beneficios: ['Tratamento integral', 'Resultados visíveis desde as primeiras sessões'] },
+    },
+  },
+  {
+    slug: 'laser-pecho',
+    familiaSlug: 'depilacion-laser',
+    orden: 9,
+    porLocale: {
+      es: { titulo: 'Láser pecho', descripcion: 'Depilación láser en la zona pectoral.', beneficios: ['Piel limpia', 'Sesión confortable de 30 min'] },
+      ca: { titulo: 'Làser pit', descripcion: 'Depilació làser a la zona pectoral.', beneficios: ['Pell neta', 'Sessió meva confortable de 30 min'] },
+      en: { titulo: 'Laser chest', descripcion: 'Laser hair removal on the chest area.', beneficios: ['Clear skin', 'Comfortable 30 min session'] },
+      it: { titulo: 'Laser petto', descripcion: 'Depilazione laser nella zona del petto.', beneficios: ['Pelle liscia', 'Seduta confortevole da 30 min'] },
+      fr: { titulo: 'Laser torse', descripcion: 'Épilation laser de la zone du torse.', beneficios: ['Peau nette', 'Séance confortable de 30 min'] },
+      pt: { titulo: 'Laser peito', descripcion: 'Depilação laser na zona peitoral.', beneficios: ['Pele limpa', 'Sessão confortável de 30 min'] },
+    },
+  },
+  {
+    slug: 'laser-ingles-brasilenas',
+    familiaSlug: 'depilacion-laser',
+    orden: 10,
+    porLocale: {
+      es: { titulo: 'Láser ingles brasileñas', descripcion: 'Depilación láser de diseño brasileño en la zona de la ingle.', beneficios: ['Definición precisa', 'Higiene y suavidad duradera'] },
+      ca: { titulo: 'Làser engonal brasiler', descripcion: 'Depilació làser de disseny brasiler a la zona de l’engonal.', beneficios: ['Definició precisa', 'Higiene i suavitat duradora'] },
+      en: { titulo: 'Laser Brazilian bikini', descripcion: 'Brazilian style laser hair removal in the bikini area.', beneficios: ['Precise definition', 'Long-lasting hygiene and smoothness'] },
+      it: { titulo: 'Laser inguine brasiliana', descripcion: 'Depilazione laser in stile brasiliano nella zona dell’inguine.', beneficios: ['Definizione precisa', 'Igiene e morbidezza duratura'] },
+      fr: { titulo: 'Laser maillot brésilien', descripcion: 'Épilation laser style brésilien de la zone du maillot.', beneficios: ['Définition précise', 'Hygiène et douceur durables'] },
+      pt: { titulo: 'Laser virilha brasileira', descripcion: 'Depilação laser estilo brasileiro na zona da virilha.', beneficios: ['Definição precisa', 'Higiene e suavidade duradouras'] },
     },
   },
 

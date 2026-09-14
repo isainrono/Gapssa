@@ -59,22 +59,41 @@ class GuardMeetingResolutionReasonConsistency implements SaveHook
         }
 
         $reason = $entity->get('cMotivoResolucionReserva');
+        $cEstadoReserva = $entity->get('cEstadoReserva');
 
-        if ($reason === null || $reason === '') {
-            // Sin motivo -> nada que validar. Cualquier otro estado
-            // (RequestReceived, PendingCenterApproval, etc.) debe llegar
-            // aquí siempre así — nunca se inventa un motivo para ellos.
+        if ($cEstadoReserva === null || $cEstadoReserva === '') {
+            // Cita normal/manual del calendario fuera del flujo de reservas web.
+            // Limpia cualquier motivo enviado por la UI y permite guardar sin conflicto.
+            if ($reason !== null && $reason !== '') {
+                $entity->set('cMotivoResolucionReserva', null);
+            }
             return;
         }
 
-        $cEstadoReserva = $entity->get('cEstadoReserva');
+        if ($cEstadoReserva === 'Confirmed') {
+            // En Confirmed, si se envió un motivo ajeno a Approved, auto-normalizar a Approved.
+            if ($reason !== null && $reason !== '' && $reason !== MeetingResolutionReason::APPROVED) {
+                $entity->set('cMotivoResolucionReserva', MeetingResolutionReason::APPROVED);
+            }
+            return;
+        }
 
-        if (!is_string($cEstadoReserva) || !MeetingResolutionPolicy::isCompatible($cEstadoReserva, (string) $reason)) {
-            throw Conflict::createWithBody(
-                'cMotivoResolucionReserva incompatible con cEstadoReserva — combinación rechazada. '
-                    . 'Este par de campos solo puede escribirse mediante la acción atómica GapssaMeetingDecision.',
-                'meeting_resolution_reason_incompatible',
-            );
+        if ($cEstadoReserva === 'Canceled') {
+            // En Canceled, si se envió un motivo no compatible, auto-normalizar a RejectedByStaff.
+            if (
+                $reason !== null
+                && $reason !== ''
+                && !in_array($reason, [MeetingResolutionReason::REJECTED_BY_STAFF, MeetingResolutionReason::APPROVAL_EXPIRED], true)
+            ) {
+                $entity->set('cMotivoResolucionReserva', MeetingResolutionReason::REJECTED_BY_STAFF);
+            }
+            return;
+        }
+
+        // Para cualquier otro estado (Completed, ClientArrived, InTreatment, NoShow, RequestReceived, etc.):
+        // El motivo de resolución web no aplica -> auto-limpiar a null.
+        if ($reason !== null && $reason !== '') {
+            $entity->set('cMotivoResolucionReserva', null);
         }
     }
 }

@@ -26,11 +26,28 @@
   margin-bottom: var(--space-4);
 }
 
+.tarifaBlock {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin-bottom: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-alt);
+  border-left: 3px solid var(--color-gold);
+  width: fit-content;
+}
+
 .precio {
   font-family: var(--font-serif);
-  font-size: 1.5rem;
+  font-size: 1.35rem;
   color: var(--color-gold);
-  margin-bottom: var(--space-5);
+  font-weight: 600;
+}
+
+.duracion {
+  font-size: var(--text-body);
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .descripcion {

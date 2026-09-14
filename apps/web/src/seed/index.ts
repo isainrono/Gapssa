@@ -162,12 +162,12 @@ async function seedContenidoSobreGapssa(payload: PayloadClient, mediaIds: Record
 }
 
 const FAMILIA_IMAGEN_POR_SLUG: Record<string, string> = {
-  masajes: 'masaje',
-  aparatologia: 'tratamiento-reafirmante',
-  depilacion: 'depilacion-facial',
   faciales: 'tratamiento-facial',
-  unas: 'manicura',
   'pestanas-cejas': 'hidratacion-facial',
+  depilacion: 'depilacion-facial',
+  'depilacion-laser': 'depilacion-facial',
+  unas: 'manicura',
+  masajes: 'masajes-masaje-relajante',
 }
 
 async function seedFamilias(payload: PayloadClient, mediaIds: Record<string, number>): Promise<Record<string, number>> {
@@ -213,15 +213,105 @@ async function seedFamilias(payload: PayloadClient, mediaIds: Record<string, num
     }
   }
 
+  // Ocultar familias obsoletas que no están en la lista oficial (ej. aparatologia)
+  const validSlugs = FAMILIAS_SEED.map((f) => f.slug)
+  const obsoleteFamilias = await payload.find({
+    collection: 'familias-tratamiento',
+    where: { slug: { not_in: validSlugs } },
+    limit: 100,
+    overrideAccess: true,
+  })
+  for (const doc of obsoleteFamilias.docs) {
+    await payload.update({
+      collection: 'familias-tratamiento',
+      id: doc.id,
+      data: { visible: false },
+      overrideAccess: true,
+    })
+  }
+
   return familiaIdPorSlug
 }
 
 const DESTACADO_IMAGEN_POR_SLUG: Record<string, string> = {
-  'masaje-relajante': 'masaje',
   'lipolaser-radiofrecuencia': 'radiofrecuencia-facial',
-  'limpieza-facial-profunda': 'tratamiento-facial',
-  'manicura-semipermanente': 'manicura',
-  'lifting-pestanas': 'hidratacion-facial',
+
+  // Uñas (fotos oficiales)
+  'manicura-express': 'unas-manicura-express',
+  'manicura-semipermanente': 'unas-manicura-semipermanente',
+  'manicura-tradicional': 'unas-manicura-tradicional',
+  'parafina-manos': 'unas-parafina-manos',
+  'pedicura-express': 'unas-pedicura-express',
+  'pedicura-semipermanente': 'unas-pedicura-semipermanente',
+  'pedicura-tradicional': 'unas-pedicura-tradicional',
+
+  // Faciales (fotos oficiales)
+  'limpieza-facial-basica': 'faciales-limpieza-basica',
+  'limpieza-facial-profunda': 'faciales-limpieza-profunda',
+  'mesoterapia-estetica': 'faciales-mesoterapia-estetica',
+  'microneedling': 'faciales-microneedling',
+  'dermapen': 'faciales-dermapen',
+  'radiofrecuencia-facial': 'faciales-radiofrecuencia-facial',
+  'peeling-prx': 'faciales-peeling-prx',
+  'skinpen': 'faciales-skinpen',
+  'laser-carbono': 'faciales-laser-carbono',
+
+  // Pestañas y cejas (fotos oficiales)
+  'lifting-pestanas': 'pestanas-cejas-lifting-pestanas',
+  'lifting-pestanas-tinte': 'pestanas-cejas-lifting-pestanas-tinte',
+  'tinte-pestanas-cejas': 'pestanas-cejas-tinte-pestanas-cejas',
+  'laminado-cejas': 'pestanas-cejas-laminado-cejas',
+
+  // Depilación (fotos oficiales)
+  'depilacion-diseno-cejas': 'depilacion-diseno-cejas',
+  'depilacion-cejas': 'depilacion-cejas',
+  'depilacion-labio-superior': 'depilacion-labio-superior',
+  'depilacion-menton': 'depilacion-menton',
+  'depilacion-patillas': 'depilacion-patillas',
+  'depilacion-facial-completa': 'depilacion-facial-completa',
+  'depilacion-axilas': 'depilacion-axilas',
+  'depilacion-espalda': 'depilacion-espalda',
+  'depilacion-brazos': 'depilacion-brazos',
+  'depilacion-medio-brazo': 'depilacion-medio-brazo',
+  'depilacion-pecho': 'depilacion-pecho',
+  'depilacion-abdomen': 'depilacion-abdomen',
+  'depilacion-gluteos': 'depilacion-gluteos',
+  'depilacion-perianal': 'depilacion-perianal',
+  'depilacion-ingles-brasilenas': 'depilacion-ingles-brasilenas',
+  'depilacion-ingles-normales': 'depilacion-ingles-normales',
+  'depilacion-piernas': 'depilacion-piernas',
+  'depilacion-medias-piernas': 'depilacion-medias-piernas',
+
+  // Depilación Láser (fotos oficiales)
+  'laser-patillas': 'depilacion-laser-laser-patillas',
+  'laser-menton': 'depilacion-laser-laser-menton',
+  'laser-axilas': 'depilacion-laser-laser-axilas',
+  'laser-espalda': 'depilacion-laser-laser-espalda',
+  'laser-ingles-integrales': 'depilacion-laser-laser-ingles-integrales',
+  'laser-labio': 'depilacion-laser-laser-labio',
+  'laser-medias-piernas': 'depilacion-laser-laser-medias-piernas',
+  'laser-piernas-completas': 'depilacion-laser-laser-piernas-completas',
+  'laser-pecho': 'depilacion-laser-laser-pecho',
+  'laser-ingles-brasilenas': 'depilacion-laser-laser-ingles-brasilenas',
+
+  // Masajes (fotos oficiales)
+  'masaje-relajante': 'masajes-masaje-relajante',
+  'masaje-descontracturante': 'masajes-masaje-descontracturante',
+  'masaje-deportivo': 'masajes-masaje-deportivo',
+  'masaje-prenatal': 'masajes-masaje-prenatal',
+  'masaje-aromaterapia': 'masajes-masaje-aromaterapia',
+  'masaje-craneofacial': 'masajes-masaje-craneofacial',
+  'masaje-facial': 'masajes-masaje-facial',
+  'masaje-piernas-cansadas': 'masajes-masaje-piernas-cansadas',
+  'masaje-relajante-pies': 'masajes-masaje-relajante-pies',
+  'reflexologia-podal': 'masajes-reflexologia-podal',
+  'drenaje-manual': 'masajes-drenaje-manual',
+  'piedras-calientes': 'masajes-masaje-piedras-calientes',
+  'exfoliacion-corporal': 'masajes-exfoliacion-corporal',
+}
+
+function imagenKeyParaTratamiento(slug: string, familiaSlug: string): string {
+  return DESTACADO_IMAGEN_POR_SLUG[slug] ?? FAMILIA_IMAGEN_POR_SLUG[familiaSlug] ?? 'tratamiento-facial'
 }
 
 /**
@@ -259,8 +349,11 @@ async function seedTratamientos(
 
     if (shouldCreateDocument(doc)) {
       const esTraduccion = tratamiento.porLocale.es
-      const imagenKey = DESTACADO_IMAGEN_POR_SLUG[tratamiento.slug]
-      const imagenId = imagenKey ? mediaIds[imagenKey] : undefined
+      const imagenKey = imagenKeyParaTratamiento(tratamiento.slug, tratamiento.familiaSlug)
+      const imagenId = mediaIds[imagenKey]
+      if (imagenId === undefined) {
+        throw new Error(`No se encontró el recurso de imagen "${imagenKey}" para el tratamiento "${tratamiento.slug}"`)
+      }
       const created = await payload.create({
         collection: 'tratamientos',
         overrideAccess: true,
@@ -275,7 +368,7 @@ async function seedTratamientos(
           requisitosContraindicaciones: esTraduccion.requisitosContraindicaciones,
           preguntasFrecuentes: esTraduccion.preguntasFrecuentes?.map((faq) => ({ pregunta: faq.pregunta, respuesta: faq.respuesta })),
           seo: esTraduccion.seo ? { title: esTraduccion.seo.titulo, description: esTraduccion.seo.descripcion } : undefined,
-          imagenes: imagenId !== undefined ? [imagenId] : undefined,
+          imagenes: [imagenId],
           indicadorPrecio: 'consultar',
           visible: true,
           destacado: Boolean(tratamiento.destacado),
@@ -319,6 +412,17 @@ async function seedTratamientos(
     // El documento ya existe: completa solo los idiomas/campos que falten.
     const raw = doc as unknown as RawLocalizedTratamiento
     const updates = computeMissingTratamientoLocaleUpdates(raw, tratamiento.porLocale, LOCALES)
+    const imagenKey = imagenKeyParaTratamiento(tratamiento.slug, tratamiento.familiaSlug)
+    const imagenId = mediaIds[imagenKey]
+    if (imagenId !== undefined) {
+      await payload.update({
+        collection: 'tratamientos',
+        id: raw.id,
+        overrideAccess: true,
+        locale: 'es',
+        data: { imagenes: [imagenId] },
+      })
+    }
     if (updates.length > 0) {
       actualizados += 1
     }

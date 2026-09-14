@@ -12,8 +12,8 @@ import { TRATAMIENTOS_SEED } from './tratamientos'
  * para los destacados.
  */
 describe('TRATAMIENTOS_SEED — cobertura multilingüe', () => {
-  it('contiene exactamente los 57 conceptos de PROJECT_CONTEXT.md §4', () => {
-    expect(TRATAMIENTOS_SEED).toHaveLength(57)
+  it('contiene los 67 tratamientos del catálogo oficial de GAPSSA', () => {
+    expect(TRATAMIENTOS_SEED).toHaveLength(67)
   })
 
   it('tiene slugs únicos y estables (no localizados)', () => {

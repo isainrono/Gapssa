@@ -11,6 +11,7 @@ import { BookingWizard } from '@/components/client/booking/BookingWizard'
 
 type Args = {
   params: Promise<{ locale: string }>
+  searchParams: Promise<{ tratamiento?: string; treatmentId?: string; treatment?: string }>
 }
 
 export async function generateMetadata({ params }: Args): Promise<Metadata> {
@@ -25,28 +26,24 @@ export async function generateMetadata({ params }: Args): Promise<Metadata> {
   }
 }
 
-/**
- * Interfaz mínima de reserva — Fase 4A (encargo, punto 9). Sustituye la
- * página puramente informativa de Fase 2 (`PLAN_DESARROLLO_WEB_PORTAL.md`
- * §1 y §9 ya no aplican: el motor de reservas real, con adaptador EspoCRM
- * simulado, existe desde esta fase). Funciona para invitado (sin sesión)
- * y para cliente autenticado (`getOptionalSession`, Fase 3 DAL) —
- * `BookingWizard` decide el endpoint según `isAuthenticated`, sin
- * duplicar lógica de negocio en ningún lado (esa vive en
- * `server/booking/*`).
- */
-export default async function ReservarPage({ params }: Args) {
+export default async function ReservarPage({ params, searchParams }: Args) {
   const { locale } = await params
+  const { tratamiento, treatmentId, treatment } = await searchParams
   if (!isLocale(locale)) {
     notFound()
   }
 
   const dict = getDictionary(locale)
   const session = await getOptionalSession()
+  const initialTreatmentParam = tratamiento || treatmentId || treatment || ''
 
   return (
     <div className="section container" style={{ maxWidth: '40rem' }}>
-      <BookingWizard dict={dict.reservar} isAuthenticated={session !== null} />
+      <BookingWizard
+        dict={dict.reservar}
+        isAuthenticated={session !== null}
+        initialTreatmentParam={initialTreatmentParam}
+      />
     </div>
   )
 }

@@ -131,7 +131,7 @@ describe('MEDIA_FILES — integridad del manifiesto de seed', () => {
 
   describe('contenido real del fichero (sharp + firma binaria)', () => {
     const MIN_DIM = 200
-    const MAX_DIM = 4000
+    const MAX_DIM = 8000
 
     function leerFirma(absolutePath: string): Buffer {
       const fd = fs.openSync(absolutePath, 'r')

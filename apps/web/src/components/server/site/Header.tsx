@@ -2,7 +2,6 @@ import Image from 'next/image'
 import Link from 'next/link'
 
 import { getAjustesGlobales } from '@/lib/content/ajustesGlobales'
-import { mediaAlt, mediaUrl } from '@/lib/content/media'
 import { getDictionary } from '@/lib/i18n/dictionary'
 import type { Locale } from '@/lib/i18n/locales'
 
@@ -18,7 +17,6 @@ type Props = {
 export async function Header({ locale }: Props) {
   const dict = getDictionary(locale)
   const ajustes = await getAjustesGlobales(locale)
-  const logoUrl = mediaUrl(ajustes.logo)
 
   const navItems = [
     { href: `/${locale}`, label: dict.nav.inicio },
@@ -35,11 +33,14 @@ export async function Header({ locale }: Props) {
   return (
     <header className={styles.header}>
       <Link href={`/${locale}`} className={styles.logoLink}>
-        {logoUrl ? (
-          <Image src={logoUrl} alt={mediaAlt(ajustes.logo) || ajustes.nombreComercial} width={160} height={44} className={styles.logoImage} priority />
-        ) : (
-          <span className={styles.logoText}>{ajustes.nombreComercial}</span>
-        )}
+        <Image
+          src="/images/marca/gapssa-logo-oficial.webp"
+          alt={`Logotipo de ${ajustes.nombreComercial}`}
+          width={35}
+          height={44}
+          className={styles.logoImage}
+          priority
+        />
       </Link>
 
       <nav className={styles.desktopNav}>

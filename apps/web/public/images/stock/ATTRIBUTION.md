@@ -100,9 +100,8 @@ retirados (nunca versionada) en
 
 ## Otras imágenes de `public/images/` — categoría D (contenido propio de Gapssa)
 
-- `marca/logo.webp`: copia sin editar de `gapssa1/unnamed.webp` (activo
-  propio de Gapssa) — SHA-256 idéntico byte a byte entre ambos ficheros,
-  verificado. **Categoría D — versionable.**
+- `marca/logo.webp` y `marca/gapssa-logo-oficial.webp`: conversiones WebP sin pérdida de `GapssaLogo.png`, logo
+  oficial aportado por Gapssa. **Categoría D — versionable.**
 - `equipo/diana.jpg`: fotografía propia de Diana aportada por Gapssa
   (`gapssa1/WhatsApp Image 2026-06-25 at 13.31.12.jpeg`). **Contenido
   propio — autorización pública pendiente de confirmación explícita del

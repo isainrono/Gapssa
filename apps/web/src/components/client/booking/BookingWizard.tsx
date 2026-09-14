@@ -5,11 +5,12 @@ import { useEffect, useId, useState, type FormEvent } from 'react'
 import type { Dictionary } from '@/lib/i18n/dictionary'
 import { authFetch } from '@/lib/auth/authFetch'
 
-import styles from '../auth/AuthForm.module.css'
+import styles from './BookingWizard.module.css'
 
 type Props = {
   dict: Dictionary['reservar']
   isAuthenticated: boolean
+  initialTreatmentParam?: string
 }
 
 interface Treatment {
@@ -17,6 +18,8 @@ interface Treatment {
   name: string
   durationMinutes: number
   familia: string
+  precioOrientativo?: number | null
+  estadoPrecio?: string | null
 }
 
 interface Slot {
@@ -36,6 +39,27 @@ function todayIso(): string {
 function formatTime(iso: string): string {
   const date = new Date(iso)
   return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })
+}
+
+function formatDateLabel(isoDate: string): string {
+  const parts = isoDate.split('-').map(Number)
+  if (parts.length !== 3 || parts.some(isNaN)) return isoDate
+  const [year, month, day] = parts as [number, number, number]
+  const d = new Date(Date.UTC(year, month - 1, day))
+  return d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+function formatPrice(treatment: Treatment): string {
+  if (treatment.estadoPrecio === 'Bajo valoración') {
+    return 'Bajo valoración'
+  }
+  if (treatment.precioOrientativo != null) {
+    if (treatment.estadoPrecio === 'Desde') {
+      return `Desde ${treatment.precioOrientativo} €`
+    }
+    return `${treatment.precioOrientativo} €`
+  }
+  return 'Consultar'
 }
 
 function mapErrorCode(code: string, dict: Dictionary['reservar']): string {
@@ -62,17 +86,8 @@ function mapErrorCode(code: string, dict: Dictionary['reservar']): string {
   }
 }
 
-/**
- * Interfaz mínima de reserva — encargo de Fase 4A, punto 9. Un único
- * componente cliente con una pequeña máquina de estados
- * (`search -> slots -> details -> otp? -> success`), sin panel de
- * administración: solo el camino del cliente (invitado o autenticado).
- * `isAuthenticated` decide el endpoint (`/requests` + verificación por
- * OTP para invitado, `/requests/authenticated`, síncrono, para sesión
- * activa) — la lógica de negocio en sí vive enteramente en el servidor
- * (`server/booking/*`), este componente solo la invoca.
- */
-export function BookingWizard({ dict, isAuthenticated }: Props) {
+export function BookingWizard({ dict, isAuthenticated, initialTreatmentParam }: Props) {
+  const familiaId = useId()
   const treatmentId = useId()
   const dateId = useId()
   const nameId = useId()
@@ -83,6 +98,7 @@ export function BookingWizard({ dict, isAuthenticated }: Props) {
 
   const [step, setStep] = useState<Step>('search')
   const [treatments, setTreatments] = useState<Treatment[] | null>(null)
+  const [selectedFamilia, setSelectedFamilia] = useState('')
   const [selectedTreatmentId, setSelectedTreatmentId] = useState('')
   const [date, setDate] = useState(todayIso())
   const [slots, setSlots] = useState<Slot[]>([])
@@ -105,7 +121,26 @@ export function BookingWizard({ dict, isAuthenticated }: Props) {
     fetch('/api/booking/v1/treatments')
       .then((response) => response.json())
       .then((body: { treatments: Treatment[] }) => {
-        if (!cancelled) setTreatments(body.treatments)
+        if (cancelled) return
+        const list = body.treatments ?? []
+        setTreatments(list)
+
+        if (initialTreatmentParam) {
+          const param = initialTreatmentParam.toLowerCase().trim()
+          const found =
+            list.find((t) => t.id.toLowerCase() === param) ||
+            list.find((t) => param.includes(t.id.toLowerCase()) || t.id.toLowerCase().includes(param)) ||
+            list.find((t) => {
+              const cleanParam = param.replace(/-/g, ' ')
+              const cleanName = t.name.toLowerCase()
+              return cleanName.includes(cleanParam) || cleanParam.includes(cleanName)
+            })
+
+          if (found) {
+            setSelectedFamilia(found.familia)
+            setSelectedTreatmentId(found.id)
+          }
+        }
       })
       .catch(() => {
         if (!cancelled) setTreatments([])
@@ -113,7 +148,15 @@ export function BookingWizard({ dict, isAuthenticated }: Props) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [initialTreatmentParam])
+
+  const familias = Array.from(new Set((treatments ?? []).map((t) => t.familia))).filter(Boolean)
+
+  const filteredTreatments = selectedFamilia
+    ? (treatments ?? []).filter((t) => t.familia === selectedFamilia)
+    : (treatments ?? [])
+
+  const selectedTreatment = (treatments ?? []).find((t) => t.id === selectedTreatmentId)
 
   async function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -338,30 +381,95 @@ export function BookingWizard({ dict, isAuthenticated }: Props) {
   }
 
   if (step === 'slots') {
+    const mananaSlots = slots.filter((slot) => {
+      const hour = new Date(slot.startAt).getHours()
+      return hour < 14
+    })
+    const tardeSlots = slots.filter((slot) => {
+      const hour = new Date(slot.startAt).getHours()
+      return hour >= 14
+    })
+
     return (
       <div className={styles.wrapper}>
         <h1 className={styles.title}>{dict.pasoHorario}</h1>
+
+        <div className={styles.summaryCard}>
+          <div className={styles.summaryHeader}>
+            <h3 className={styles.summaryTitle}>{selectedTreatment?.name ?? 'Tratamiento'}</h3>
+            {selectedTreatment && (
+              <span className={styles.summaryBadge}>
+                {formatPrice(selectedTreatment)}
+              </span>
+            )}
+          </div>
+          <div className={styles.summaryMeta}>
+            <span>⏱️ {selectedTreatment?.durationMinutes ?? 0} min</span>
+            <span>📅 <span style={{ textTransform: 'capitalize' }}>{formatDateLabel(date)}</span></span>
+          </div>
+        </div>
+
         {error && (
           <p className={styles.alertError} role="alert">
             {error}
           </p>
         )}
+
         {slots.length === 0 ? (
-          <p>{dict.sinHuecos}</p>
+          <div className={styles.emptyState}>
+            <p>{dict.sinHuecos}</p>
+          </div>
         ) : (
-          <ul className={styles.links} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', listStyle: 'none', padding: 0 }}>
-            {slots.map((slot) => (
-              <li key={`${slot.startAt}-${slot.professionalId}-${slot.zoneId}`}>
-                <button type="button" className={styles.submit} onClick={() => handleChooseSlot(slot)}>
-                  {formatTime(slot.startAt)}
-                </button>
-              </li>
-            ))}
-          </ul>
+          <div className={styles.slotsScrollArea}>
+            {mananaSlots.length > 0 && (
+              <div className={styles.periodSection}>
+                <div className={styles.periodHeader}>
+                  <span className={styles.periodTitle}>🌅 Mañana</span>
+                  <span className={styles.periodCount}>{mananaSlots.length} huecos</span>
+                </div>
+                <ul className={styles.slotsGrid}>
+                  {mananaSlots.map((slot) => (
+                    <li key={`${slot.startAt}-${slot.professionalId}-${slot.zoneId}`}>
+                      <button
+                        type="button"
+                        className={styles.slotPill}
+                        onClick={() => handleChooseSlot(slot)}
+                      >
+                        {formatTime(slot.startAt)}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {tardeSlots.length > 0 && (
+              <div className={styles.periodSection}>
+                <div className={styles.periodHeader}>
+                  <span className={styles.periodTitle}>☀️ Tarde</span>
+                  <span className={styles.periodCount}>{tardeSlots.length} huecos</span>
+                </div>
+                <ul className={styles.slotsGrid}>
+                  {tardeSlots.map((slot) => (
+                    <li key={`${slot.startAt}-${slot.professionalId}-${slot.zoneId}`}>
+                      <button
+                        type="button"
+                        className={styles.slotPill}
+                        onClick={() => handleChooseSlot(slot)}
+                      >
+                        {formatTime(slot.startAt)}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
         )}
-        <div className={styles.links}>
-          <button type="button" className={styles.input} onClick={() => setStep('search')}>
-            {dict.volverBoton}
+
+        <div style={{ marginTop: '1rem' }}>
+          <button type="button" className={styles.secondaryButton} onClick={() => setStep('search')}>
+            ← {dict.volverBoton}
           </button>
         </div>
       </div>
@@ -379,6 +487,28 @@ export function BookingWizard({ dict, isAuthenticated }: Props) {
           </p>
         )}
         <div className={styles.field}>
+          <label className={styles.label} htmlFor={familiaId}>
+            Categoría / Familia
+          </label>
+          <select
+            id={familiaId}
+            className={styles.input}
+            value={selectedFamilia}
+            onChange={(event) => {
+              setSelectedFamilia(event.target.value)
+              setSelectedTreatmentId('')
+            }}
+          >
+            <option value="">Todas las categorías</option>
+            {familias.map((fam) => (
+              <option key={fam} value={fam}>
+                {fam}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className={styles.field}>
           <label className={styles.label} htmlFor={treatmentId}>
             {dict.tratamientoLabel}
           </label>
@@ -390,15 +520,26 @@ export function BookingWizard({ dict, isAuthenticated }: Props) {
             onChange={(event) => setSelectedTreatmentId(event.target.value)}
           >
             <option value="" disabled>
-              {dict.tratamientoLabel}
+              {selectedFamilia ? 'Selecciona un tratamiento' : 'Selecciona una categoría primero'}
             </option>
-            {(treatments ?? []).map((treatment) => (
+            {filteredTreatments.map((treatment) => (
               <option key={treatment.id} value={treatment.id}>
                 {treatment.name}
               </option>
             ))}
           </select>
         </div>
+
+        {selectedTreatment && (
+          <div className={styles.alertSuccess} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            <strong style={{ fontSize: '1rem', color: 'var(--color-brown-900)' }}>{selectedTreatment.name}</strong>
+            <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+              <span>⏱️ Duración: {selectedTreatment.durationMinutes} min</span>
+              <span>💳 Precio: {formatPrice(selectedTreatment)}</span>
+            </div>
+          </div>
+        )}
+
         <div className={styles.field}>
           <label className={styles.label} htmlFor={dateId}>
             {dict.fechaLabel}

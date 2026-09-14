@@ -366,7 +366,7 @@ export class HttpEspoBookingAdapter implements EspoBookingAdapter {
   async listTreatments(): Promise<TreatmentFixture[]> {
     const rows = await this.listAllPages(
       '/api/v1/CTratamiento',
-      { select: 'id,name,familia,duracionMinutos,activo', 'where[0][type]': 'isTrue', 'where[0][attribute]': 'activo' },
+      { select: TREATMENT_SELECT_FIELDS, 'where[0][type]': 'isTrue', 'where[0][attribute]': 'activo' },
       treatmentRecordSchema,
     )
     return rows.map(toTreatmentFixture)
@@ -801,12 +801,14 @@ export class HttpEspoBookingAdapter implements EspoBookingAdapter {
 // TypeScript para lo que devuelve la red.
 // ---------------------------------------------------------------------------
 
-const TREATMENT_SELECT_FIELDS = 'id,name,familia,duracionMinutos'
+const TREATMENT_SELECT_FIELDS = 'id,name,familia,duracionMinutos,precioOrientativo,estadoPrecio'
 const treatmentRecordSchema = z.object({
   id: z.string(),
   name: z.string(),
   familia: z.string(),
   duracionMinutos: z.number().int().positive(),
+  precioOrientativo: z.number().nullable().optional(),
+  estadoPrecio: z.string().nullable().optional(),
 })
 type TreatmentRecord = z.infer<typeof treatmentRecordSchema>
 
@@ -920,7 +922,14 @@ export function isIdempotencyKeyReusedConflict(error: unknown): error is EspoApi
 }
 
 function toTreatmentFixture(row: TreatmentRecord): TreatmentFixture {
-  return { id: row.id, name: row.name, familia: row.familia, durationMinutes: row.duracionMinutos }
+  return {
+    id: row.id,
+    name: row.name,
+    familia: row.familia,
+    durationMinutes: row.duracionMinutos,
+    precioOrientativo: row.precioOrientativo ?? null,
+    estadoPrecio: row.estadoPrecio ?? null,
+  }
 }
 
 function toZoneFixture(row: ZoneRecord): ZoneFixture {
