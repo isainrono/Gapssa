@@ -45,7 +45,7 @@ RUN adduser --system --uid 1001 nextjs
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/web ./apps/web
-COPY --from=builder /app/packages/contracts ./packages/contracts
+RUN mkdir -p /app/media /app/apps/web/media && chown -R nextjs:nodejs /app
 
 USER nextjs
 
