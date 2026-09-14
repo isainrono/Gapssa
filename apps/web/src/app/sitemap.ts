@@ -6,6 +6,8 @@ import { publicEnv } from '@/lib/env.public'
 import { LOCALES } from '@/lib/i18n/locales'
 import { buildLocalizedUrl } from '@/lib/seo/metadata'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * `mi-cuenta` nunca aparece aquí (ruta privada, siempre noindex —
  * `PLAN_DESARROLLO_WEB_PORTAL.md` §16). Las 4 páginas legales solo se
@@ -16,10 +18,19 @@ const RUTAS_ESTATICAS = ['', 'tratamientos', 'sobre-gapssa', 'contacto', 'reserv
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = publicEnv.NEXT_PUBLIC_SITE_URL
-  const [slugsTratamientos, tiposLegalIndexables] = await Promise.all([
-    getTodosLosSlugsDeTratamientos(),
-    getTiposPaginaLegalIndexables(),
-  ])
+  let slugsTratamientos: string[] = []
+  let tiposLegalIndexables: string[] = []
+
+  try {
+    const res = await Promise.all([
+      getTodosLosSlugsDeTratamientos(),
+      getTiposPaginaLegalIndexables(),
+    ])
+    slugsTratamientos = res[0]
+    tiposLegalIndexables = res[1]
+  } catch {
+    // Si la base de datos no está disponible durante el build estático, usa rutas estáticas
+  }
 
   const paths = [
     ...RUTAS_ESTATICAS,
