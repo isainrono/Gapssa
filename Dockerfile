@@ -17,9 +17,14 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Usar .env.example como valores base para validación Zod durante el build estático de Next.js
-RUN cp .env.example .env
+# Copiar variables base de construcción en la raíz y dentro del paquete web
+RUN cp .env.example .env && cp .env.example apps/web/.env
 
+ARG NEXT_PUBLIC_SITE_URL=https://gapssa.es
+ARG SITE_NOINDEX=false
+
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
+ENV SITE_NOINDEX=$SITE_NOINDEX
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
