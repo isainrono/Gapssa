@@ -57,18 +57,15 @@ async function run() {
 
 async function seedAjustesGlobales(payload: PayloadClient, mediaIds: Record<string, number>): Promise<string> {
   const actual = await payload.findGlobal({ slug: 'ajustes-globales', overrideAccess: true })
-  if (!shouldSeedGlobalField(actual.direccion?.calle)) {
-    return 'sin cambios (ya configurado)'
-  }
 
   await payload.updateGlobal({
     slug: 'ajustes-globales',
     overrideAccess: true,
     locale: 'es',
     data: {
-      direccion: DIRECCION_SEED,
+      direccion: actual.direccion?.calle ? actual.direccion : DIRECCION_SEED,
       horario: HORARIO_SEED,
-      logo: mediaIds['logo'],
+      logo: actual.logo ? (typeof actual.logo === 'number' ? actual.logo : actual.logo.id) : mediaIds['logo'],
       seoPorDefecto: { titulo: SEO_POR_DEFECTO_SEED.es.titulo, descripcion: SEO_POR_DEFECTO_SEED.es.descripcion, ogImage: mediaIds['logo'] },
     },
   })

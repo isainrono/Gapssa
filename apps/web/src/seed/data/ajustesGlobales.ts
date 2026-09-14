@@ -3,14 +3,14 @@ import type { DiaSemana } from '@/globals/AjustesGlobales'
 
 export type HorarioSeed = { dia: DiaSemana; cerrado: boolean; franja?: string }
 
-/** Horario inicial confirmado (`PLAN_DESARROLLO_WEB_PORTAL.md` §7.2): lunes a sábado 09:00–21:00, domingo cerrado. */
+/** Horario inicial confirmado: lunes a viernes 10:00–20:00, sábado 10:00–17:00, domingo cerrado. */
 export const HORARIO_SEED: HorarioSeed[] = [
-  { dia: 'lunes', cerrado: false, franja: '09:00–21:00' },
-  { dia: 'martes', cerrado: false, franja: '09:00–21:00' },
-  { dia: 'miercoles', cerrado: false, franja: '09:00–21:00' },
-  { dia: 'jueves', cerrado: false, franja: '09:00–21:00' },
-  { dia: 'viernes', cerrado: false, franja: '09:00–21:00' },
-  { dia: 'sabado', cerrado: false, franja: '09:00–21:00' },
+  { dia: 'lunes', cerrado: false, franja: '10:00–20:00' },
+  { dia: 'martes', cerrado: false, franja: '10:00–20:00' },
+  { dia: 'miercoles', cerrado: false, franja: '10:00–20:00' },
+  { dia: 'jueves', cerrado: false, franja: '10:00–20:00' },
+  { dia: 'viernes', cerrado: false, franja: '10:00–20:00' },
+  { dia: 'sabado', cerrado: false, franja: '10:00–17:00' },
   { dia: 'domingo', cerrado: true },
 ]
 
