@@ -198,3 +198,4 @@ basta con no ejecutarlos si no se quiere continuar por este camino; no
 modifican nada fuera de sí mismos ni de `compose.yml`/`.env(.example)`
 (cambios aditivos, revisables con `git diff`).
 
+# Gapssa
