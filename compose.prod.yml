@@ -5,6 +5,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://gapssa.es}
+        SITE_NOINDEX: ${SITE_NOINDEX:-false}
     restart: unless-stopped
     ports:
       - "127.0.0.1:3050:3000"
