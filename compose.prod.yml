@@ -5,13 +5,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://gapssa.es}
-        SITE_NOINDEX: ${SITE_NOINDEX:-false}
-        PAYLOAD_SECRET: ${PAYLOAD_SECRET:-dummy-payload-secret-min-32-chars-for-build}
-        DATABASE_URL_CMS: ${DATABASE_URL_CMS:-postgresql://gapssa_apps:dummy@apps-db:5432/gapssa_cms}
-        DATABASE_URL_AUTH: ${DATABASE_URL_AUTH:-postgresql://gapssa_apps:dummy@apps-db:5432/gapssa_auth}
-        DATABASE_URL_BOOKING: ${DATABASE_URL_BOOKING:-postgresql://gapssa_apps:dummy@apps-db:5432/gapssa_booking}
     restart: unless-stopped
     ports:
       - "127.0.0.1:3050:3000"
