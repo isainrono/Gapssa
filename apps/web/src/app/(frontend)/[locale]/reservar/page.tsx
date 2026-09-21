@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
+import { isRedirectError } from 'next/dist/client/components/redirect-error'
 import { notFound } from 'next/navigation'
 
 import { publicEnv } from '@/lib/env.public'
@@ -34,7 +36,78 @@ export default async function ReservarPage({ params, searchParams }: Args) {
   }
 
   const dict = getDictionary(locale)
-  const session = await getOptionalSession()
+  let session = null
+  let hasServiceError = false
+
+  try {
+    session = await getOptionalSession()
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error
+    }
+    console.error('Error de servicio en /reservar:', error)
+    hasServiceError = true
+  }
+
+  if (hasServiceError) {
+    return (
+      <div
+        className="container section"
+        style={{
+          textAlign: 'center',
+          minHeight: '50vh',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingBlock: '4rem',
+        }}
+      >
+        <h1
+          style={{
+            fontFamily: 'var(--font-serif)',
+            fontSize: '2.25rem',
+            fontWeight: 400,
+            marginBottom: '1rem',
+            color: 'var(--text-primary)',
+          }}
+        >
+          Estamos trabajando en novedades
+        </h1>
+        <p
+          style={{
+            color: 'var(--text-secondary)',
+            maxWidth: '32rem',
+            marginBottom: '2rem',
+            lineHeight: '1.8',
+            fontSize: '1.05rem',
+          }}
+        >
+          Estamos actualizando el sistema de reservas para ofrecerte la mejor experiencia posible. Disculpa las molestias.
+        </p>
+        <Link
+          href={`/${locale}`}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0.85rem 2rem',
+            background: 'var(--color-gold)',
+            color: '#fff',
+            textDecoration: 'none',
+            fontSize: '0.85rem',
+            fontWeight: 500,
+            letterSpacing: '0.15em',
+            textTransform: 'uppercase',
+            border: '1px solid var(--color-gold)',
+          }}
+        >
+          {dict.notFound.volverInicio}
+        </Link>
+      </div>
+    )
+  }
+
   const initialTreatmentParam = tratamiento || treatmentId || treatment || ''
 
   return (
