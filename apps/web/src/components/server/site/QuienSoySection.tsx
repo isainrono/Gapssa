@@ -20,11 +20,14 @@ type Props = {
  * (`contenido-sobre-gapssa`), sin duplicar el marcado en dos sitios.
  */
 export function QuienSoySection({ sobreGapssa, eyebrow, cta }: Props) {
-  const imgUrl = mediaUrl(sobreGapssa.bioImagen)
+  const imgUrl = mediaUrl(sobreGapssa.bioImagen) || '/images/equipo/diana.jpg'
+  const altText = mediaAlt(sobreGapssa.bioImagen) || 'Diana, fundadora y especialista en belleza de GAPSSA by Nana'
 
   return (
     <div className={styles.grid}>
-      <RevealOnScroll className={styles.photo}>{imgUrl ? <Image src={imgUrl} alt={mediaAlt(sobreGapssa.bioImagen)} fill sizes="(min-width: 900px) 40vw, 90vw" /> : null}</RevealOnScroll>
+      <RevealOnScroll className={styles.photo}>
+        <Image src={imgUrl} alt={altText} fill sizes="(min-width: 900px) 40vw, 90vw" />
+      </RevealOnScroll>
       <div className={styles.body}>
         <p className="eyebrow">{eyebrow}</p>
         <h2>{sobreGapssa.bioTitulo}</h2>

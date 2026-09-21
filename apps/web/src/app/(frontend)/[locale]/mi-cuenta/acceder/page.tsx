@@ -22,7 +22,12 @@ export default async function AccederPage({ params, searchParams }: Args) {
   }
 
   const dashboardHref = `/${locale}/mi-cuenta`
-  const existingSession = await getOptionalSession()
+  let existingSession = null
+  try {
+    existingSession = await getOptionalSession()
+  } catch (err) {
+    console.error('Error al comprobar sesión previa en /mi-cuenta/acceder:', err)
+  }
   if (existingSession) {
     redirect(dashboardHref)
   }

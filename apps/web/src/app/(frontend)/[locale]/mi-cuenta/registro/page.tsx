@@ -19,7 +19,12 @@ export default async function RegistroPage({ params }: Args) {
     notFound()
   }
 
-  const existingSession = await getOptionalSession()
+  let existingSession = null
+  try {
+    existingSession = await getOptionalSession()
+  } catch (err) {
+    console.error('Error al comprobar sesión previa en /mi-cuenta/registro:', err)
+  }
   if (existingSession) {
     redirect(`/${locale}/mi-cuenta`)
   }
