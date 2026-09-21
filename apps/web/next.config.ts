@@ -2,6 +2,9 @@ import { withPayload } from '@payloadcms/next/withPayload'
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
+  images: {
+    unoptimized: true,
+  },
   // apps/web es la única capa que habla con EspoCRM/n8n/FacturaScripts.
   // Ningún secreto de servidor debe llevar el prefijo NEXT_PUBLIC_: ver
   // src/server/env.ts.

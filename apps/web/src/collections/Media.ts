@@ -1,6 +1,15 @@
+import path from 'path'
 import type { CollectionConfig } from 'payload'
 
 import { isAdmin, isAdminOrEditor } from './access/roles'
+
+const getMediaStaticDir = (): string => {
+  const cwd = process.cwd()
+  if (cwd.endsWith('apps/web')) {
+    return path.resolve(cwd, 'media')
+  }
+  return path.resolve(cwd, 'apps/web/media')
+}
 
 /**
  * Activos de marketing (logo, fotos de tratamientos, galería, Instagram
@@ -19,6 +28,7 @@ export const Media: CollectionConfig = {
     delete: isAdmin,
   },
   upload: {
+    staticDir: getMediaStaticDir(),
     mimeTypes: ['image/*'],
     imageSizes: [
       { name: 'thumbnail', width: 400, height: 400, position: 'centre' },
