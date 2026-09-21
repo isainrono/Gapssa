@@ -24,6 +24,9 @@ services:
         condition: service_healthy
     networks:
       - gapssa-network
+    volumes:
+      - media-prod-data:/app/apps/web/media
+      - media-root-prod-data:/app/media
 
   apps-db:
     image: postgres:18-alpine
@@ -77,3 +80,5 @@ networks:
 volumes:
   apps-db-prod-data:
   redis-prod-data:
+  media-prod-data:
+  media-root-prod-data:

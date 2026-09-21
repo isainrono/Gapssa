@@ -533,6 +533,32 @@ export async function seedMedia(payload: BasePayload): Promise<Record<string, nu
     }
 
     ids[file.key] = doc!.id
+
+    const mediaDirCandidates = [
+      path.resolve(process.cwd(), 'media'),
+      path.resolve(process.cwd(), 'apps/web/media'),
+    ]
+    const fileExistsOnDisk = mediaDirCandidates.some((dir) =>
+      fs.existsSync(path.join(dir, filename))
+    )
+
+    if (!fileExistsOnDisk) {
+      const absolutePath = path.join(PUBLIC_IMAGES_DIR, file.relativePath)
+      const buffer = fs.readFileSync(absolutePath)
+      await payload.update({
+        collection: 'media',
+        id: doc!.id,
+        overrideAccess: true,
+        data: {},
+        file: {
+          data: buffer,
+          mimetype: mimeTypeFor(absolutePath),
+          name: filename,
+          size: buffer.length,
+        },
+      })
+    }
+
     const rawAlt = (doc as unknown as { alt?: RawLocalizedText }).alt
     const updates = computeMissingAltUpdates(rawAlt, file.altPorLocale, LOCALES)
     for (const update of updates) {
