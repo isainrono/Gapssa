@@ -86,6 +86,56 @@ function mapErrorCode(code: string, dict: Dictionary['reservar']): string {
   }
 }
 
+function normalize(str: string): string {
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, ' ')
+    .trim()
+}
+
+function findBestTreatmentMatch(param: string, list: Treatment[]): Treatment | null {
+  if (!param || list.length === 0) return null
+
+  const rawParam = param.trim().toLowerCase()
+  const normParam = normalize(param)
+  const paramWords = normParam.split(/\s+/).filter((w) => w.length > 2)
+
+  const exactId = list.find((t) => t.id.toLowerCase() === rawParam)
+  if (exactId) return exactId
+
+  const directInclude = list.find(
+    (t) =>
+      t.id.toLowerCase().includes(rawParam) ||
+      rawParam.includes(t.id.toLowerCase().replace(/-\d+$/, ''))
+  )
+  if (directInclude) return directInclude
+
+  let bestMatch: Treatment | null = null
+  let maxScore = 0
+
+  for (const t of list) {
+    const normId = normalize(t.id)
+    const normName = normalize(t.name)
+    const tText = `${normId} ${normName}`
+
+    let score = 0
+    for (const word of paramWords) {
+      if (tText.includes(word)) {
+        score += 1
+      }
+    }
+
+    if (score > maxScore) {
+      maxScore = score
+      bestMatch = t
+    }
+  }
+
+  return maxScore > 0 ? bestMatch : null
+}
+
 export function BookingWizard({ dict, isAuthenticated, initialTreatmentParam }: Props) {
   const familiaId = useId()
   const treatmentId = useId()
@@ -126,16 +176,7 @@ export function BookingWizard({ dict, isAuthenticated, initialTreatmentParam }: 
         setTreatments(list)
 
         if (initialTreatmentParam) {
-          const param = initialTreatmentParam.toLowerCase().trim()
-          const found =
-            list.find((t) => t.id.toLowerCase() === param) ||
-            list.find((t) => param.includes(t.id.toLowerCase()) || t.id.toLowerCase().includes(param)) ||
-            list.find((t) => {
-              const cleanParam = param.replace(/-/g, ' ')
-              const cleanName = t.name.toLowerCase()
-              return cleanName.includes(cleanParam) || cleanParam.includes(cleanName)
-            })
-
+          const found = findBestTreatmentMatch(initialTreatmentParam, list)
           if (found) {
             setSelectedFamilia(found.familia)
             setSelectedTreatmentId(found.id)
