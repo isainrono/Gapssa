@@ -101,6 +101,13 @@ async function seedContenidoInicio(payload: PayloadClient, mediaIds: Record<stri
 async function seedContenidoSobreGapssa(payload: PayloadClient, mediaIds: Record<string, number>): Promise<string> {
   const actual = await payload.findGlobal({ slug: 'contenido-sobre-gapssa', overrideAccess: true })
   if (!shouldSeedGlobalField(actual.bioTitulo)) {
+    if (!actual.bioImagen && mediaIds['diana']) {
+      await payload.updateGlobal({
+        slug: 'contenido-sobre-gapssa',
+        overrideAccess: true,
+        data: { bioImagen: mediaIds['diana'] },
+      })
+    }
     return 'sin cambios (ya configurado)'
   }
 

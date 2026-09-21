@@ -42,13 +42,6 @@ playwright-report/
 # generados por /admin o por el seed de Fase 2, nunca código fuente.
 apps/web/media/
 
-# equipo/diana.jpg: contenido propio de Gapssa sin autorización pública
-# explícita confirmada todavía (docs/deuda-imagenes-stock.md). Exclusión
-# exacta de este único fichero — el resto de apps/web/public/images/equipo/
-# sigue versionable con normalidad. Retirar esta línea únicamente tras
-# confirmación humana explícita de consentimiento, y volver a añadir la
-# entrada a MEDIA_FILES en ese momento.
-/apps/web/public/images/equipo/diana.jpg
 
 # IDEs
 .idea/

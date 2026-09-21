@@ -36,11 +36,18 @@ export const MEDIA_FILES: MediaFileSeed[] = [
       pt: 'Logótipo da GAPSSA by Nana',
     },
   },
-  // 'diana' (equipo/diana.jpg) queda fuera de MEDIA_FILES a propósito: es
-  // contenido propio de Gapssa cuya autorización pública explícita todavía
-  // no está confirmada (docs/deuda-imagenes-stock.md). No inferir
-  // consentimiento por aparecer en gapssa1/ o WhatsApp — cuando Gapssa
-  // confirme la autorización, volver a añadir esta entrada.
+  {
+    key: 'diana',
+    relativePath: 'equipo/diana.jpg',
+    altPorLocale: {
+      es: 'Diana, fundadora y especialista en belleza de GAPSSA by Nana',
+      ca: 'Diana, fundadora i especialista en bellesa de GAPSSA by Nana',
+      en: 'Diana, founder and beauty specialist at GAPSSA by Nana',
+      it: 'Diana, fondatrice e specialista di bellezza di GAPSSA by Nana',
+      fr: 'Diana, fondatrice et spécialiste de la beauté de GAPSSA by Nana',
+      pt: 'Diana, fundadora e especialista em beleza da GAPSSA by Nana',
+    },
+  },
   {
     key: 'hero-centro',
     relativePath: 'stock/hero-centro.jpg',
