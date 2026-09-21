@@ -538,8 +538,16 @@ export async function seedMedia(payload: BasePayload): Promise<Record<string, nu
       path.resolve(process.cwd(), 'media'),
       path.resolve(process.cwd(), 'apps/web/media'),
     ]
-    const fileExistsOnDisk = mediaDirCandidates.some((dir) =>
-      fs.existsSync(path.join(dir, filename))
+    const ext = path.extname(filename)
+    const baseName = path.basename(filename, ext)
+    const cardFilename = `${baseName}-800x800${ext}`
+    const thumbFilename = `${baseName}-400x400${ext}`
+
+    const fileExistsOnDisk = mediaDirCandidates.some(
+      (dir: string) =>
+        fs.existsSync(path.join(dir, filename)) &&
+        fs.existsSync(path.join(dir, cardFilename)) &&
+        fs.existsSync(path.join(dir, thumbFilename))
     )
 
     if (!fileExistsOnDisk) {

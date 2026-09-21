@@ -45,7 +45,7 @@ RUN adduser --system --uid 1001 nextjs
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/web ./apps/web
-RUN mkdir -p /app/media /app/apps/web/media && chown -R nextjs:nodejs /app
+RUN mkdir -p /app/media /app/apps/web/media /app/apps/web/.next/cache && chown -R nextjs:nodejs /app && chmod -R 775 /app/apps/web/.next
 
 USER nextjs
 
