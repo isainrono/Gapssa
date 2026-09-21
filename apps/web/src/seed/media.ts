@@ -21,7 +21,16 @@ export type MediaFileSeed = {
   altPorLocale: Record<Locale, string>
 }
 
-export const PUBLIC_IMAGES_DIR = path.resolve(process.cwd(), 'public/images')
+const getPublicImagesDir = (): string => {
+  const cwd = process.cwd()
+  const candidate1 = path.resolve(cwd, 'public/images')
+  if (fs.existsSync(candidate1)) {
+    return candidate1
+  }
+  return path.resolve(cwd, 'apps/web/public/images')
+}
+
+export const PUBLIC_IMAGES_DIR = getPublicImagesDir()
 
 export const MEDIA_FILES: MediaFileSeed[] = [
   {
