@@ -806,8 +806,17 @@ const treatmentRecordSchema = z.object({
   id: z.string(),
   name: z.string(),
   familia: z.string(),
-  duracionMinutos: z.number().int().positive(),
-  precioOrientativo: z.number().nullable().optional(),
+  duracionMinutos: z.coerce.number().int().positive(),
+  precioOrientativo: z
+    .union([
+      z.number(),
+      z.string().transform((val) => {
+        const parsed = Number.parseFloat(val)
+        return Number.isNaN(parsed) ? null : parsed
+      }),
+    ])
+    .nullable()
+    .optional(),
   estadoPrecio: z.string().nullable().optional(),
 })
 type TreatmentRecord = z.infer<typeof treatmentRecordSchema>
@@ -816,7 +825,7 @@ const ZONE_SELECT_FIELDS = 'id,name,capacidadSimultanea'
 const zoneRecordSchema = z.object({
   id: z.string(),
   name: z.string(),
-  capacidadSimultanea: z.number().int().positive(),
+  capacidadSimultanea: z.coerce.number().int().positive(),
 })
 type ZoneRecord = z.infer<typeof zoneRecordSchema>
 
