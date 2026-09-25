@@ -141,6 +141,34 @@ foreach ($treatments as $data) {
     }
 }
 
-echo "Proceso completado con éxito:\n";
+echo "Proceso de tratamientos completado con éxito:\n";
 echo "- Creados: $createdCount\n";
 echo "- Actualizados: $updatedCount\n";
+
+$zones = [
+    ['name' => 'Cabina 1', 'tipo' => 'Centro', 'capacidadSimultanea' => 1, 'activa' => true],
+    ['name' => 'Cabina 2', 'tipo' => 'Centro', 'capacidadSimultanea' => 1, 'activa' => true],
+    ['name' => 'Servicio a domicilio', 'tipo' => 'Domicilio / externa', 'capacidadSimultanea' => 1, 'activa' => true],
+];
+
+$zonesCreated = 0;
+$zonesUpdated = 0;
+
+foreach ($zones as $zData) {
+    $existingZone = $em->getRDBRepository('CZonaAtencion')->where(['name' => $zData['name']])->findOne();
+    if ($existingZone) {
+        $existingZone->set('tipo', $zData['tipo']);
+        $existingZone->set('capacidadSimultanea', $zData['capacidadSimultanea']);
+        $existingZone->set('activa', $zData['activa']);
+        $em->saveEntity($existingZone);
+        $zonesUpdated++;
+    } else {
+        $em->createEntity('CZonaAtencion', $zData);
+        $zonesCreated++;
+    }
+}
+
+echo "Proceso de zonas de atención completado:\n";
+echo "- Creadas: $zonesCreated\n";
+echo "- Actualizadas: $zonesUpdated\n";
+
