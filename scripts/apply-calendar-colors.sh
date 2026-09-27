@@ -16,10 +16,10 @@ echo "==> 2. Reconstruyendo metadatos y limpiando caché de EspoCRM..."
 docker compose --env-file .env.production -f compose.prod.yml exec espocrm bin/command rebuild
 docker compose --env-file .env.production -f compose.prod.yml exec espocrm bin/command clear-cache
 
-smtp_host="$(grep -E '^SMTP_HOST=' .env.production 2>/dev/null | cut -d= -f2- | tr -d '\r\n"' || echo '172.25.0.1')"
-smtp_port="$(grep -E '^SMTP_PORT=' .env.production 2>/dev/null | cut -d= -f2- | tr -d '\r\n"' || echo '587')"
-smtp_user="$(grep -E '^SMTP_USER=' .env.production 2>/dev/null | cut -d= -f2- | tr -d '\r\n"' || echo 'reservas@gapssa.es')"
-smtp_pass="$(grep -E '^SMTP_PASSWORD=' .env.production 2>/dev/null | cut -d= -f2- | tr -d '\r\n"' || echo '')"
+smtp_host="$(grep -E '^ *SMTP_HOST *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '172.25.0.1')"
+smtp_port="$(grep -E '^ *SMTP_PORT *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '587')"
+smtp_user="$(grep -E '^ *SMTP_USER *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo 'reservas@gapssa.es')"
+smtp_pass="$(grep -E '^ *(SMTP_PASSWORD|SMTP_PASS) *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '')"
 
 echo "==> 2b. Configurando SMTP y habilitando aprobación de reservas en EspoCRM..."
 docker compose --env-file .env.production -f compose.prod.yml exec espocrm php -r '
