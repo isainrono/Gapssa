@@ -77,14 +77,21 @@ try {
         echo "Clase AccountProvider: " . get_class($ap) . "\n";
         $refAp = new \ReflectionClass($ap);
         echo "Archivo AccountProvider: " . $refAp->getFileName() . "\n";
-        if ($refAp->hasMethod("getSystem")) {
-            $m = $refAp->getMethod("getSystem");
+        if ($refAp->hasMethod("loadSystem")) {
+            $m = $refAp->getMethod("loadSystem");
             $start = $m->getStartLine();
             $end = $m->getEndLine();
             $file = file($refAp->getFileName());
-            echo "Código de getSystem() (líneas $start-$end):\n";
-            for ($i = $start - 1; $i < $end; $i++) {
+            echo "Código de loadSystem() (líneas $start-$end):\n";
+            for ($i = max(0, $start - 1); $i < min(count($file), $end); $i++) {
                 echo "  " . ($i + 1) . ": " . $file[$i];
+            }
+        }
+        echo "Contenido relevante de SendingAccountProvider:\n";
+        $file = file($refAp->getFileName());
+        foreach ($file as $idx => $line) {
+            if (stripos($line, 'system') !== false || stripos($line, 'smtp') !== false) {
+                echo "  " . ($idx + 1) . ": " . $line;
             }
         }
     }
@@ -92,42 +99,20 @@ try {
     echo "Aviso inspeccionando AccountProvider: " . $e->getMessage() . "\n";
 }
 
-echo "\n--- 2a. Asegurando OutboundEmail del sistema ---\n";
+echo "\n--- 2a. Inspección de entidades de correo en EntityManager ---\n";
 try {
     $em = $c->get("entityManager");
-    
-    // Verificamos si existe la entidad OutboundEmail
-    $hasOutboundEntity = $em->hasRepository("OutboundEmail");
-    echo "Repositorio OutboundEmail disponible: " . ($hasOutboundEntity ? "Sí" : "No") . "\n";
-    
-    if ($hasOutboundEntity) {
-        $repo = $em->getRDBRepository("OutboundEmail");
-        $existing = $repo->where(["isShared" => true])->findOne();
-        if (!$existing) {
-            $existing = $repo->findOne();
+    $meta = $c->get("metadata");
+    $entities = $meta->get(['scopes']) ?? [];
+    $emailEntities = [];
+    foreach (array_keys($entities) as $scope) {
+        if (stripos($scope, 'mail') !== false || stripos($scope, 'smtp') !== false) {
+            $emailEntities[] = $scope;
         }
-        
-        $account = $existing ?? $em->getNewEntity("OutboundEmail");
-        $account->set([
-            "name" => "GAPSSA",
-            "status" => "Active",
-            "fromAddress" => $envUser,
-            "fromName" => "GAPSSA",
-            "replyToAddress" => $envUser,
-            "replyToName" => "GAPSSA",
-            "smtpServer" => $envHost,
-            "smtpPort" => $envPort,
-            "smtpAuth" => true,
-            "smtpSecurity" => "",
-            "smtpUsername" => $envUser,
-            "smtpPassword" => $crypt->encrypt($envPass),
-            "isShared" => true,
-        ]);
-        $em->saveEntity($account);
-        echo "✔ Entidad OutboundEmail guardada con ID: " . $account->getId() . " (isShared: 1, host: $envHost:$envPort, user: $envUser)\n";
     }
+    echo "Entidades relacionadas con correo en EspoCRM: " . implode(", ", $emailEntities) . "\n";
 } catch (\Throwable $e) {
-    echo "Aviso configurando OutboundEmail: " . $e->getMessage() . "\n";
+    echo "Aviso listando entidades: " . $e->getMessage() . "\n";
 }
 
 echo "\n--- 2b. Prueba de envío directo con MailSender de EspoCRM ---\n";
