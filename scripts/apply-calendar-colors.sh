@@ -41,7 +41,7 @@ if (!in_array("6a71e26f5a32d9575", $config["gapssaBookingDecisionAuthorizedUserI
 $config["smtpServer"] = $argv[1] ?: "172.25.0.1";
 $config["smtpPort"] = (int) ($argv[2] ?: 587);
 $config["smtpAuth"] = true;
-$config["smtpSecurity"] = "";
+$config["smtpSecurity"] = "TLS";
 $config["smtpUsername"] = $argv[3] ?: "info@gapssa.es";
 if (!empty($argv[4])) {
     $config["smtpPassword"] = $crypt->encrypt($argv[4]);
@@ -93,7 +93,7 @@ try {
                     "smtpHost" => $argv[1] ?: "172.25.0.1",
                     "smtpPort" => (int) ($argv[2] ?: 587),
                     "smtpAuth" => true,
-                    "smtpSecurity" => "",
+                    "smtpSecurity" => "TLS",
                     "smtpUsername" => $targetEmail,
                     "smtpIsShared" => true,
                     "isShared" => true,
@@ -104,7 +104,7 @@ try {
                 try {
                     $em->saveEntity($account);
                     $activeId = $account->getId();
-                    echo "✔ Cuenta InboundEmail del sistema configurada (ID: $activeId, Email: $targetEmail).\n";
+                    echo "✔ Cuenta InboundEmail del sistema configurada (ID: $activeId, Email: $targetEmail, TLS).\n";
                 } catch (\Throwable $e) {}
             } else {
                 $account->set("status", "Inactive");
@@ -116,7 +116,7 @@ try {
 
         $pdo = $c->has('pdo') ? $c->get('pdo') : null;
         if ($pdo && $activeId) {
-            $updStmt = $pdo->prepare("UPDATE inbound_email SET status = 'Active', use_smtp = 1, smtp_host = ?, smtp_port = ?, smtp_auth = 1, smtp_security = '', smtp_username = ?, smtp_password = ?, smtp_is_shared = 1, from_name = 'GAPSSA', reply_to_address = ?, reply_to_name = 'GAPSSA' WHERE id = ?");
+            $updStmt = $pdo->prepare("UPDATE inbound_email SET status = 'Active', use_smtp = 1, smtp_host = ?, smtp_port = ?, smtp_auth = 1, smtp_security = 'TLS', smtp_username = ?, smtp_password = ?, smtp_is_shared = 1, from_name = 'GAPSSA', reply_to_address = ?, reply_to_name = 'GAPSSA' WHERE id = ?");
             $updStmt->execute([$argv[1] ?: "172.25.0.1", (int) ($argv[2] ?: 587), $targetEmail, $encryptedPassword, $targetEmail, $activeId]);
             $pdo->exec("UPDATE inbound_email SET status = 'Inactive' WHERE email_address = '$targetEmail' AND id != '$activeId'");
             $pdo->exec("UPDATE inbound_email SET status = 'Inactive' WHERE id = '6a70ed04a0fdd2f68' AND id != '$activeId'");

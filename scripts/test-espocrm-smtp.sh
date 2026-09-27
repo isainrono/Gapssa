@@ -30,12 +30,19 @@ $envPort = (int) ($argv[4] ?? 587);
 $envUser = $argv[5] ?? "info@gapssa.es";
 
 echo "ℹ Sincronizando configuración de remitente oficial ($envUser)...\n";
+// Buscar valores admitidos para smtpSecurity en EspoCRM
+echo "--- Valores admitidos para smtpSecurity en EspoCRM ---\n";
+passthru('grep -rn -C 2 -i "smtpSecurity" /var/www/html/application/Espo/ 2>/dev/null | head -n 25 || true');
+
+// Probar con TLS
+$smtpSecurity = "TLS";
+
 $configFile = "/var/www/html/data/config.php";
 $conf = file_exists($configFile) ? require $configFile : [];
 $conf["smtpServer"] = $envHost;
 $conf["smtpPort"] = $envPort;
 $conf["smtpAuth"] = true;
-$conf["smtpSecurity"] = "";
+$conf["smtpSecurity"] = $smtpSecurity;
 $conf["smtpUsername"] = $envUser;
 if (!empty($envPass)) {
     $conf["smtpPassword"] = $crypt->encrypt($envPass);
@@ -160,7 +167,7 @@ try {
                 "smtpHost" => $envHost,
                 "smtpPort" => $envPort,
                 "smtpAuth" => true,
-                "smtpSecurity" => "",
+                "smtpSecurity" => "TLS",
                 "smtpUsername" => $envUser,
                 "smtpPassword" => $encryptedPassword,
                 "smtpIsShared" => true,
@@ -169,7 +176,7 @@ try {
             try {
                 $em->saveEntity($acc);
                 $activeId = $acc->getId();
-                echo "✔ Cuenta InboundEmail oficial activada con SMTP (ID: $activeId, Email: $envUser)\n";
+                echo "✔ Cuenta InboundEmail oficial activada con SMTP (ID: $activeId, Email: $envUser, TLS)\n";
             } catch (\Throwable $e) {
                 echo "⚠ Error al guardar vía ORM: " . $e->getMessage() . "\n";
             }
@@ -186,7 +193,7 @@ try {
     try {
         $pdo = $c->has('pdo') ? $c->get('pdo') : null;
         if ($pdo && $activeId) {
-            $upd = $pdo->prepare("UPDATE inbound_email SET status = 'Active', use_smtp = 1, smtp_host = ?, smtp_port = ?, smtp_auth = 1, smtp_security = '', smtp_username = ?, smtp_password = ?, smtp_is_shared = 1, from_name = 'GAPSSA', reply_to_address = ?, reply_to_name = 'GAPSSA' WHERE id = ?");
+            $upd = $pdo->prepare("UPDATE inbound_email SET status = 'Active', use_smtp = 1, smtp_host = ?, smtp_port = ?, smtp_auth = 1, smtp_security = 'TLS', smtp_username = ?, smtp_password = ?, smtp_is_shared = 1, from_name = 'GAPSSA', reply_to_address = ?, reply_to_name = 'GAPSSA' WHERE id = ?");
             $upd->execute([$envHost, $envPort, $envUser, $encryptedPassword, $envUser, $activeId]);
             $pdo->exec("UPDATE inbound_email SET status = 'Inactive' WHERE email_address = '$envUser' AND id != '$activeId'");
         }
@@ -199,8 +206,9 @@ try {
     $systemAccount = $cleanAp->getSystem();
     if ($systemAccount) {
         echo "✔ ¡AccountProvider::getSystem() cargó exitosamente la cuenta del sistema!\n";
-        echo "  Nombre de cuenta: " . $systemAccount->getName() . "\n";
-        echo "  Email saliente:   " . $systemAccount->getFromAddress() . "\n";
+        if (method_exists($systemAccount, 'getFromAddress')) {
+            echo "  Email saliente:   " . $systemAccount->getFromAddress() . "\n";
+        }
     } else {
         echo "❌ AccountProvider::getSystem() sigue devolviendo NULL.\n";
     }
