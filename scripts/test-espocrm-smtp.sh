@@ -6,6 +6,7 @@ project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${project_dir}"
 
 target_email="${1:-reservas@gapssa.es}"
+smtp_pass_arg="${2:-}"
 
 echo "==> Verificando y diagnosticando correo saliente de EspoCRM hacia: $target_email"
 
@@ -13,7 +14,17 @@ smtp_host="$(grep -E '^ *SMTP_HOST *=' .env.production 2>/dev/null | head -n1 | 
 smtp_port="$(grep -E '^ *SMTP_PORT *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '587')"
 # EspoCRM utiliza info@gapssa.es como cuenta saliente oficial del CRM
 smtp_user="info@gapssa.es"
-smtp_pass="$(grep -E '^ *(SMTP_PASSWORD|SMTP_PASS) *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '')"
+
+if [ -n "$smtp_pass_arg" ]; then
+  smtp_pass="$smtp_pass_arg"
+  echo "✔ Usando contraseña proporcionada por argumento para $smtp_user"
+else
+  smtp_pass="$(grep -E '^ *(ESPO_SMTP_PASSWORD|SMTP_INFO_PASSWORD|INFO_SMTP_PASSWORD|SMTP_PASSWORD|SMTP_PASS) *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '')"
+fi
+
+# Sincronizar CustomTransportPreparator al contenedor
+docker compose --env-file .env.production -f compose.prod.yml cp extensions/espocrm/custom/Espo/Custom/Classes/Mail/Sender/CustomTransportPreparator.php espocrm:/var/www/html/custom/Espo/Custom/Classes/Mail/Sender/CustomTransportPreparator.php 2>/dev/null || true
+docker compose --env-file .env.production -f compose.prod.yml exec espocrm chown -R www-data:www-data /var/www/html/custom
 
 docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm php -- "$target_email" "$smtp_pass" "$smtp_host" "$smtp_port" "$smtp_user" << 'PHP_SCRIPT'
 <?php
@@ -30,9 +41,6 @@ $envPort = (int) ($argv[4] ?? 587);
 $envUser = $argv[5] ?? "info@gapssa.es";
 
 echo "ℹ Sincronizando configuración de remitente oficial ($envUser)...\n";
-echo "--- Código de TransportPreparatorFactory.php y Sender.php ---\n";
-passthru('cat /var/www/html/application/Espo/Core/Mail/Sender/TransportPreparatorFactory.php');
-passthru('grep -rn -C 10 "transportPreparatorFactory" /var/www/html/application/Espo/Core/Mail/Sender.php');
 
 // Probar con TLS
 $smtpSecurity = "TLS";
@@ -50,6 +58,7 @@ if (!empty($envPass)) {
 $conf["outboundEmailFromName"] = "GAPSSA";
 $conf["outboundEmailFromAddress"] = $envUser;
 $conf["outboundEmailIsShared"] = true;
+$conf["transportPreparatorClassName"] = "\\Espo\\Custom\\Classes\\Mail\\Sender\\CustomTransportPreparator";
 file_put_contents($configFile, "<?php\nreturn " . var_export($conf, true) . ";\n");
 
 // Actualizar también la instancia de config en memoria
@@ -172,6 +181,7 @@ try {
                 "smtpPassword" => $encryptedPassword,
                 "smtpIsShared" => true,
                 "isShared" => true,
+                "transportPreparatorClassName" => "\\Espo\\Custom\\Classes\\Mail\\Sender\\CustomTransportPreparator",
             ]);
             try {
                 $em->saveEntity($acc);

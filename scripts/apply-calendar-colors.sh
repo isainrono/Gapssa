@@ -20,7 +20,7 @@ smtp_host="$(grep -E '^ *SMTP_HOST *=' .env.production 2>/dev/null | head -n1 | 
 smtp_port="$(grep -E '^ *SMTP_PORT *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '587')"
 # EspoCRM utiliza info@gapssa.es como cuenta saliente oficial del CRM
 smtp_user="info@gapssa.es"
-smtp_pass="$(grep -E '^ *(SMTP_PASSWORD|SMTP_PASS) *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '')"
+smtp_pass="$(grep -E '^ *(ESPO_SMTP_PASSWORD|SMTP_INFO_PASSWORD|INFO_SMTP_PASSWORD|SMTP_PASSWORD|SMTP_PASS) *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '')"
 
 echo "==> 2b. Configurando SMTP y habilitando aprobación de reservas en EspoCRM..."
 docker compose --env-file .env.production -f compose.prod.yml exec espocrm php -r '
@@ -49,6 +49,7 @@ if (!empty($argv[4])) {
 $config["outboundEmailFromName"] = "GAPSSA";
 $config["outboundEmailFromAddress"] = $argv[3] ?: "info@gapssa.es";
 $config["outboundEmailIsShared"] = true;
+$config["transportPreparatorClassName"] = "\\Espo\\Custom\\Classes\\Mail\\Sender\\CustomTransportPreparator";
 
 file_put_contents($configFile, "<?php\nreturn " . var_export($config, true) . ";\n");
 @unlink("/var/www/html/data/cache/application/config.php");
@@ -97,6 +98,7 @@ try {
                     "smtpUsername" => $targetEmail,
                     "smtpIsShared" => true,
                     "isShared" => true,
+                    "transportPreparatorClassName" => "\\Espo\\Custom\\Classes\\Mail\\Sender\\CustomTransportPreparator",
                 ]);
                 if (!empty($encryptedPassword)) {
                     $account->set("smtpPassword", $encryptedPassword);
