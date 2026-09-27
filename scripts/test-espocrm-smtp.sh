@@ -14,7 +14,8 @@ smtp_port="$(grep -E '^ *SMTP_PORT *=' .env.production 2>/dev/null | head -n1 | 
 smtp_user="$(grep -E '^ *SMTP_USER *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo 'reservas@gapssa.es')"
 smtp_pass="$(grep -E '^ *(SMTP_PASSWORD|SMTP_PASS) *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '')"
 
-docker compose --env-file .env.production -f compose.prod.yml exec espocrm php -r '
+docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm php -- "$target_email" "$smtp_pass" "$smtp_host" "$smtp_port" "$smtp_user" << 'PHP_SCRIPT'
+<?php
 require_once "/var/www/html/bootstrap.php";
 $app = new \Espo\Core\Application();
 $c = $app->getContainer();
@@ -37,7 +38,6 @@ if (is_string($rawPass) && $rawPass !== "") {
     }
 }
 
-// Si la contraseña no está configurada o no se puede descifrar, auto-configurarla desde .env.production
 if (empty($decrypted) && !empty($envPass)) {
     echo "ℹ Contraseña no configurada o no descifrable. Aplicando configuración cifrada desde .env.production...\n";
     $configFile = "/var/www/html/data/config.php";
@@ -66,7 +66,8 @@ echo "Remitente:     " . $config->get("outboundEmailFromName") . " <" . $config-
 echo "Estado Password: " . (!empty($decrypted) ? "✔ Correctamente cifrado y descifrable" : "❌ No configurada o vacía") . "\n";
 
 echo "\n--- 2. Diagnóstico de código del emisor SMTP ---\n";
-system("grep -rn -C 6 'No system SMTP settings' /var/www/html/application/Espo/ || true");
+$cmd = 'grep -rn -C 6 "No system SMTP settings" /var/www/html/application/Espo/';
+passthru($cmd);
 
 echo "\n--- 2b. Prueba de envío directo con MailSender de EspoCRM ---\n";
 try {
@@ -95,6 +96,6 @@ if (!empty($logFiles)) {
 } else {
     echo "ℹ No se han generado archivos de log en /var/www/html/data/logs/ (no hay errores registrados en disco).\n";
 }
-' "$target_email" "$smtp_pass" "$smtp_host" "$smtp_port" "$smtp_user"
+PHP_SCRIPT
 
 docker compose --env-file .env.production -f compose.prod.yml exec espocrm chown -R www-data:www-data /var/www/html/data
