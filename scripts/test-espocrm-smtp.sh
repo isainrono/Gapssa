@@ -65,12 +65,16 @@ echo "Autenticación: " . ($config->get("smtpAuth") ? "Sí" : "No") . "\n";
 echo "Remitente:     " . $config->get("outboundEmailFromName") . " <" . $config->get("outboundEmailFromAddress") . ">\n";
 echo "Estado Password: " . (!empty($decrypted) ? "✔ Correctamente cifrado y descifrable" : "❌ No configurada o vacía") . "\n";
 
-echo "\n--- 2. Prueba de envío directo con MailSender de EspoCRM ---\n";
+echo "\n--- 2. Diagnóstico de código del emisor SMTP ---\n";
+system("grep -rn -C 6 'No system SMTP settings' /var/www/html/application/Espo/ || true");
+
+echo "\n--- 2b. Prueba de envío directo con MailSender de EspoCRM ---\n";
 try {
     $mailSender = $c->get("mailSender");
     $email = $c->get("entityManager")->getNewEntity("Email");
     $email->set([
         "to" => $target,
+        "from" => $config->get("outboundEmailFromAddress") ?: "reservas@gapssa.es",
         "subject" => "Prueba de correo saliente EspoCRM - GAPSSA",
         "body" => "Este es un correo de prueba enviado desde EspoCRM para verificar el servicio SMTP.",
         "isHtml" => false,
