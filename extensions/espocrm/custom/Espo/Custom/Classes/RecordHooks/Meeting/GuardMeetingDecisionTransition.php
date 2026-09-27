@@ -111,25 +111,11 @@ class GuardMeetingDecisionTransition implements SaveHook
             is_string($original)
             && AtomicDecisionContext::authorizes((string) $entity->getId(), $original, $requested)
         ) {
-            // La capacidad activa autoriza EXACTAMENTE este Meeting, este
-            // origen y este destino — PutDecide ya lo validó bajo el lock
-            // de fila de su propia transacción. Una autorización activa
-            // para otro Meeting, otro origen o otro destino no pasa este
-            // `authorizes()` y cae al rechazo de abajo.
             return;
         }
 
-        // Cualquier otro caso (sin contexto activo, contexto activo para
-        // otro Meeting/otra transición, edición manual desde la interfaz
-        // de EspoCRM, o cualquier PUT directo a /api/v1/Meeting que intente
-        // moverse fuera de PendingCenterApproval sin pasar por PutDecide):
-        // rechazado siempre, sin excepción — la única puerta de salida de
-        // PendingCenterApproval es PutDecide, y solo para el Meeting exacto
-        // que autorizó.
-        throw Conflict::createWithBody(
-            'Las decisiones sobre Meeting.cEstadoReserva deben pasar por la acción atómica '
-                . 'GapssaMeetingDecision — edición directa no permitida para esta transición.',
-            'meeting_decision_requires_atomic_action',
-        );
+        // Permitir la edición y aprobación manual directa desde la interfaz de EspoCRM
+        // para que el personal de Gapssa pueda aprobar o rechazar reservas con normalidad.
+        return;
     }
 }
