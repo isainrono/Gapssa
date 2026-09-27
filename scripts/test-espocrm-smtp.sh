@@ -30,10 +30,8 @@ $envPort = (int) ($argv[4] ?? 587);
 $envUser = $argv[5] ?? "info@gapssa.es";
 
 echo "ℹ Sincronizando configuración de remitente oficial ($envUser)...\n";
-echo "--- Contenido completo de DefaultTransportPreparator.php ---\n";
-passthru('cat /var/www/html/application/Espo/Core/Mail/Sender/DefaultTransportPreparator.php');
-echo "--- Certificado SMTP devuelto por 172.25.0.1:587 ---\n";
-passthru('echo "QUIT" | openssl s_client -connect ' . escapeshellarg($envHost . ':' . $envPort) . ' -starttls smtp 2>&1 | grep -E "(subject=|issuer=|Verification error|verify return code)" || true');
+echo "--- Constructor de Sender.php ---\n";
+passthru('head -n 60 /var/www/html/application/Espo/Core/Mail/Sender.php');
 
 // Probar con TLS
 $smtpSecurity = "TLS";
@@ -231,44 +229,42 @@ try {
 
     $mailSender = $c->get("mailSender");
     $refSender = new \ReflectionClass($mailSender);
+    echo "Propiedades de MailSender: " . implode(", ", array_map(fn($p) => $p->getName(), $refSender->getProperties())) . "\n";
 
-    // Inyectar el accountProvider fresco en el MailSender para invalidar la caché interna
-    if (isset($cleanAp)) {
-        if ($refSender->hasProperty("accountProvider")) {
-            $prop = $refSender->getProperty("accountProvider");
-            $prop->setAccessible(true);
-            $prop->setValue($mailSender, $cleanAp);
-        }
+    if ($refSender->hasProperty("accountProvider") && isset($cleanAp)) {
+        $prop = $refSender->getProperty("accountProvider");
+        $prop->setAccessible(true);
+        $prop->setValue($mailSender, $cleanAp);
     }
 
-    // Envolver transportPreparator para permitir certificados autofirmados del host VPS (Plesk)
-    if ($refSender->hasProperty("transportPreparator")) {
-        $prepProp = $refSender->getProperty("transportPreparator");
-        $prepProp->setAccessible(true);
-        $innerPrep = $prepProp->getValue($mailSender);
-
-        $customPrep = new class($innerPrep) implements \Espo\Core\Mail\Sender\TransportPreparator {
-            private $inner;
-            public function __construct($inner) { $this->inner = $inner; }
-            public function prepare(\Espo\Core\Mail\SmtpParams $params): \Symfony\Component\Mailer\Transport\TransportInterface {
-                $t = $this->inner->prepare($params);
-                if ($t instanceof \Symfony\Component\Mailer\Transport\Smtp\EsmtpTransport) {
-                    $stream = $t->getStream();
-                    if ($stream instanceof \Symfony\Component\Mailer\Transport\Smtp\Stream\SocketStream) {
-                        $stream->setStreamOptions([
-                            'ssl' => [
-                                'verify_peer' => false,
-                                'verify_peer_name' => false,
-                                'allow_self_signed' => true,
-                            ],
-                        ]);
+    foreach ($refSender->getProperties() as $prop) {
+        $prop->setAccessible(true);
+        $val = $prop->getValue($mailSender);
+        if (is_object($val) && $val instanceof \Espo\Core\Mail\Sender\TransportPreparator) {
+            $innerPrep = $val;
+            $customPrep = new class($innerPrep) implements \Espo\Core\Mail\Sender\TransportPreparator {
+                private $inner;
+                public function __construct($inner) { $this->inner = $inner; }
+                public function prepare(\Espo\Core\Mail\SmtpParams $params): \Symfony\Component\Mailer\Transport\TransportInterface {
+                    $t = $this->inner->prepare($params);
+                    if ($t instanceof \Symfony\Component\Mailer\Transport\Smtp\EsmtpTransport) {
+                        $stream = $t->getStream();
+                        if ($stream instanceof \Symfony\Component\Mailer\Transport\Smtp\Stream\SocketStream) {
+                            $stream->setStreamOptions([
+                                'ssl' => [
+                                    'verify_peer' => false,
+                                    'verify_peer_name' => false,
+                                    'allow_self_signed' => true,
+                                ],
+                            ]);
+                        }
                     }
+                    return $t;
                 }
-                return $t;
-            }
-        };
-        $prepProp->setValue($mailSender, $customPrep);
-        echo "✔ Preparador SMTP adaptado para aceptar certificado TLS del host VPS (Plesk).\n";
+            };
+            $prop->setValue($mailSender, $customPrep);
+            echo "✔ Preparador SMTP (" . $prop->getName() . ") adaptado para aceptar certificado TLS autofirmado de Plesk.\n";
+        }
     }
 
     $email = $c->get("entityManager")->getNewEntity("Email");
