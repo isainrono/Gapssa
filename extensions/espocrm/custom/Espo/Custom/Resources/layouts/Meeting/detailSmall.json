@@ -1,0 +1,59 @@
+[
+    {
+        "rows": [
+            [
+                {
+                    "name": "name"
+                },
+                {
+                    "name": "cEstadoReserva"
+                }
+            ],
+            [
+                {
+                    "name": "status"
+                },
+                {
+                    "name": "cMotivoResolucionReserva"
+                }
+            ],
+            [
+                {
+                    "name": "cTratamiento"
+                },
+                {
+                    "name": "cZonaAtencion"
+                }
+            ],
+            [
+                {
+                    "name": "dateStart"
+                },
+                {
+                    "name": "dateEnd"
+                }
+            ],
+            [
+                {
+                    "name": "duration"
+                },
+                {
+                    "name": "reminders"
+                }
+            ],
+            [
+                {
+                    "name": "parent"
+                },
+                false
+            ],
+            [
+                {
+                    "name": "description"
+                }
+            ]
+        ],
+        "style": "default",
+        "label": ""
+    }
+]
