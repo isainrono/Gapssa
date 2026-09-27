@@ -1,0 +1,4 @@
+{
+    "Espo\\Core\\Mail\\Sender\\DefaultTransportPreparator": "Espo\\Custom\\Classes\\Mail\\Sender\\CustomTransportPreparator",
+    "Espo\\Core\\Mail\\Sender\\TransportPreparatorFactory": "Espo\\Custom\\Classes\\Mail\\Sender\\CustomTransportPreparatorFactory"
+}

@@ -16,6 +16,14 @@ class CustomTransportPreparator extends DefaultTransportPreparator
 {
     public function prepare(SmtpParams $smtpParams): TransportInterface
     {
+        @stream_context_set_default([
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+                'allow_self_signed' => true,
+            ],
+        ]);
+
         $transport = parent::prepare($smtpParams);
 
         if ($transport instanceof EsmtpTransport) {

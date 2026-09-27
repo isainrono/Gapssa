@@ -1,0 +1,3 @@
+{
+    "transportPreparatorFactory": "Espo\\Custom\\Classes\\Mail\\Sender\\CustomTransportPreparatorFactory"
+}

@@ -20,7 +20,7 @@ smtp_host="$(grep -E '^ *SMTP_HOST *=' .env.production 2>/dev/null | head -n1 | 
 smtp_port="$(grep -E '^ *SMTP_PORT *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '587')"
 # EspoCRM utiliza info@gapssa.es como cuenta saliente oficial del CRM
 smtp_user="info@gapssa.es"
-smtp_pass="$(grep -E '^ *(ESPO_SMTP_PASSWORD|SMTP_INFO_PASSWORD|INFO_SMTP_PASSWORD|SMTP_PASSWORD|SMTP_PASS) *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '')"
+smtp_pass="${1:-$(grep -E '^ *(ESPO_SMTP_PASSWORD|SMTP_INFO_PASSWORD|INFO_SMTP_PASSWORD|SMTP_PASSWORD|SMTP_PASS) *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '')}"
 
 echo "==> 2b. Configurando SMTP y habilitando aprobación de reservas en EspoCRM..."
 docker compose --env-file .env.production -f compose.prod.yml exec espocrm php -r '
@@ -215,9 +215,27 @@ echo "==> 3b. Despachando confirmación personalizada a clientes con citas confi
 docker compose --env-file .env.production -f compose.prod.yml exec espocrm php -r '
 require_once "/var/www/html/bootstrap.php";
 try {
+    @stream_context_set_default([
+        "ssl" => [
+            "verify_peer" => false,
+            "verify_peer_name" => false,
+            "allow_self_signed" => true,
+        ]
+    ]);
+
     $app = new \Espo\Core\Application();
     $container = $app->getContainer();
     $em = $container->get("entityManager");
+
+    $systemUser = $em->getEntity("User", "system") ?? $em->getEntity("User", "1");
+    if ($systemUser) {
+        if (method_exists($container, "setUser")) {
+            $container->setUser($systemUser);
+        }
+        if (method_exists($container, "set")) {
+            $container->set("user", $systemUser);
+        }
+    }
 
     if ($container->has(\Espo\Modules\Crm\Tools\Meeting\InvitationService::class)) {
         $invitationService = $container->get(\Espo\Modules\Crm\Tools\Meeting\InvitationService::class);
