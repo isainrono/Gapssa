@@ -438,30 +438,34 @@ export class HttpEspoBookingAdapter implements EspoBookingAdapter {
   async listActiveMeetingsOverlapping(input: ListOccupiedMeetingsInput): Promise<SimMeeting[]> {
     const query: Record<string, string> = {
       select: MEETING_SELECT_FIELDS,
-      'where[0][type]': 'notIn',
-      'where[0][attribute]': 'cEstadoReserva',
-      'where[0][value][0]': 'Canceled',
-      'where[0][value][1]': 'NoShow',
-      'where[1][type]': 'lessThan',
-      'where[1][attribute]': 'dateStart',
-      'where[1][value]': formatEspoDateTime(input.to),
-      'where[2][type]': 'greaterThan',
-      'where[2][attribute]': 'dateEnd',
-      'where[2][value]': formatEspoDateTime(input.from),
+      'where[0][type]': 'lessThan',
+      'where[0][attribute]': 'dateStart',
+      'where[0][value]': formatEspoDateTime(input.to),
+      'where[1][type]': 'greaterThan',
+      'where[1][attribute]': 'dateEnd',
+      'where[1][value]': formatEspoDateTime(input.from),
     }
     if (input.professionalId) {
-      query['where[3][type]'] = 'equals'
-      query['where[3][attribute]'] = 'assignedUserId'
-      query['where[3][value]'] = input.professionalId
+      query['where[2][type]'] = 'equals'
+      query['where[2][attribute]'] = 'assignedUserId'
+      query['where[2][value]'] = input.professionalId
     }
     if (input.zoneId) {
-      query['where[4][type]'] = 'equals'
-      query['where[4][attribute]'] = 'cZonaAtencionId'
-      query['where[4][value]'] = input.zoneId
+      query['where[3][type]'] = 'equals'
+      query['where[3][attribute]'] = 'cZonaAtencionId'
+      query['where[3][value]'] = input.zoneId
     }
 
     const rows = await this.listAllPages('/api/v1/Meeting', query, meetingRecordSchema)
-    return rows.map(toSimMeeting)
+    return rows
+      .filter((row) => {
+        // Excluir reuniones canceladas tanto por el flujo estándar de EspoCRM (status = 'Not Held')
+        // como por el flujo del portal (cEstadoReserva = 'Canceled' o 'NoShow')
+        if (row.status === 'Not Held') return false
+        if (row.cEstadoReserva === 'Canceled' || row.cEstadoReserva === 'NoShow') return false
+        return true
+      })
+      .map(toSimMeeting)
   }
 
   /**
