@@ -33,6 +33,12 @@ final class EstadoReservaStatusMap
         'ScheduleConflict' => 'Planned',
     ];
 
+    public const COLOR_MAP = [
+        'PendingCenterApproval' => '#F59E0B',
+        'Confirmed' => '#10B981',
+        'Canceled' => '#9CA3AF',
+    ];
+
     /** Null si `$estadoReserva` no pertenece al enum conocido — nunca inventa un status. */
     public static function statusFor(?string $estadoReserva): ?string
     {
@@ -41,5 +47,15 @@ final class EstadoReservaStatusMap
         }
 
         return self::MAP[$estadoReserva] ?? null;
+    }
+
+    /** Color de calendario para el estado o null (color estándar de EspoCRM). */
+    public static function colorFor(?string $estadoReserva): ?string
+    {
+        if ($estadoReserva === null || $estadoReserva === '') {
+            return null;
+        }
+
+        return self::COLOR_MAP[$estadoReserva] ?? null;
     }
 }

@@ -68,17 +68,14 @@ class SyncEstadoReservaToStatus implements SaveHook
             return;
         }
 
-        $status = EstadoReservaStatusMap::statusFor($entity->get('cEstadoReserva'));
+        $estadoReserva = $entity->get('cEstadoReserva');
+        $status = EstadoReservaStatusMap::statusFor($estadoReserva);
 
-        if ($status === null) {
-            // Reunión fuera del flujo de reservas del portal (null/vacío),
-            // o un valor fuera del enum conocido (no debería ser
-            // alcanzable — campo `enum` cerrado en el propio EspoCRM, pero
-            // se comprueba explícitamente en vez de asumirlo) — nunca se
-            // inventa un status, se deja como esté (nativo, GCS, manual).
-            return;
+        if ($status !== null) {
+            $entity->set('status', $status);
         }
 
-        $entity->set('status', $status);
+        $color = EstadoReservaStatusMap::colorFor($estadoReserva);
+        $entity->set('color', $color);
     }
 }

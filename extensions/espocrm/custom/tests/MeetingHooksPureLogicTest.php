@@ -84,6 +84,15 @@ check('statusFor("") — vacío tratado igual que null', EstadoReservaStatusMap:
 check('statusFor(valor desconocido) — nunca inventa un status', EstadoReservaStatusMap::statusFor('EstadoInventado'), null);
 check('MAP tiene exactamente 12 entradas (el enum completo)', count(EstadoReservaStatusMap::MAP), 12);
 
+// EstadoReservaStatusMap::colorFor — colores de calendario para cada estado
+check('colorFor(PendingCenterApproval) — naranja/ámbar de atención requerida', EstadoReservaStatusMap::colorFor('PendingCenterApproval'), '#F59E0B');
+check('colorFor(Confirmed) — verde de confirmada', EstadoReservaStatusMap::colorFor('Confirmed'), '#10B981');
+check('colorFor(Canceled) — gris de cancelada/rechazada', EstadoReservaStatusMap::colorFor('Canceled'), '#9CA3AF');
+check('colorFor(RequestReceived) — sin color custom (usa el nativo)', EstadoReservaStatusMap::colorFor('RequestReceived'), null);
+check('colorFor(null) — reunión interna / sin estado web (usa color nativo)', EstadoReservaStatusMap::colorFor(null), null);
+check('colorFor("") — vacío tratado igual que null', EstadoReservaStatusMap::colorFor(''), null);
+check('colorFor(valor desconocido) — nunca inventa un color', EstadoReservaStatusMap::colorFor('EstadoInventado'), null);
+
 // ---------------------------------------------------------------------------
 // MeetingDecisionTransitionPolicy — qué transiciones necesitan el CAS
 // atómico del guard (GuardMeetingDecisionTransition).

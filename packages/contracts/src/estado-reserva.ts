@@ -76,3 +76,15 @@ export const ESTADO_RESERVA_A_MEETING_STATUS: Readonly<
   RescheduleRequested: "Planned",
   ScheduleConflict: "Planned",
 };
+
+/**
+ * Colores asignados a cada estado de reserva en el calendario de EspoCRM.
+ * Copia exacta de COLOR_MAP en EstadoReservaStatusMap.php.
+ */
+export const ESTADO_RESERVA_A_CALENDAR_COLOR: Readonly<
+  Partial<Record<EstadoReserva, string>>
+> = {
+  PendingCenterApproval: "#F59E0B",
+  Confirmed: "#10B981",
+  Canceled: "#9CA3AF",
+};

@@ -12,6 +12,12 @@
                 86400
             ]
         },
+        "color": {
+            "type": "varchar",
+            "required": false,
+            "maxLength": 32,
+            "isCustom": true
+        },
         "cBookingRequestId": {
             "type": "varchar",
             "required": false,

@@ -37,6 +37,7 @@ coverage/
 test-results/
 playwright-report/
 *.tsbuildinfo
+.pnpm-store/
 
 # Almacenamiento local de subidas de Payload (apps/web) — binarios
 # generados por /admin o por el seed de Fase 2, nunca código fuente.

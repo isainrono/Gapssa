@@ -5,6 +5,7 @@ import { z } from 'zod'
 
 import {
   CONTACT_GAPSSA_ACCOUNT_ID_FIELD,
+  ESTADO_RESERVA_A_CALENDAR_COLOR,
   ESTADO_RESERVA_A_MEETING_STATUS,
   ESTADOS_RESERVA,
   MEETING_RESOLUTION_REASONS,
@@ -622,6 +623,7 @@ export class HttpEspoBookingAdapter implements EspoBookingAdapter {
           assignedUserId: input.professionalId,
           cEstadoReserva: 'PendingCenterApproval' satisfies EstadoReserva,
           status: ESTADO_RESERVA_A_MEETING_STATUS.PendingCenterApproval,
+          color: ESTADO_RESERVA_A_CALENDAR_COLOR.PendingCenterApproval,
           cBookingRequestId: input.bookingRequestId,
           // Puerta 5B-2A: SOLO se añade la clave cuando es exactamente
           // `true` — funcionamiento normal (`undefined`) nunca la incluye
@@ -866,6 +868,7 @@ const meetingRecordSchema = z.object({
   dateStart: z.string(),
   dateEnd: z.string(),
   status: z.enum(['Planned', 'Held', 'Not Held']),
+  color: z.string().nullable().optional(),
   cEstadoReserva: z.enum(ESTADOS_RESERVA).nullable(),
   // "Fase 4B — flujo de decisión final": campo NUEVO, no creado todavía en
   // la instancia real (docs/fase4b-decision-flow-final.md §6) — nullable/
