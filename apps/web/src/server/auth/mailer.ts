@@ -60,6 +60,9 @@ function getTransporter(): Transporter {
     auth: serverEnv.SMTP_USER
       ? { user: serverEnv.SMTP_USER, pass: serverEnv.SMTP_PASSWORD }
       : undefined,
+    tls: {
+      rejectUnauthorized: serverEnv.SMTP_TLS_REJECT_UNAUTHORIZED,
+    },
   })
   return transporter
 }

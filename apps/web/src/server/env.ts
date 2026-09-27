@@ -157,6 +157,11 @@ export const restEnvSchema = z.object({
   SMTP_PASSWORD: z.string().optional().default(''),
   /** Remitente ya decidido por el plan (no un secreto) — configurable igualmente, nunca hardcodeado en el código. */
   SMTP_FROM_EMAIL: z.string().optional().default('reservas@gapssa.es'),
+  /** Permite saltar la validación estricta de certificado en entornos internos (p. ej. Plesk en la puerta de enlace Docker). */
+  SMTP_TLS_REJECT_UNAUTHORIZED: z
+    .string()
+    .optional()
+    .transform((value) => value !== 'false'),
 
   // -------------------------------------------------------------------
   // Fase 4A — Reservas (gapssa_booking). Secretos sin fallback de
