@@ -16,6 +16,7 @@ use Espo\Core\Exceptions\ServiceUnavailable;
 use Espo\Core\Record\ServiceContainer;
 use Espo\Core\Record\UpdateParams;
 use Espo\Core\Utils\Config;
+use Espo\Custom\Classes\RecordHooks\Meeting\EstadoReservaStatusMap;
 use Espo\Custom\Classes\RecordHooks\Meeting\MeetingDecisionTransitionPolicy;
 use Espo\Custom\Classes\RecordHooks\Meeting\MeetingResolutionPolicy;
 use Espo\Custom\Classes\RecordHooks\Meeting\MeetingResolutionReason;
@@ -357,10 +358,13 @@ class PutDecide implements Action
 
         $data = new stdClass();
         $data->cEstadoReserva = $decision;
-        // Escrito en la MISMA llamada que cEstadoReserva — nunca en un
-        // segundo update separado — para que los dos campos se comprometan
-        // o reviertan juntos (ver cabecera de la clase).
         $data->cMotivoResolucionReserva = $resultReason;
+        $data->color = EstadoReservaStatusMap::colorFor($decision);
+
+        $status = EstadoReservaStatusMap::statusFor($decision);
+        if ($status !== null) {
+            $data->status = $status;
+        }
 
         if ($note !== null) {
             $data->description = $note;

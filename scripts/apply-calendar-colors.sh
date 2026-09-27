@@ -7,14 +7,21 @@ cd "${project_dir}"
 
 echo "==> 1. Sincronizando personalizaciones de EspoCRM..."
 docker compose --env-file .env.production -f compose.prod.yml cp extensions/espocrm/custom/Espo/Custom/. espocrm:/var/www/html/custom/Espo/Custom/
+if [ -d extensions/espocrm/custom/client/custom ]; then
+  docker compose --env-file .env.production -f compose.prod.yml cp extensions/espocrm/custom/client/custom/. espocrm:/var/www/html/client/custom/
+fi
 
 echo "==> 2. Reconstruyendo metadatos y limpiando caché de EspoCRM..."
-docker compose --env-file .env.production -f compose.prod.yml exec espocrm php command.php rebuild
-docker compose --env-file .env.production -f compose.prod.yml exec espocrm php command.php clear-cache
+docker compose --env-file .env.production -f compose.prod.yml exec espocrm bin/command rebuild
+docker compose --env-file .env.production -f compose.prod.yml exec espocrm bin/command clear-cache
 
-echo "==> 3. Actualizando color naranja en citas pendientes existentes en la base de datos..."
+echo "==> 3. Actualizando colores en base de datos para todas las citas..."
 docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm-db sh -c \
-  'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE" -e "UPDATE meeting SET color = '\''#F59E0B'\'' WHERE c_estado_reserva = '\''PendingCenterApproval'\'' AND (color IS NULL OR color != '\''#F59E0B'\'');"'
+  'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE" -e "
+    UPDATE meeting SET color = '\''#F59E0B'\'' WHERE c_estado_reserva = '\''PendingCenterApproval'\'';
+    UPDATE meeting SET color = '\''#10B981'\'' WHERE c_estado_reserva = '\''Confirmed'\'';
+    UPDATE meeting SET color = '\''#9CA3AF'\'' WHERE c_estado_reserva = '\''Canceled'\'';
+  "'
 
 echo "==> 4. Reconstruyendo y actualizando el contenedor web (BFF)..."
 docker compose --env-file .env.production -f compose.prod.yml up -d --build web
