@@ -29,6 +29,30 @@ $envHost = $argv[3] ?? "172.25.0.1";
 $envPort = (int) ($argv[4] ?? 587);
 $envUser = $argv[5] ?? "info@gapssa.es";
 
+echo "ℹ Sincronizando configuración de remitente oficial ($envUser)...\n";
+$configFile = "/var/www/html/data/config.php";
+$conf = file_exists($configFile) ? require $configFile : [];
+$conf["smtpServer"] = $envHost;
+$conf["smtpPort"] = $envPort;
+$conf["smtpAuth"] = true;
+$conf["smtpSecurity"] = "";
+$conf["smtpUsername"] = $envUser;
+if (!empty($envPass)) {
+    $conf["smtpPassword"] = $crypt->encrypt($envPass);
+}
+$conf["outboundEmailFromName"] = "GAPSSA";
+$conf["outboundEmailFromAddress"] = $envUser;
+$conf["outboundEmailIsShared"] = true;
+file_put_contents($configFile, "<?php\nreturn " . var_export($conf, true) . ";\n");
+
+// Actualizar también la instancia de config en memoria
+foreach ($conf as $k => $v) {
+    if (method_exists($config, 'set')) {
+        $config->set($k, $v);
+    }
+}
+@unlink("/var/www/html/data/cache/application/config.php");
+
 $rawPass = $config->get("smtpPassword");
 $decrypted = null;
 if (is_string($rawPass) && $rawPass !== "") {
@@ -38,27 +62,7 @@ if (is_string($rawPass) && $rawPass !== "") {
         $decrypted = null;
     }
 }
-
-if (!empty($envPass) || empty($decrypted)) {
-    echo "ℹ Sincronizando configuración de remitente oficial ($envUser)...\n";
-    $configFile = "/var/www/html/data/config.php";
-    $conf = require $configFile;
-    $conf["smtpServer"] = $envHost;
-    $conf["smtpPort"] = $envPort;
-    $conf["smtpAuth"] = true;
-    $conf["smtpSecurity"] = "";
-    $conf["smtpUsername"] = $envUser;
-    if (!empty($envPass)) {
-        $conf["smtpPassword"] = $crypt->encrypt($envPass);
-    }
-    $conf["outboundEmailFromName"] = "GAPSSA";
-    $conf["outboundEmailFromAddress"] = $envUser;
-    $conf["outboundEmailIsShared"] = true;
-    file_put_contents($configFile, "<?php\nreturn " . var_export($conf, true) . ";\n");
-    $rawPass = $conf["smtpPassword"] ?? "";
-    $decrypted = !empty($rawPass) ? $crypt->decrypt($rawPass) : null;
-    echo "✔ data/config.php actualizado con remitente: $envUser.\n";
-}
+echo "✔ data/config.php y memoria actualizados con remitente: " . $config->get("outboundEmailFromAddress") . ".\n";
 
 echo "\n--- 1. Parámetros en data/config.php ---\n";
 echo "Servidor SMTP: " . $config->get("smtpServer") . ":" . $config->get("smtpPort") . "\n";
@@ -132,80 +136,73 @@ try {
         echo "  - ID: " . $ie->getId() . " | Nombre: " . $ie->get('name') . " | Email: " . $ie->get('emailAddress') . " | Status: " . $ie->get('status') . " | useSmtp: " . var_export($ie->get('useSmtp'), true) . " | smtpHost: " . $ie->get('smtpHost') . "\n";
     }
 
-    // Buscamos si existe ya la cuenta para $envUser
-    $account = $inboundRepo->where(['emailAddress' => $envUser])->findOne();
-    if (!$account) {
-        $account = $em->getNewEntity("InboundEmail");
+    // Buscamos todas las cuentas para $envUser
+    $allInfoAccounts = $inboundRepo->where(['emailAddress' => $envUser])->find();
+    $activeId = null;
+
+    if (count($allInfoAccounts) === 0) {
+        $acc = $em->getNewEntity("InboundEmail");
+        $allInfoAccounts = [$acc];
     }
 
     $encryptedPassword = $crypt->encrypt($envPass);
 
-    $account->set([
-        "name" => "GAPSSA",
-        "status" => "Active",
-        "emailAddress" => $envUser,
-        "fromName" => "GAPSSA",
-        "replyToAddress" => $envUser,
-        "replyToName" => "GAPSSA",
-        "useSmtp" => true,
-        "smtpHost" => $envHost,
-        "smtpPort" => $envPort,
-        "smtpAuth" => true,
-        "smtpSecurity" => "",
-        "smtpUsername" => $envUser,
-        "smtpPassword" => $encryptedPassword,
-        "smtpIsShared" => true,
-        "isShared" => true,
-    ]);
-
-    try {
-        $em->saveEntity($account);
-        echo "✔ Cuenta InboundEmail guardada mediante EntityManager (ID: " . $account->getId() . ")\n";
-    } catch (\Throwable $e) {
-        echo "⚠ Falló saveEntity (" . $e->getMessage() . "), aplicando directamente vía base de datos...\n";
-        $pdo = $c->has('pdo') ? $c->get('pdo') : ($c->has('defaultEntityManager') ? $c->get('defaultEntityManager')->getPDO() : null);
-        if ($pdo) {
-            $checkStmt = $pdo->prepare("SELECT id FROM inbound_email WHERE LOWER(email_address) = LOWER(?) LIMIT 1");
-            $checkStmt->execute([$envUser]);
-            $existingId = $checkStmt->fetchColumn();
-            if ($existingId) {
-                $updStmt = $pdo->prepare("UPDATE inbound_email SET status = 'Active', use_smtp = 1, smtp_host = ?, smtp_port = ?, smtp_auth = 1, smtp_security = '', smtp_username = ?, smtp_password = ?, smtp_is_shared = 1, from_name = 'GAPSSA', reply_to_address = ?, reply_to_name = 'GAPSSA' WHERE id = ?");
-                $updStmt->execute([$envHost, $envPort, $envUser, $encryptedPassword, $envUser, $existingId]);
-                echo "✔ Cuenta InboundEmail actualizada vía SQL (ID: $existingId)\n";
-            } else {
-                $newId = bin2hex(random_bytes(8)) . 'a';
-                $insStmt = $pdo->prepare("INSERT INTO inbound_email (id, name, status, email_address, from_name, reply_to_address, reply_to_name, use_smtp, smtp_host, smtp_port, smtp_auth, smtp_security, smtp_username, smtp_password, smtp_is_shared, deleted) VALUES (?, 'GAPSSA', 'Active', ?, 'GAPSSA', ?, 'GAPSSA', 1, ?, ?, 1, '', ?, ?, 1, 0)");
-                $insStmt->execute([$newId, $envUser, $envUser, $envHost, $envPort, $envUser, $encryptedPassword]);
-                echo "✔ Cuenta InboundEmail insertada vía SQL (ID: $newId)\n";
+    foreach ($allInfoAccounts as $idx => $acc) {
+        if ($idx === 0) {
+            $acc->set([
+                "name" => "GAPSSA",
+                "status" => "Active",
+                "emailAddress" => $envUser,
+                "fromName" => "GAPSSA",
+                "replyToAddress" => $envUser,
+                "replyToName" => "GAPSSA",
+                "useSmtp" => true,
+                "smtpHost" => $envHost,
+                "smtpPort" => $envPort,
+                "smtpAuth" => true,
+                "smtpSecurity" => "",
+                "smtpUsername" => $envUser,
+                "smtpPassword" => $encryptedPassword,
+                "smtpIsShared" => true,
+                "isShared" => true,
+            ]);
+            try {
+                $em->saveEntity($acc);
+                $activeId = $acc->getId();
+                echo "✔ Cuenta InboundEmail oficial activada con SMTP (ID: $activeId, Email: $envUser)\n";
+            } catch (\Throwable $e) {
+                echo "⚠ Error al guardar vía ORM: " . $e->getMessage() . "\n";
             }
+        } else {
+            $acc->set("status", "Inactive");
+            try {
+                $em->saveEntity($acc);
+                echo "ℹ Cuenta InboundEmail secundaria marcada como Inactive (ID: " . $acc->getId() . ")\n";
+            } catch (\Throwable $e) {}
         }
     }
 
-    // Desactivar cuentas duplicadas/rotas sin SMTP para que el cron no de errores
+    // Backup directo en SQL para garantizar sincronización en BD
     try {
         $pdo = $c->has('pdo') ? $c->get('pdo') : null;
-        if ($pdo) {
-            $pdo->exec("UPDATE inbound_email SET status = 'Inactive' WHERE id = '6a70ed04a0fdd2f68' AND id != '{$account->getId()}'");
-            echo "ℹ Cuenta obsoleta desactivada en BD.\n";
+        if ($pdo && $activeId) {
+            $upd = $pdo->prepare("UPDATE inbound_email SET status = 'Active', use_smtp = 1, smtp_host = ?, smtp_port = ?, smtp_auth = 1, smtp_security = '', smtp_username = ?, smtp_password = ?, smtp_is_shared = 1, from_name = 'GAPSSA', reply_to_address = ?, reply_to_name = 'GAPSSA' WHERE id = ?");
+            $upd->execute([$envHost, $envPort, $envUser, $encryptedPassword, $envUser, $activeId]);
+            $pdo->exec("UPDATE inbound_email SET status = 'Inactive' WHERE email_address = '$envUser' AND id != '$activeId'");
         }
-    } catch (\Throwable $e) {
-        // Ignorar
-    }
+    } catch (\Throwable $e) {}
 
-    // Comprobamos ahora getSystem() recreando el provider
-    if (isset($refSender) && $refSender->hasProperty("accountProvider")) {
-        // Obtenemos una nueva instancia limpia de SendingAccountProvider
-        $cleanAp = $c->has("injectableFactory") 
-            ? $c->get("injectableFactory")->create(\Espo\Core\Mail\Account\SendingAccountProvider::class)
-            : $ap;
-        $systemAccount = $cleanAp->getSystem();
-        if ($systemAccount) {
-            echo "✔ ¡AccountProvider::getSystem() cargó exitosamente la cuenta del sistema!\n";
-            echo "  Nombre de cuenta: " . $systemAccount->getName() . "\n";
-            echo "  Email saliente:   " . $systemAccount->getFromAddress() . "\n";
-        } else {
-            echo "❌ AccountProvider::getSystem() sigue devolviendo NULL.\n";
-        }
+    // Comprobamos getSystem() recreando el provider
+    $cleanAp = $c->has("injectableFactory") 
+        ? $c->get("injectableFactory")->create(\Espo\Core\Mail\Account\SendingAccountProvider::class)
+        : $ap;
+    $systemAccount = $cleanAp->getSystem();
+    if ($systemAccount) {
+        echo "✔ ¡AccountProvider::getSystem() cargó exitosamente la cuenta del sistema!\n";
+        echo "  Nombre de cuenta: " . $systemAccount->getName() . "\n";
+        echo "  Email saliente:   " . $systemAccount->getFromAddress() . "\n";
+    } else {
+        echo "❌ AccountProvider::getSystem() sigue devolviendo NULL.\n";
     }
 
 } catch (\Throwable $e) {
@@ -215,16 +212,26 @@ try {
 echo "\n--- 2b. Prueba de envío directo con MailSender de EspoCRM ---\n";
 try {
     $mailSender = $c->get("mailSender");
+    // Inyectar el accountProvider fresco en el MailSender para invalidar la caché interna
+    if (isset($cleanAp)) {
+        $refSender = new \ReflectionClass($mailSender);
+        if ($refSender->hasProperty("accountProvider")) {
+            $prop = $refSender->getProperty("accountProvider");
+            $prop->setAccessible(true);
+            $prop->setValue($mailSender, $cleanAp);
+        }
+    }
+
     $email = $c->get("entityManager")->getNewEntity("Email");
     $email->set([
         "to" => $target,
-        "from" => $config->get("outboundEmailFromAddress") ?: "reservas@gapssa.es",
+        "from" => $config->get("outboundEmailFromAddress") ?: "info@gapssa.es",
         "subject" => "Prueba de correo saliente EspoCRM - GAPSSA",
-        "body" => "Este es un correo de prueba enviado desde EspoCRM para verificar el servicio SMTP.",
+        "body" => "Este es un correo de prueba enviado desde EspoCRM (info@gapssa.es) para verificar el servicio SMTP.",
         "isHtml" => false,
     ]);
     $mailSender->send($email);
-    echo "✔ ¡ÉXITO TOTAL! Correo de prueba enviado satisfactoriamente a $target.\n";
+    echo "✔ ¡ÉXITO TOTAL! Correo de prueba enviado satisfactoriamente a $target desde " . ($config->get("outboundEmailFromAddress") ?: "info@gapssa.es") . ".\n";
 } catch (\Throwable $e) {
     echo "❌ ERROR al enviar correo: " . $e->getMessage() . "\n";
     echo "Clase de excepción: " . get_class($e) . "\n";

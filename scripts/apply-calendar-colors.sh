@@ -42,16 +42,17 @@ $config["smtpServer"] = $argv[1] ?: "172.25.0.1";
 $config["smtpPort"] = (int) ($argv[2] ?: 587);
 $config["smtpAuth"] = true;
 $config["smtpSecurity"] = "";
-$config["smtpUsername"] = $argv[3] ?: "reservas@gapssa.es";
+$config["smtpUsername"] = $argv[3] ?: "info@gapssa.es";
 if (!empty($argv[4])) {
     $config["smtpPassword"] = $crypt->encrypt($argv[4]);
 }
 $config["outboundEmailFromName"] = "GAPSSA";
-$config["outboundEmailFromAddress"] = $argv[3] ?: "reservas@gapssa.es";
+$config["outboundEmailFromAddress"] = $argv[3] ?: "info@gapssa.es";
 $config["outboundEmailIsShared"] = true;
 
 file_put_contents($configFile, "<?php\nreturn " . var_export($config, true) . ";\n");
-echo "Configuración en data/config.php actualizada (decisiones habilitadas y SMTP configurado con contraseña cifrada para " . $config["outboundEmailFromAddress"] . ").\n";
+@unlink("/var/www/html/data/cache/application/config.php");
+echo "Configuración en data/config.php actualizada (decisiones habilitadas y SMTP configurado para " . $config["outboundEmailFromAddress"] . ").\n";
 
 try {
     $c = $app->getContainer();
@@ -69,61 +70,57 @@ try {
 
     if ($em->hasRepository("InboundEmail")) {
         $repo = $em->getRDBRepository("InboundEmail");
-        $account = $repo->where(["emailAddress" => $argv[3] ?: "reservas@gapssa.es"])->findOne();
-        if (!$account) {
-            $account = $em->getNewEntity("InboundEmail");
-        }
+        $targetEmail = $argv[3] ?: "info@gapssa.es";
+        $allAccounts = $repo->where(["emailAddress" => $targetEmail])->find();
         $encryptedPassword = !empty($argv[4]) ? $crypt->encrypt($argv[4]) : "";
-        $account->set([
-            "name" => "GAPSSA",
-            "status" => "Active",
-            "emailAddress" => $argv[3] ?: "reservas@gapssa.es",
-            "fromName" => "GAPSSA",
-            "replyToAddress" => $argv[3] ?: "reservas@gapssa.es",
-            "replyToName" => "GAPSSA",
-            "useSmtp" => true,
-            "smtpHost" => $argv[1] ?: "172.25.0.1",
-            "smtpPort" => (int) ($argv[2] ?: 587),
-            "smtpAuth" => true,
-            "smtpSecurity" => "",
-            "smtpUsername" => $argv[3] ?: "reservas@gapssa.es",
-            "smtpIsShared" => true,
-            "isShared" => true,
-        ]);
-        if (!empty($encryptedPassword)) {
-            $account->set("smtpPassword", $encryptedPassword);
+        $activeId = null;
+
+        if (count($allAccounts) === 0) {
+            $acc = $em->getNewEntity("InboundEmail");
+            $allAccounts = [$acc];
         }
 
-        try {
-            $em->saveEntity($account);
-            echo "✔ Cuenta InboundEmail del sistema configurada (ID: " . $account->getId() . ", Email: " . $account->get("emailAddress") . ").\n";
-        } catch (\Throwable $e) {
-            $pdo = $c->has('pdo') ? $c->get('pdo') : null;
-            if ($pdo) {
-                $targetEmail = $argv[3] ?: "reservas@gapssa.es";
-                $checkStmt = $pdo->prepare("SELECT id FROM inbound_email WHERE LOWER(email_address) = LOWER(?) LIMIT 1");
-                $checkStmt->execute([$targetEmail]);
-                $existingId = $checkStmt->fetchColumn();
-                if ($existingId) {
-                    $updStmt = $pdo->prepare("UPDATE inbound_email SET status = 'Active', use_smtp = 1, smtp_host = ?, smtp_port = ?, smtp_auth = 1, smtp_security = '', smtp_username = ?, smtp_password = ?, smtp_is_shared = 1, from_name = 'GAPSSA', reply_to_address = ?, reply_to_name = 'GAPSSA' WHERE id = ?");
-                    $updStmt->execute([$argv[1] ?: "172.25.0.1", (int) ($argv[2] ?: 587), $targetEmail, $encryptedPassword, $targetEmail, $existingId]);
-                    echo "✔ Cuenta InboundEmail actualizada vía SQL (ID: $existingId)\n";
-                } else {
-                    $newId = bin2hex(random_bytes(8)) . 'a';
-                    $insStmt = $pdo->prepare("INSERT INTO inbound_email (id, name, status, email_address, from_name, reply_to_address, reply_to_name, use_smtp, smtp_host, smtp_port, smtp_auth, smtp_security, smtp_username, smtp_password, smtp_is_shared, deleted) VALUES (?, 'GAPSSA', 'Active', ?, 'GAPSSA', ?, 'GAPSSA', 1, ?, ?, 1, '', ?, ?, 1, 0)");
-                    $insStmt->execute([$newId, $targetEmail, $targetEmail, $argv[1] ?: "172.25.0.1", (int) ($argv[2] ?: 587), $targetEmail, $encryptedPassword]);
-                    echo "✔ Cuenta InboundEmail insertada vía SQL (ID: $newId)\n";
+        foreach ($allAccounts as $idx => $account) {
+            if ($idx === 0) {
+                $account->set([
+                    "name" => "GAPSSA",
+                    "status" => "Active",
+                    "emailAddress" => $targetEmail,
+                    "fromName" => "GAPSSA",
+                    "replyToAddress" => $targetEmail,
+                    "replyToName" => "GAPSSA",
+                    "useSmtp" => true,
+                    "smtpHost" => $argv[1] ?: "172.25.0.1",
+                    "smtpPort" => (int) ($argv[2] ?: 587),
+                    "smtpAuth" => true,
+                    "smtpSecurity" => "",
+                    "smtpUsername" => $targetEmail,
+                    "smtpIsShared" => true,
+                    "isShared" => true,
+                ]);
+                if (!empty($encryptedPassword)) {
+                    $account->set("smtpPassword", $encryptedPassword);
                 }
+                try {
+                    $em->saveEntity($account);
+                    $activeId = $account->getId();
+                    echo "✔ Cuenta InboundEmail del sistema configurada (ID: $activeId, Email: $targetEmail).\n";
+                } catch (\Throwable $e) {}
+            } else {
+                $account->set("status", "Inactive");
+                try {
+                    $em->saveEntity($account);
+                } catch (\Throwable $e) {}
             }
         }
 
-        // Desactivar cuentas duplicadas/rotas sin SMTP para no colapsar tareas cron
-        try {
-            $pdo = $c->has('pdo') ? $c->get('pdo') : null;
-            if ($pdo) {
-                $pdo->exec("UPDATE inbound_email SET status = 'Inactive' WHERE id = '6a70ed04a0fdd2f68'");
-            }
-        } catch (\Throwable $e) {}
+        $pdo = $c->has('pdo') ? $c->get('pdo') : null;
+        if ($pdo && $activeId) {
+            $updStmt = $pdo->prepare("UPDATE inbound_email SET status = 'Active', use_smtp = 1, smtp_host = ?, smtp_port = ?, smtp_auth = 1, smtp_security = '', smtp_username = ?, smtp_password = ?, smtp_is_shared = 1, from_name = 'GAPSSA', reply_to_address = ?, reply_to_name = 'GAPSSA' WHERE id = ?");
+            $updStmt->execute([$argv[1] ?: "172.25.0.1", (int) ($argv[2] ?: 587), $targetEmail, $encryptedPassword, $targetEmail, $activeId]);
+            $pdo->exec("UPDATE inbound_email SET status = 'Inactive' WHERE email_address = '$targetEmail' AND id != '$activeId'");
+            $pdo->exec("UPDATE inbound_email SET status = 'Inactive' WHERE id = '6a70ed04a0fdd2f68' AND id != '$activeId'");
+        }
     }
 } catch (\Throwable $e) {
     echo "⚠ Aviso actualizando InboundEmail: " . $e->getMessage() . "\n";
