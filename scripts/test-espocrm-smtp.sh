@@ -65,9 +65,70 @@ echo "Autenticación: " . ($config->get("smtpAuth") ? "Sí" : "No") . "\n";
 echo "Remitente:     " . $config->get("outboundEmailFromName") . " <" . $config->get("outboundEmailFromAddress") . ">\n";
 echo "Estado Password: " . (!empty($decrypted) ? "✔ Correctamente cifrado y descifrable" : "❌ No configurada o vacía") . "\n";
 
-echo "\n--- 2. Diagnóstico de código del emisor SMTP ---\n";
-$cmd = 'grep -rn -C 6 "No system SMTP settings" /var/www/html/application/Espo/';
-passthru($cmd);
+echo "\n--- 2. Diagnóstico de AccountProvider en EspoCRM ---\n";
+try {
+    $sender = $c->get("mailSender");
+    $refSender = new \ReflectionClass($sender);
+    echo "Clase MailSender: " . get_class($sender) . "\n";
+    if ($refSender->hasProperty("accountProvider")) {
+        $prop = $refSender->getProperty("accountProvider");
+        $prop->setAccessible(true);
+        $ap = $prop->getValue($sender);
+        echo "Clase AccountProvider: " . get_class($ap) . "\n";
+        $refAp = new \ReflectionClass($ap);
+        echo "Archivo AccountProvider: " . $refAp->getFileName() . "\n";
+        if ($refAp->hasMethod("getSystem")) {
+            $m = $refAp->getMethod("getSystem");
+            $start = $m->getStartLine();
+            $end = $m->getEndLine();
+            $file = file($refAp->getFileName());
+            echo "Código de getSystem() (líneas $start-$end):\n";
+            for ($i = $start - 1; $i < $end; $i++) {
+                echo "  " . ($i + 1) . ": " . $file[$i];
+            }
+        }
+    }
+} catch (\Throwable $e) {
+    echo "Aviso inspeccionando AccountProvider: " . $e->getMessage() . "\n";
+}
+
+echo "\n--- 2a. Asegurando OutboundEmail del sistema ---\n";
+try {
+    $em = $c->get("entityManager");
+    
+    // Verificamos si existe la entidad OutboundEmail
+    $hasOutboundEntity = $em->hasRepository("OutboundEmail");
+    echo "Repositorio OutboundEmail disponible: " . ($hasOutboundEntity ? "Sí" : "No") . "\n";
+    
+    if ($hasOutboundEntity) {
+        $repo = $em->getRDBRepository("OutboundEmail");
+        $existing = $repo->where(["isShared" => true])->findOne();
+        if (!$existing) {
+            $existing = $repo->findOne();
+        }
+        
+        $account = $existing ?? $em->getNewEntity("OutboundEmail");
+        $account->set([
+            "name" => "GAPSSA",
+            "status" => "Active",
+            "fromAddress" => $envUser,
+            "fromName" => "GAPSSA",
+            "replyToAddress" => $envUser,
+            "replyToName" => "GAPSSA",
+            "smtpServer" => $envHost,
+            "smtpPort" => $envPort,
+            "smtpAuth" => true,
+            "smtpSecurity" => "",
+            "smtpUsername" => $envUser,
+            "smtpPassword" => $crypt->encrypt($envPass),
+            "isShared" => true,
+        ]);
+        $em->saveEntity($account);
+        echo "✔ Entidad OutboundEmail guardada con ID: " . $account->getId() . " (isShared: 1, host: $envHost:$envPort, user: $envUser)\n";
+    }
+} catch (\Throwable $e) {
+    echo "Aviso configurando OutboundEmail: " . $e->getMessage() . "\n";
+}
 
 echo "\n--- 2b. Prueba de envío directo con MailSender de EspoCRM ---\n";
 try {

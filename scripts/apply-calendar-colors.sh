@@ -50,7 +50,40 @@ $config["outboundEmailFromAddress"] = $argv[3] ?: "reservas@gapssa.es";
 $config["outboundEmailIsShared"] = true;
 
 file_put_contents($configFile, "<?php\nreturn " . var_export($config, true) . ";\n");
-echo "Configuración actualizada (decisiones habilitadas y SMTP configurado con contraseña cifrada para " . $config["outboundEmailFromAddress"] . ").\n";
+echo "Configuración en data/config.php actualizada (decisiones habilitadas y SMTP configurado con contraseña cifrada para " . $config["outboundEmailFromAddress"] . ").\n";
+
+try {
+    $em = $app->getContainer()->get("entityManager");
+    if ($em->hasRepository("OutboundEmail")) {
+        $repo = $em->getRDBRepository("OutboundEmail");
+        $existing = $repo->where(["isShared" => true])->findOne();
+        if (!$existing) {
+            $existing = $repo->findOne();
+        }
+        $account = $existing ?? $em->getNewEntity("OutboundEmail");
+        $account->set([
+            "name" => "GAPSSA",
+            "status" => "Active",
+            "fromAddress" => $argv[3] ?: "reservas@gapssa.es",
+            "fromName" => "GAPSSA",
+            "replyToAddress" => $argv[3] ?: "reservas@gapssa.es",
+            "replyToName" => "GAPSSA",
+            "smtpServer" => $argv[1] ?: "172.25.0.1",
+            "smtpPort" => (int) ($argv[2] ?: 587),
+            "smtpAuth" => true,
+            "smtpSecurity" => "",
+            "smtpUsername" => $argv[3] ?: "reservas@gapssa.es",
+            "isShared" => true,
+        ]);
+        if (!empty($argv[4])) {
+            $account->set("smtpPassword", $crypt->encrypt($argv[4]));
+        }
+        $em->saveEntity($account);
+        echo "✔ Entidad OutboundEmail del sistema asegurada (ID: " . $account->getId() . ").\n";
+    }
+} catch (\Throwable $e) {
+    echo "⚠ Aviso actualizando OutboundEmail: " . $e->getMessage() . "\n";
+}
 ' "$smtp_host" "$smtp_port" "$smtp_user" "$smtp_pass"
 
 docker compose --env-file .env.production -f compose.prod.yml exec espocrm chown -R www-data:www-data /var/www/html/data
