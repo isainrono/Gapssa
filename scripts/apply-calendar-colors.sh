@@ -23,7 +23,8 @@ smtp_user="info@gapssa.es"
 smtp_pass="${1:-$(grep -E '^ *(ESPO_SMTP_PASSWORD|SMTP_INFO_PASSWORD|INFO_SMTP_PASSWORD|SMTP_PASSWORD|SMTP_PASS) *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '')}"
 
 echo "==> 2b. Configurando SMTP y habilitando aprobación de reservas en EspoCRM..."
-docker compose --env-file .env.production -f compose.prod.yml exec espocrm php -r '
+docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm php -- "$smtp_host" "$smtp_port" "$smtp_user" "$smtp_pass" << 'PHP_EOF'
+<?php
 require_once "/var/www/html/bootstrap.php";
 $app = new \Espo\Core\Application();
 $crypt = $app->getContainer()->get("crypt");
@@ -127,7 +128,7 @@ try {
 } catch (\Throwable $e) {
     echo "⚠ Aviso actualizando InboundEmail: " . $e->getMessage() . "\n";
 }
-' "$smtp_host" "$smtp_port" "$smtp_user" "$smtp_pass"
+PHP_EOF
 
 docker compose --env-file .env.production -f compose.prod.yml exec espocrm chown -R www-data:www-data /var/www/html/data
 
@@ -212,7 +213,8 @@ SELECT id, name, date_start, c_estado_reserva, status, color, c_motivo_resolucio
 EOF
 
 echo "==> 3b. Despachando confirmación personalizada a clientes con citas confirmadas..."
-docker compose --env-file .env.production -f compose.prod.yml exec espocrm php -r '
+docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm php -- << 'PHP_EOF'
+<?php
 require_once "/var/www/html/bootstrap.php";
 try {
     @stream_context_set_default([
@@ -294,7 +296,7 @@ try {
 } catch (\Throwable $e) {
     echo "⚠ Aviso general en despacho de confirmaciones: " . $e->getMessage() . "\n";
 }
-'
+PHP_EOF
 
 echo "==> 4. Reconstruyendo y actualizando el contenedor web (BFF)..."
 docker compose --env-file .env.production -f compose.prod.yml up -d --build web
