@@ -11,7 +11,8 @@ echo "==> Verificando y diagnosticando correo saliente de EspoCRM hacia: $target
 
 smtp_host="$(grep -E '^ *SMTP_HOST *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '172.25.0.1')"
 smtp_port="$(grep -E '^ *SMTP_PORT *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '587')"
-smtp_user="$(grep -E '^ *SMTP_USER *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo 'reservas@gapssa.es')"
+# EspoCRM utiliza info@gapssa.es como cuenta saliente oficial del CRM
+smtp_user="info@gapssa.es"
 smtp_pass="$(grep -E '^ *(SMTP_PASSWORD|SMTP_PASS) *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '')"
 
 docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm php -- "$target_email" "$smtp_pass" "$smtp_host" "$smtp_port" "$smtp_user" << 'PHP_SCRIPT'
@@ -26,7 +27,7 @@ $target = $argv[1] ?? "reservas@gapssa.es";
 $envPass = $argv[2] ?? "";
 $envHost = $argv[3] ?? "172.25.0.1";
 $envPort = (int) ($argv[4] ?? 587);
-$envUser = $argv[5] ?? "reservas@gapssa.es";
+$envUser = $argv[5] ?? "info@gapssa.es";
 
 $rawPass = $config->get("smtpPassword");
 $decrypted = null;
@@ -38,8 +39,8 @@ if (is_string($rawPass) && $rawPass !== "") {
     }
 }
 
-if (empty($decrypted) && !empty($envPass)) {
-    echo "ℹ Contraseña no configurada o no descifrable. Aplicando configuración cifrada desde .env.production...\n";
+if (!empty($envPass) || empty($decrypted)) {
+    echo "ℹ Sincronizando configuración de remitente oficial ($envUser)...\n";
     $configFile = "/var/www/html/data/config.php";
     $conf = require $configFile;
     $conf["smtpServer"] = $envHost;
@@ -47,14 +48,16 @@ if (empty($decrypted) && !empty($envPass)) {
     $conf["smtpAuth"] = true;
     $conf["smtpSecurity"] = "";
     $conf["smtpUsername"] = $envUser;
-    $conf["smtpPassword"] = $crypt->encrypt($envPass);
+    if (!empty($envPass)) {
+        $conf["smtpPassword"] = $crypt->encrypt($envPass);
+    }
     $conf["outboundEmailFromName"] = "GAPSSA";
     $conf["outboundEmailFromAddress"] = $envUser;
     $conf["outboundEmailIsShared"] = true;
     file_put_contents($configFile, "<?php\nreturn " . var_export($conf, true) . ";\n");
-    $rawPass = $conf["smtpPassword"];
-    $decrypted = $crypt->decrypt($rawPass);
-    echo "✔ Configuración guardada con contraseña cifrada exitosamente.\n";
+    $rawPass = $conf["smtpPassword"] ?? "";
+    $decrypted = !empty($rawPass) ? $crypt->decrypt($rawPass) : null;
+    echo "✔ data/config.php actualizado con remitente: $envUser.\n";
 }
 
 echo "\n--- 1. Parámetros en data/config.php ---\n";
@@ -178,12 +181,12 @@ try {
         }
     }
 
-    // Desactivar cuentas con credenciales obsoletas para que el cron no de errores
+    // Desactivar cuentas duplicadas/rotas sin SMTP para que el cron no de errores
     try {
         $pdo = $c->has('pdo') ? $c->get('pdo') : null;
         if ($pdo) {
-            $pdo->exec("UPDATE inbound_email SET status = 'Inactive' WHERE id IN ('6a70ed04a0fdd2f68', '6a71de063d0f9f1c5')");
-            echo "ℹ Cuentas obsoletas desactivadas en BD.\n";
+            $pdo->exec("UPDATE inbound_email SET status = 'Inactive' WHERE id = '6a70ed04a0fdd2f68' AND id != '{$account->getId()}'");
+            echo "ℹ Cuenta obsoleta desactivada en BD.\n";
         }
     } catch (\Throwable $e) {
         // Ignorar

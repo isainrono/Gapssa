@@ -18,7 +18,8 @@ docker compose --env-file .env.production -f compose.prod.yml exec espocrm bin/c
 
 smtp_host="$(grep -E '^ *SMTP_HOST *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '172.25.0.1')"
 smtp_port="$(grep -E '^ *SMTP_PORT *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '587')"
-smtp_user="$(grep -E '^ *SMTP_USER *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo 'reservas@gapssa.es')"
+# EspoCRM utiliza info@gapssa.es como cuenta saliente oficial del CRM
+smtp_user="info@gapssa.es"
 smtp_pass="$(grep -E '^ *(SMTP_PASSWORD|SMTP_PASS) *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '')"
 
 echo "==> 2b. Configurando SMTP y habilitando aprobación de reservas en EspoCRM..."
@@ -116,11 +117,11 @@ try {
             }
         }
 
-        // Desactivar cuentas con credenciales obsoletas para no colapsar tareas cron
+        // Desactivar cuentas duplicadas/rotas sin SMTP para no colapsar tareas cron
         try {
             $pdo = $c->has('pdo') ? $c->get('pdo') : null;
             if ($pdo) {
-                $pdo->exec("UPDATE inbound_email SET status = 'Inactive' WHERE id IN ('6a70ed04a0fdd2f68', '6a71de063d0f9f1c5')");
+                $pdo->exec("UPDATE inbound_email SET status = 'Inactive' WHERE id = '6a70ed04a0fdd2f68'");
             }
         } catch (\Throwable $e) {}
     }
