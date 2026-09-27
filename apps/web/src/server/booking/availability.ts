@@ -65,16 +65,34 @@ export async function isSlotStillAvailable(
   ])
 
   const occupancy = [
-    ...activeMeetings.map((meeting) => ({ professionalId: meeting.professionalId, zoneId: meeting.zoneId })),
-    ...unresolvedRequests.map((request) => ({ professionalId: request.professionalId, zoneId: request.zoneId })),
+    ...activeMeetings.map((meeting) => ({
+      professionalId: meeting.professionalId,
+      zoneId: meeting.zoneId,
+      startAt: meeting.startAt,
+      endAt: meeting.endAt,
+    })),
+    ...unresolvedRequests.map((request) => ({
+      professionalId: request.professionalId,
+      zoneId: request.zoneId,
+      startAt: request.startAt,
+      endAt: request.endAt,
+    })),
   ]
 
-  const professionalBusy = occupancy.some((entry) => entry.professionalId === input.professionalId)
+  const professionalBusy = occupancy.some(
+    (entry) =>
+      entry.professionalId === input.professionalId &&
+      intervalsOverlap(input.startAt, input.endAt, entry.startAt, entry.endAt),
+  )
   if (professionalBusy) {
     return false
   }
 
-  const zoneOccupiedCount = occupancy.filter((entry) => entry.zoneId === input.zoneId).length
+  const zoneOccupiedCount = occupancy.filter(
+    (entry) =>
+      entry.zoneId === input.zoneId &&
+      intervalsOverlap(input.startAt, input.endAt, entry.startAt, entry.endAt),
+  ).length
   return zoneOccupiedCount < input.zoneCapacity
 }
 
