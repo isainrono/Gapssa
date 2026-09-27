@@ -30,9 +30,12 @@ $envPort = (int) ($argv[4] ?? 587);
 $envUser = $argv[5] ?? "info@gapssa.es";
 
 echo "ℹ Sincronizando configuración de remitente oficial ($envUser)...\n";
-// Buscar valores admitidos para smtpSecurity en EspoCRM
-echo "--- Valores admitidos para smtpSecurity en EspoCRM ---\n";
-passthru('grep -rn -C 2 -i "smtpSecurity" /var/www/html/application/Espo/ 2>/dev/null | head -n 25 || true');
+echo "--- Código de creación del transporte SMTP en EspoCRM ---\n";
+passthru('grep -rn -C 5 "EsmtpTransport" /var/www/html/application/Espo/ 2>/dev/null || true');
+passthru('grep -rn -C 5 "SmtpTransport" /var/www/html/application/Espo/ 2>/dev/null || true');
+passthru('grep -rn -C 5 "verify_peer" /var/www/html/application/Espo/ 2>/dev/null || true');
+echo "--- Certificado SMTP devuelto por 172.25.0.1:587 ---\n";
+passthru('echo "QUIT" | openssl s_client -connect ' . escapeshellarg($envHost . ':' . $envPort) . ' -starttls smtp 2>&1 | grep -E "(subject=|issuer=|Verification error|verify return code)" || true');
 
 // Probar con TLS
 $smtpSecurity = "TLS";
