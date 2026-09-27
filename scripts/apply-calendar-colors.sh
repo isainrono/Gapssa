@@ -26,12 +26,16 @@ $configWriter->save();
 echo "Decisiones habilitadas correctamente (gapssaBookingDecisionEnabled=true).\n";
 '
 
+echo "==> 2c. Reiniciando contenedor de EspoCRM para recargar OPcache de Apache..."
+docker compose --env-file .env.production -f compose.prod.yml restart espocrm
+
 echo "==> 3. Actualizando colores en base de datos para todas las citas..."
 docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm-db sh -c \
   'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE" -e "
     UPDATE meeting SET color = '\''#F59E0B'\'' WHERE c_estado_reserva = '\''PendingCenterApproval'\'';
     UPDATE meeting SET color = '\''#10B981'\'' WHERE c_estado_reserva = '\''Confirmed'\'';
     UPDATE meeting SET color = '\''#9CA3AF'\'' WHERE c_estado_reserva = '\''Canceled'\'';
+    SELECT id, name, date_start, c_estado_reserva, status, color FROM meeting;
   "'
 
 echo "==> 4. Reconstruyendo y actualizando el contenedor web (BFF)..."
