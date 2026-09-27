@@ -30,8 +30,9 @@ $envPort = (int) ($argv[4] ?? 587);
 $envUser = $argv[5] ?? "info@gapssa.es";
 
 echo "ℹ Sincronizando configuración de remitente oficial ($envUser)...\n";
-echo "--- Constructor de Sender.php ---\n";
-passthru('head -n 60 /var/www/html/application/Espo/Core/Mail/Sender.php');
+echo "--- Código de TransportPreparatorFactory.php y Sender.php ---\n";
+passthru('cat /var/www/html/application/Espo/Core/Mail/Sender/TransportPreparatorFactory.php');
+passthru('grep -rn -C 10 "transportPreparatorFactory" /var/www/html/application/Espo/Core/Mail/Sender.php');
 
 // Probar con TLS
 $smtpSecurity = "TLS";
@@ -237,34 +238,40 @@ try {
         $prop->setValue($mailSender, $cleanAp);
     }
 
-    foreach ($refSender->getProperties() as $prop) {
-        $prop->setAccessible(true);
-        $val = $prop->getValue($mailSender);
-        if (is_object($val) && $val instanceof \Espo\Core\Mail\Sender\TransportPreparator) {
-            $innerPrep = $val;
-            $customPrep = new class($innerPrep) implements \Espo\Core\Mail\Sender\TransportPreparator {
-                private $inner;
-                public function __construct($inner) { $this->inner = $inner; }
-                public function prepare(\Espo\Core\Mail\SmtpParams $params): \Symfony\Component\Mailer\Transport\TransportInterface {
-                    $t = $this->inner->prepare($params);
-                    if ($t instanceof \Symfony\Component\Mailer\Transport\Smtp\EsmtpTransport) {
-                        $stream = $t->getStream();
-                        if ($stream instanceof \Symfony\Component\Mailer\Transport\Smtp\Stream\SocketStream) {
-                            $stream->setStreamOptions([
-                                'ssl' => [
-                                    'verify_peer' => false,
-                                    'verify_peer_name' => false,
-                                    'allow_self_signed' => true,
-                                ],
-                            ]);
+    if ($refSender->hasProperty("transportPreparatorFactory")) {
+        $tpfProp = $refSender->getProperty("transportPreparatorFactory");
+        $tpfProp->setAccessible(true);
+        $innerTpf = $tpfProp->getValue($mailSender);
+
+        $customTpf = new class($innerTpf) implements \Espo\Core\Mail\Sender\TransportPreparatorFactory {
+            private $inner;
+            public function __construct($inner) { $this->inner = $inner; }
+            public function create(): \Espo\Core\Mail\Sender\TransportPreparator {
+                $innerPrep = $this->inner->create();
+                return new class($innerPrep) implements \Espo\Core\Mail\Sender\TransportPreparator {
+                    private $inner;
+                    public function __construct($inner) { $this->inner = $inner; }
+                    public function prepare(\Espo\Core\Mail\SmtpParams $params): \Symfony\Component\Mailer\Transport\TransportInterface {
+                        $t = $this->inner->prepare($params);
+                        if ($t instanceof \Symfony\Component\Mailer\Transport\Smtp\EsmtpTransport) {
+                            $stream = $t->getStream();
+                            if ($stream instanceof \Symfony\Component\Mailer\Transport\Smtp\Stream\SocketStream) {
+                                $stream->setStreamOptions([
+                                    'ssl' => [
+                                        'verify_peer' => false,
+                                        'verify_peer_name' => false,
+                                        'allow_self_signed' => true,
+                                    ],
+                                ]);
+                            }
                         }
+                        return $t;
                     }
-                    return $t;
-                }
-            };
-            $prop->setValue($mailSender, $customPrep);
-            echo "✔ Preparador SMTP (" . $prop->getName() . ") adaptado para aceptar certificado TLS autofirmado de Plesk.\n";
-        }
+                };
+            }
+        };
+        $tpfProp->setValue($mailSender, $customTpf);
+        echo "✔ transportPreparatorFactory adaptado con soporte para certificado autofirmado de Plesk.\n";
     }
 
     $email = $c->get("entityManager")->getNewEntity("Email");
