@@ -22,6 +22,10 @@ smtp_pass="$(grep -E '^SMTP_PASSWORD=' .env.production 2>/dev/null | cut -d= -f2
 
 echo "==> 2b. Configurando SMTP y habilitando aprobación de reservas en EspoCRM..."
 docker compose --env-file .env.production -f compose.prod.yml exec espocrm php -r '
+require_once "/var/www/html/bootstrap.php";
+$app = new \Espo\Core\Application();
+$crypt = $app->getContainer()->get("crypt");
+
 $configFile = "/var/www/html/data/config.php";
 $config = require $configFile;
 $config["gapssaBookingDecisionEnabled"] = true;
@@ -38,14 +42,14 @@ $config["smtpAuth"] = true;
 $config["smtpSecurity"] = "";
 $config["smtpUsername"] = $argv[3] ?: "reservas@gapssa.es";
 if (!empty($argv[4])) {
-    $config["smtpPassword"] = $argv[4];
+    $config["smtpPassword"] = $crypt->encrypt($argv[4]);
 }
 $config["outboundEmailFromName"] = "GAPSSA";
 $config["outboundEmailFromAddress"] = $argv[3] ?: "reservas@gapssa.es";
 $config["outboundEmailIsShared"] = true;
 
 file_put_contents($configFile, "<?php\nreturn " . var_export($config, true) . ";\n");
-echo "Configuración actualizada (decisiones habilitadas y SMTP configurado para " . $config["outboundEmailFromAddress"] . ").\n";
+echo "Configuración actualizada (decisiones habilitadas y SMTP configurado con contraseña cifrada para " . $config["outboundEmailFromAddress"] . ").\n";
 ' "$smtp_host" "$smtp_port" "$smtp_user" "$smtp_pass"
 
 echo "==> 2c. Reiniciando contenedor de EspoCRM para recargar OPcache de Apache..."
