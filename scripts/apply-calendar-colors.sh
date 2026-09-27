@@ -15,6 +15,16 @@ echo "==> 2. Reconstruyendo metadatos y limpiando caché de EspoCRM..."
 docker compose --env-file .env.production -f compose.prod.yml exec espocrm bin/command rebuild
 docker compose --env-file .env.production -f compose.prod.yml exec espocrm bin/command clear-cache
 
+echo "==> 2b. Habilitando aprobación de reservas en EspoCRM..."
+docker compose --env-file .env.production -f compose.prod.yml exec espocrm php -r '
+$container = (new \Espo\Core\Application())->getContainer();
+$configWriter = $container->get("configWriter");
+$configWriter->set("gapssaBookingDecisionEnabled", true);
+$configWriter->set("gapssaBookingDecisionAuthorizedUserIds", ["6a71e26f5a32d9575"]);
+$configWriter->save();
+echo "Decisiones habilitadas correctamente (gapssaBookingDecisionEnabled=true).\n";
+'
+
 echo "==> 3. Actualizando colores en base de datos para todas las citas..."
 docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm-db sh -c \
   'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE" -e "
