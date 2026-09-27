@@ -10,6 +10,7 @@ docker compose --env-file .env.production -f compose.prod.yml cp extensions/espo
 if [ -d extensions/espocrm/custom/client/custom ]; then
   docker compose --env-file .env.production -f compose.prod.yml cp extensions/espocrm/custom/client/custom/. espocrm:/var/www/html/client/custom/
 fi
+docker compose --env-file .env.production -f compose.prod.yml exec espocrm chown -R www-data:www-data /var/www/html/custom /var/www/html/client/custom
 
 echo "==> 2. Reconstruyendo metadatos y limpiando caché de EspoCRM..."
 docker compose --env-file .env.production -f compose.prod.yml exec espocrm bin/command rebuild
@@ -51,6 +52,8 @@ $config["outboundEmailIsShared"] = true;
 file_put_contents($configFile, "<?php\nreturn " . var_export($config, true) . ";\n");
 echo "Configuración actualizada (decisiones habilitadas y SMTP configurado con contraseña cifrada para " . $config["outboundEmailFromAddress"] . ").\n";
 ' "$smtp_host" "$smtp_port" "$smtp_user" "$smtp_pass"
+
+docker compose --env-file .env.production -f compose.prod.yml exec espocrm chown -R www-data:www-data /var/www/html/data
 
 echo "==> 2c. Reiniciando contenedor de EspoCRM para recargar OPcache de Apache..."
 docker compose --env-file .env.production -f compose.prod.yml restart espocrm
