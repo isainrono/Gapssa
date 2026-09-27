@@ -17,8 +17,9 @@ docker compose --env-file .env.production -f compose.prod.yml exec espocrm bin/c
 
 echo "==> 2b. Habilitando aprobación de reservas en EspoCRM..."
 docker compose --env-file .env.production -f compose.prod.yml exec espocrm php -r '
-$container = (new \Espo\Core\Application())->getContainer();
-$configWriter = $container->get("configWriter");
+require_once "bootstrap.php";
+$app = new \Espo\Core\Application();
+$configWriter = $app->getContainer()->get("configWriter");
 $configWriter->set("gapssaBookingDecisionEnabled", true);
 $configWriter->set("gapssaBookingDecisionAuthorizedUserIds", ["6a71e26f5a32d9575"]);
 $configWriter->save();
