@@ -54,35 +54,45 @@ echo "Configuración en data/config.php actualizada (decisiones habilitadas y SM
 
 try {
     $em = $app->getContainer()->get("entityManager");
-    if ($em->hasRepository("OutboundEmail")) {
-        $repo = $em->getRDBRepository("OutboundEmail");
-        $existing = $repo->where(["isShared" => true])->findOne();
-        if (!$existing) {
-            $existing = $repo->findOne();
+    if ($em->hasRepository("InboundEmail")) {
+        $repo = $em->getRDBRepository("InboundEmail");
+        $account = $repo->where(["emailAddress" => $argv[3] ?: "reservas@gapssa.es"])->findOne();
+        if (!$account) {
+            $account = $em->getNewEntity("InboundEmail");
         }
-        $account = $existing ?? $em->getNewEntity("OutboundEmail");
         $account->set([
             "name" => "GAPSSA",
             "status" => "Active",
-            "fromAddress" => $argv[3] ?: "reservas@gapssa.es",
+            "emailAddress" => $argv[3] ?: "reservas@gapssa.es",
             "fromName" => "GAPSSA",
             "replyToAddress" => $argv[3] ?: "reservas@gapssa.es",
             "replyToName" => "GAPSSA",
-            "smtpServer" => $argv[1] ?: "172.25.0.1",
+            "useSmtp" => true,
+            "smtpHost" => $argv[1] ?: "172.25.0.1",
             "smtpPort" => (int) ($argv[2] ?: 587),
             "smtpAuth" => true,
             "smtpSecurity" => "",
             "smtpUsername" => $argv[3] ?: "reservas@gapssa.es",
+            "smtpIsShared" => true,
             "isShared" => true,
         ]);
         if (!empty($argv[4])) {
             $account->set("smtpPassword", $crypt->encrypt($argv[4]));
         }
         $em->saveEntity($account);
-        echo "✔ Entidad OutboundEmail del sistema asegurada (ID: " . $account->getId() . ").\n";
+        echo "✔ Cuenta InboundEmail del sistema configurada (ID: " . $account->getId() . ", Email: " . $account->get("emailAddress") . ").\n";
+
+        // Desactivar cuentas con credenciales obsoletas para no colapsar tareas cron
+        $obsolete = $repo->find();
+        foreach ($obsolete as $old) {
+            if ($old->getId() !== $account->getId() && in_array($old->getId(), ['6a70ed04a0fdd2f68', '6a71de063d0f9f1c5'])) {
+                $old->set('status', 'Inactive');
+                $em->saveEntity($old);
+            }
+        }
     }
 } catch (\Throwable $e) {
-    echo "⚠ Aviso actualizando OutboundEmail: " . $e->getMessage() . "\n";
+    echo "⚠ Aviso actualizando InboundEmail: " . $e->getMessage() . "\n";
 }
 ' "$smtp_host" "$smtp_port" "$smtp_user" "$smtp_pass"
 

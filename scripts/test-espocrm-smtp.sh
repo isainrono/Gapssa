@@ -99,20 +99,77 @@ try {
     echo "Aviso inspeccionando AccountProvider: " . $e->getMessage() . "\n";
 }
 
-echo "\n--- 2a. Inspección de entidades de correo en EntityManager ---\n";
+echo "\n--- 2a. Inspección y Configuración de InboundEmail del sistema ---\n";
 try {
     $em = $c->get("entityManager");
-    $meta = $c->get("metadata");
-    $entities = $meta->get(['scopes']) ?? [];
-    $emailEntities = [];
-    foreach (array_keys($entities) as $scope) {
-        if (stripos($scope, 'mail') !== false || stripos($scope, 'smtp') !== false) {
-            $emailEntities[] = $scope;
+    
+    // Verificamos qué devuelve configDataProvider
+    if (isset($ap) && isset($refAp) && $refAp->hasProperty("configDataProvider")) {
+        $cdpProp = $refAp->getProperty("configDataProvider");
+        $cdpProp->setAccessible(true);
+        $cdp = $cdpProp->getValue($ap);
+        echo "System Outbound Address devuelto por ConfigDataProvider: " . var_export($cdp->getSystemOutboundAddress(), true) . "\n";
+    }
+
+    $inboundRepo = $em->getRDBRepository("InboundEmail");
+    $existingList = $inboundRepo->find();
+    echo "Total cuentas InboundEmail existentes: " . count($existingList) . "\n";
+    foreach ($existingList as $ie) {
+        echo "  - ID: " . $ie->getId() . " | Nombre: " . $ie->get('name') . " | Email: " . $ie->get('emailAddress') . " | Status: " . $ie->get('status') . " | useSmtp: " . var_export($ie->get('useSmtp'), true) . " | smtpHost: " . $ie->get('smtpHost') . "\n";
+    }
+
+    // Buscamos si existe ya la cuenta para $envUser
+    $account = $inboundRepo->where(['emailAddress' => $envUser])->findOne();
+    if (!$account) {
+        $account = $em->getNewEntity("InboundEmail");
+    }
+
+    $account->set([
+        "name" => "GAPSSA",
+        "status" => "Active",
+        "emailAddress" => $envUser,
+        "fromName" => "GAPSSA",
+        "replyToAddress" => $envUser,
+        "replyToName" => "GAPSSA",
+        "useSmtp" => true,
+        "smtpHost" => $envHost,
+        "smtpPort" => $envPort,
+        "smtpAuth" => true,
+        "smtpSecurity" => "",
+        "smtpUsername" => $envUser,
+        "smtpPassword" => $crypt->encrypt($envPass),
+        "smtpIsShared" => true,
+        "isShared" => true,
+    ]);
+    $em->saveEntity($account);
+    echo "✔ Cuenta InboundEmail configurada con éxito (ID: " . $account->getId() . ", Email: $envUser, Host: $envHost:$envPort, useSmtp: true)\n";
+
+    // También verificamos si hay cuentas antiguas rotas que causan OpenSSL decrypt failure en jobs y las desactivamos
+    foreach ($existingList as $oldIe) {
+        if ($oldIe->getId() !== $account->getId() && in_array($oldIe->getId(), ['6a70ed04a0fdd2f68', '6a71de063d0f9f1c5'])) {
+            $oldIe->set('status', 'Inactive');
+            $em->saveEntity($oldIe);
+            echo "ℹ Cuenta InboundEmail obsoleta " . $oldIe->getId() . " desactivada para evitar errores en jobs de correo.\n";
         }
     }
-    echo "Entidades relacionadas con correo en EspoCRM: " . implode(", ", $emailEntities) . "\n";
+
+    // Comprobamos ahora getSystem()
+    if (isset($ap) && $refAp->hasProperty("systemIsCached")) {
+        $sic = $refAp->getProperty("systemIsCached");
+        $sic->setAccessible(true);
+        $sic->setValue($ap, false); // Forzar recarga
+    }
+    $systemAccount = $ap->getSystem();
+    if ($systemAccount) {
+        echo "✔ ¡AccountProvider::getSystem() cargó exitosamente la cuenta del sistema!\n";
+        echo "  Nombre de cuenta: " . $systemAccount->getName() . "\n";
+        echo "  Email saliente:   " . $systemAccount->getFromAddress() . "\n";
+    } else {
+        echo "❌ AccountProvider::getSystem() sigue devolviendo NULL.\n";
+    }
+
 } catch (\Throwable $e) {
-    echo "Aviso listando entidades: " . $e->getMessage() . "\n";
+    echo "Aviso configurando InboundEmail: " . $e->getMessage() . "\n";
 }
 
 echo "\n--- 2b. Prueba de envío directo con MailSender de EspoCRM ---\n";
@@ -131,6 +188,9 @@ try {
 } catch (\Throwable $e) {
     echo "❌ ERROR al enviar correo: " . $e->getMessage() . "\n";
     echo "Clase de excepción: " . get_class($e) . "\n";
+    if (method_exists($e, 'getTraceAsString')) {
+        echo "Traza:\n" . $e->getTraceAsString() . "\n";
+    }
 }
 
 echo "\n--- 3. Verificación de logs en EspoCRM ---\n";
