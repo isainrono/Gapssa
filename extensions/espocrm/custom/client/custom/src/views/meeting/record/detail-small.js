@@ -1,4 +1,4 @@
-define(['views/record/detail'], (Dep) => {
+define(['views/record/detail-small'], (Dep) => {
 
     /**
      * "Fase 4B — flujo de decisión final", punto 5 del encargo: acciones

@@ -1,6 +1,7 @@
 {
     "recordViews": {
-        "detail": "custom:views/meeting/record/detail"
+        "detail": "custom:views/meeting/record/detail",
+        "detailSmall": "custom:views/meeting/record/detail-small"
     },
     "relationshipPanels": {
         "tratamiento": {

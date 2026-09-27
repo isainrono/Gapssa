@@ -25,6 +25,12 @@ class SendInvitationsAfterCreate implements SaveHook
     {
         $this->ensureParentContactIsAttendee($entity);
 
+        // Si la reserva proviene del portal web y está pendiente de aprobación,
+        // no enviamos la confirmación hasta que el centro la apruebe efectivamente.
+        if ($entity->get('cEstadoReserva') === 'PendingCenterApproval') {
+            return;
+        }
+
         $this->invitationService->send(Meeting::ENTITY_TYPE, $entity->getId());
     }
 

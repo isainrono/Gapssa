@@ -15,7 +15,12 @@ echo "==> 2. Reconstruyendo metadatos y limpiando caché de EspoCRM..."
 docker compose --env-file .env.production -f compose.prod.yml exec espocrm bin/command rebuild
 docker compose --env-file .env.production -f compose.prod.yml exec espocrm bin/command clear-cache
 
-echo "==> 2b. Habilitando aprobación de reservas en EspoCRM..."
+smtp_host="$(grep -E '^SMTP_HOST=' .env.production 2>/dev/null | cut -d= -f2- | tr -d '\r\n"' || echo '172.25.0.1')"
+smtp_port="$(grep -E '^SMTP_PORT=' .env.production 2>/dev/null | cut -d= -f2- | tr -d '\r\n"' || echo '587')"
+smtp_user="$(grep -E '^SMTP_USER=' .env.production 2>/dev/null | cut -d= -f2- | tr -d '\r\n"' || echo 'reservas@gapssa.es')"
+smtp_pass="$(grep -E '^SMTP_PASSWORD=' .env.production 2>/dev/null | cut -d= -f2- | tr -d '\r\n"' || echo '')"
+
+echo "==> 2b. Configurando SMTP y habilitando aprobación de reservas en EspoCRM..."
 docker compose --env-file .env.production -f compose.prod.yml exec espocrm php -r '
 $configFile = "/var/www/html/data/config.php";
 $config = require $configFile;
@@ -26,9 +31,22 @@ if (!isset($config["gapssaBookingDecisionAuthorizedUserIds"]) || !is_array($conf
 if (!in_array("6a71e26f5a32d9575", $config["gapssaBookingDecisionAuthorizedUserIds"], true)) {
     $config["gapssaBookingDecisionAuthorizedUserIds"][] = "6a71e26f5a32d9575";
 }
+// Configuración de SMTP saliente en EspoCRM para envío de confirmaciones
+$config["smtpServer"] = $argv[1] ?: "172.25.0.1";
+$config["smtpPort"] = (int) ($argv[2] ?: 587);
+$config["smtpAuth"] = true;
+$config["smtpSecurity"] = "";
+$config["smtpUsername"] = $argv[3] ?: "reservas@gapssa.es";
+if (!empty($argv[4])) {
+    $config["smtpPassword"] = $argv[4];
+}
+$config["outboundEmailFromName"] = "GAPSSA";
+$config["outboundEmailFromAddress"] = $argv[3] ?: "reservas@gapssa.es";
+$config["outboundEmailIsShared"] = true;
+
 file_put_contents($configFile, "<?php\nreturn " . var_export($config, true) . ";\n");
-echo "Decisiones habilitadas correctamente (gapssaBookingDecisionEnabled=true).\n";
-'
+echo "Configuración actualizada (decisiones habilitadas y SMTP configurado para " . $config["outboundEmailFromAddress"] . ").\n";
+' "$smtp_host" "$smtp_port" "$smtp_user" "$smtp_pass"
 
 echo "==> 2c. Reiniciando contenedor de EspoCRM para recargar OPcache de Apache..."
 docker compose --env-file .env.production -f compose.prod.yml restart espocrm
@@ -109,6 +127,62 @@ UPDATE meeting SET color = '#9CA3AF' WHERE c_estado_reserva = 'Canceled';
 
 SELECT id, name, date_start, c_estado_reserva, status, color, c_motivo_resolucion_reserva FROM meeting;
 EOF
+
+echo "==> 3b. Despachando confirmación personalizada a clientes con citas confirmadas..."
+docker compose --env-file .env.production -f compose.prod.yml exec espocrm php -r '
+require_once "/var/www/html/bootstrap.php";
+$app = new \Espo\Core\Application();
+$container = $app->getContainer();
+$em = $container->get("entityManager");
+$invitationService = $container->get("invitationService");
+
+$meetings = $em->getRDBRepository("Meeting")
+    ->where(["cEstadoReserva" => "Confirmed"])
+    ->find();
+
+foreach ($meetings as $meeting) {
+    $targets = [];
+    $contacts = $em->getRelation($meeting, \Espo\Modules\Crm\Entities\Meeting::LINK_CONTACTS)->find();
+    
+    // Si no está en la relación, verificar parentId
+    if (count($contacts) === 0) {
+        $contactId = null;
+        if ($meeting->get("parentType") === "Contact" && $meeting->get("parentId")) {
+            $contactId = (string) $meeting->get("parentId");
+        } elseif ($meeting->get("contactId")) {
+            $contactId = (string) $meeting->get("contactId");
+        }
+        if ($contactId) {
+            $parentContact = $em->getEntity("Contact", $contactId);
+            if ($parentContact) {
+                $em->getRelation($meeting, \Espo\Modules\Crm\Entities\Meeting::LINK_CONTACTS)->relate($parentContact);
+                $contacts = [$parentContact];
+            }
+        }
+    }
+
+    foreach ($contacts as $contact) {
+        if ($contact->getEmailAddress()) {
+            $targets[] = new \Espo\Modules\Crm\Tools\Meeting\Invitation\Invitee(
+                $contact->getEntityType(),
+                $contact->getId(),
+                $contact->getEmailAddress()
+            );
+        }
+    }
+
+    if (!empty($targets)) {
+        try {
+            $invitationService->send("Meeting", $meeting->getId(), $targets);
+            echo "✔ Correo de confirmación enviado exitosamente a " . $targets[0]->getEmailAddress() . " para la cita " . $meeting->get("name") . "\n";
+        } catch (\Throwable $e) {
+            echo "⚠ Aviso enviando correo para la cita " . $meeting->getId() . ": " . $e->getMessage() . "\n";
+        }
+    } else {
+        echo "ℹ No se encontró email de contacto para la cita " . $meeting->getId() . "\n";
+    }
+}
+'
 
 echo "==> 4. Reconstruyendo y actualizando el contenedor web (BFF)..."
 docker compose --env-file .env.production -f compose.prod.yml up -d --build web

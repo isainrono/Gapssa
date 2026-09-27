@@ -29,9 +29,19 @@ class SendInvitationsAfterUpdate implements SaveHook
 
     public function process(Entity $entity): void
     {
-        if (!$this->hasNotifiableChange($entity)) {
+        $becameConfirmed = $entity->isAttributeChanged('cEstadoReserva') && $entity->get('cEstadoReserva') === 'Confirmed';
+        $hasScheduleChange = $this->hasNotifiableChange($entity);
+
+        // Si la reserva está pendiente de aprobación y cambia algo menor, no notificamos aún.
+        if ($entity->get('cEstadoReserva') === 'PendingCenterApproval' && !$becameConfirmed) {
             return;
         }
+
+        if (!$becameConfirmed && !$hasScheduleChange) {
+            return;
+        }
+
+        $this->ensureParentContactIsAttendee($entity);
 
         $targets = [];
         $contacts = $this->entityManager
@@ -59,6 +69,33 @@ class SendInvitationsAfterUpdate implements SaveHook
             $entity->getId(),
             $targets,
         );
+    }
+
+    private function ensureParentContactIsAttendee(Entity $entity): void
+    {
+        $contactId = null;
+
+        if ($entity->get('parentType') === 'Contact' && $entity->get('parentId')) {
+            $contactId = (string) $entity->get('parentId');
+        } elseif ($entity->get('contactId')) {
+            $contactId = (string) $entity->get('contactId');
+        }
+
+        if (!$contactId) {
+            return;
+        }
+
+        $contact = $this->entityManager->getEntity('Contact', $contactId);
+        if (!$contact) {
+            return;
+        }
+
+        $relation = $this->entityManager->getRelation($entity, Meeting::LINK_CONTACTS);
+        $existing = $relation->where(['id' => $contactId])->findOne();
+
+        if (!$existing) {
+            $relation->relate($contact);
+        }
     }
 
     private function hasNotifiableChange(Entity $entity): bool
