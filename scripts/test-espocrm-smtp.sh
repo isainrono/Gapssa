@@ -243,11 +243,14 @@ try {
         $tpfProp->setAccessible(true);
         $innerTpf = $tpfProp->getValue($mailSender);
 
-        $customTpf = new class($innerTpf) implements \Espo\Core\Mail\Sender\TransportPreparatorFactory {
+        $customTpf = new class($c->get("injectableFactory"), $innerTpf) extends \Espo\Core\Mail\Sender\TransportPreparatorFactory {
             private $inner;
-            public function __construct($inner) { $this->inner = $inner; }
-            public function create(): \Espo\Core\Mail\Sender\TransportPreparator {
-                $innerPrep = $this->inner->create();
+            public function __construct($injectableFactory, $inner) {
+                parent::__construct($injectableFactory);
+                $this->inner = $inner;
+            }
+            public function create(\Espo\Core\Mail\SmtpParams $smtpParams): \Espo\Core\Mail\Sender\TransportPreparator {
+                $innerPrep = $this->inner->create($smtpParams);
                 return new class($innerPrep) implements \Espo\Core\Mail\Sender\TransportPreparator {
                     private $inner;
                     public function __construct($inner) { $this->inner = $inner; }
