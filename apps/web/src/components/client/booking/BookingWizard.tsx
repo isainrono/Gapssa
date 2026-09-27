@@ -62,6 +62,49 @@ function formatPrice(treatment: Treatment): string {
   return 'Consultar'
 }
 
+interface CountryDialCode {
+  code: string
+  country: string
+  flag: string
+}
+
+const COMMON_COUNTRY_CODES: CountryDialCode[] = [
+  { code: '+34', country: 'España', flag: '🇪🇸' },
+  { code: '+351', country: 'Portugal', flag: '🇵🇹' },
+  { code: '+33', country: 'Francia', flag: '🇫🇷' },
+  { code: '+39', country: 'Italia', flag: '🇮🇹' },
+  { code: '+44', country: 'Reino Unido', flag: '🇬🇧' },
+  { code: '+49', country: 'Alemania', flag: '🇩🇪' },
+  { code: '+376', country: 'Andorra', flag: '🇦🇩' },
+  { code: '+41', country: 'Suiza', flag: '🇨🇭' },
+  { code: '+32', country: 'Bélgica', flag: '🇧🇪' },
+  { code: '+31', country: 'Países Bajos', flag: '🇳🇱' },
+  { code: '+1', country: 'EE.UU. / Canadá', flag: '🇺🇸' },
+  { code: '+52', country: 'México', flag: '🇲🇽' },
+  { code: '+57', country: 'Colombia', flag: '🇨🇴' },
+  { code: '+54', country: 'Argentina', flag: '🇦🇷' },
+  { code: '+56', country: 'Chile', flag: '🇨🇱' },
+  { code: '+51', country: 'Perú', flag: '🇵🇪' },
+  { code: '+593', country: 'Ecuador', flag: '🇪🇨' },
+  { code: '+58', country: 'Venezuela', flag: '🇻🇪' },
+  { code: '+212', country: 'Marruecos', flag: '🇲🇦' },
+]
+
+function buildInternationalPhone(countryCode: string, customPrefix: string, phoneInput: string): string {
+  const trimmed = phoneInput.trim()
+  if (trimmed.startsWith('+')) {
+    return trimmed.replace(/[\s()-]/g, '')
+  }
+  const prefix = countryCode === 'custom' ? customPrefix.trim() : countryCode.trim()
+  const cleanPrefix = prefix.startsWith('+') ? prefix : `+${prefix.replace(/\D/g, '')}`
+  const digits = trimmed.replace(/\D/g, '').replace(/^0+/, '')
+  return `${cleanPrefix}${digits}`
+}
+
+function isValidInternationalPhone(phone: string): boolean {
+  return /^\+[1-9]\d{6,14}$/.test(phone)
+}
+
 function mapErrorCode(code: string, dict: Dictionary['reservar']): string {
   switch (code) {
     case 'treatment_not_found':
@@ -81,8 +124,10 @@ function mapErrorCode(code: string, dict: Dictionary['reservar']): string {
       return dict.errorCodigoIncorrecto
     case 'account_not_active':
       return dict.errorCuentaNoActiva
+    case 'invalid_phone':
+      return dict.errorTelefonoInvalido
     default:
-      return dict.errorTratamientoNoEncontrado
+      return dict.errorGenerico
   }
 }
 
@@ -143,6 +188,7 @@ export function BookingWizard({ dict, isAuthenticated, initialTreatmentParam }: 
   const nameId = useId()
   const lastNameId = useId()
   const phoneId = useId()
+  const phoneCountryId = useId()
   const emailId = useId()
   const codeId = useId()
 
@@ -156,6 +202,8 @@ export function BookingWizard({ dict, isAuthenticated, initialTreatmentParam }: 
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
+  const [phoneCountry, setPhoneCountry] = useState('+34')
+  const [phoneCustomPrefix, setPhoneCustomPrefix] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
@@ -230,6 +278,13 @@ export function BookingWizard({ dict, isAuthenticated, initialTreatmentParam }: 
     setLoading(true)
     setError(null)
 
+    const fullPhone = buildInternationalPhone(phoneCountry, phoneCustomPrefix, phone)
+    if (!isValidInternationalPhone(fullPhone)) {
+      setError(dict.errorTelefonoInvalido)
+      setLoading(false)
+      return
+    }
+
     const idempotencyKey = crypto.randomUUID()
 
     if (isAuthenticated) {
@@ -241,7 +296,7 @@ export function BookingWizard({ dict, isAuthenticated, initialTreatmentParam }: 
           professionalId: selectedSlot.professionalId,
           zoneId: selectedSlot.zoneId,
           startAt: selectedSlot.startAt,
-          contact: { firstName, lastName, phone },
+          contact: { firstName, lastName, phone: fullPhone },
         }),
       })
       setLoading(false)
@@ -262,7 +317,7 @@ export function BookingWizard({ dict, isAuthenticated, initialTreatmentParam }: 
         professionalId: selectedSlot.professionalId,
         zoneId: selectedSlot.zoneId,
         startAt: selectedSlot.startAt,
-        guest: { firstName, lastName, phone, email },
+        guest: { firstName, lastName, phone: fullPhone, email },
       }),
     })
     setLoading(false)
@@ -387,15 +442,44 @@ export function BookingWizard({ dict, isAuthenticated, initialTreatmentParam }: 
             <label className={styles.label} htmlFor={phoneId}>
               {dict.telefonoLabel}
             </label>
-            <input
-              id={phoneId}
-              className={styles.input}
-              type="tel"
-              required
-              maxLength={20}
-              value={phone}
-              onChange={(event) => setPhone(event.target.value)}
-            />
+            <div className={styles.phoneContainer}>
+              <select
+                id={phoneCountryId}
+                aria-label={dict.indicativoLabel}
+                className={styles.phonePrefixSelect}
+                value={phoneCountry}
+                onChange={(event) => setPhoneCountry(event.target.value)}
+              >
+                {COMMON_COUNTRY_CODES.map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.flag} {item.code} ({item.country})
+                  </option>
+                ))}
+                <option value="custom">{dict.otroPais}</option>
+              </select>
+              {phoneCountry === 'custom' && (
+                <input
+                  type="text"
+                  aria-label={dict.indicativoLabel}
+                  className={styles.phoneCustomPrefix}
+                  placeholder="+…"
+                  maxLength={6}
+                  value={phoneCustomPrefix}
+                  onChange={(event) => setPhoneCustomPrefix(event.target.value)}
+                />
+              )}
+              <input
+                id={phoneId}
+                className={styles.phoneInput}
+                type="tel"
+                required
+                maxLength={20}
+                placeholder="600 000 000"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+              />
+            </div>
+            <p className={styles.phoneHelp}>{dict.telefonoAyuda}</p>
           </div>
           {!isAuthenticated && (
             <div className={styles.field}>

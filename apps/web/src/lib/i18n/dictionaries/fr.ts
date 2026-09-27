@@ -132,6 +132,11 @@ export const fr: Dictionary = {
     errorDemasiadasSolicitudes: 'Vous avez déjà des demandes en attente. Terminez-les avant d’en créer une nouvelle.',
     errorCodigoIncorrecto: 'Code incorrect, expiré ou déjà utilisé.',
     errorCuentaNoActiva: 'Votre compte ne peut pas effectuer de réservation pour le moment.',
+    indicativoLabel: 'Indicatif international',
+    telefonoAyuda: 'Sélectionnez votre indicatif de pays et saisissez votre numéro.',
+    errorTelefonoInvalido: 'Veuillez saisir un numéro de téléphone valide avec indicatif international (ex. +34 600 000 000).',
+    errorGenerico: 'Une erreur est survenue lors du traitement de votre demande. Veuillez vérifier vos informations ou réessayer.',
+    otroPais: '🌐 Autre (+)',
   },
   legal: {
     provisionalAviso: 'Texte provisoire, en attente de révision juridique définitive.',

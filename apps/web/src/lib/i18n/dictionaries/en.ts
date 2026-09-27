@@ -132,6 +132,11 @@ export const en: Dictionary = {
     errorDemasiadasSolicitudes: 'You already have pending requests. Complete them before creating another one.',
     errorCodigoIncorrecto: 'Incorrect, expired, or already used code.',
     errorCuentaNoActiva: 'Your account cannot make bookings right now.',
+    indicativoLabel: 'International prefix',
+    telefonoAyuda: 'Select your country code and enter your phone number.',
+    errorTelefonoInvalido: 'Please enter a valid phone number with country prefix (e.g. +34 600 000 000).',
+    errorGenerico: 'An error occurred while processing your request. Please check your details or try again.',
+    otroPais: '🌐 Other (+)',
   },
   legal: {
     provisionalAviso: 'Provisional text, pending final legal review.',

@@ -133,6 +133,11 @@ export const ca: Dictionary = {
     errorDemasiadasSolicitudes: 'Ja tens sol·licituds pendents. Completa-les abans de crear-ne una altra.',
     errorCodigoIncorrecto: 'Codi incorrecte, caducat o ja utilitzat.',
     errorCuentaNoActiva: 'El teu compte no pot fer reserves en aquest moment.',
+    indicativoLabel: 'Prefix internacional',
+    telefonoAyuda: 'Selecciona el teu prefix de país i introdueix el teu telèfon.',
+    errorTelefonoInvalido: 'Introdueix un número de telèfon vàlid amb prefix internacional (ex. +34 600 000 000).',
+    errorGenerico: 'Hi ha hagut un error en processar la teva sol·licitud. Si us plau, revisa les teves dades o torna-ho a provar.',
+    otroPais: '🌐 Altres (+)',
   },
   legal: {
     provisionalAviso: 'Text provisional, pendent de revisió legal definitiva.',

@@ -132,6 +132,11 @@ export const pt: Dictionary = {
     errorDemasiadasSolicitudes: 'Já tem pedidos pendentes. Conclua-os antes de criar outro.',
     errorCodigoIncorrecto: 'Código incorreto, expirado ou já utilizado.',
     errorCuentaNoActiva: 'A sua conta não pode fazer reservas neste momento.',
+    indicativoLabel: 'Prefixo internacional',
+    telefonoAyuda: 'Selecione o prefixo do seu país e introduza o seu número de telefone.',
+    errorTelefonoInvalido: 'Introduza um número de telefone válido com prefixo internacional (ex. +34 600 000 000).',
+    errorGenerico: 'Ocorreu um erro ao processar o seu pedido. Por favor, reveja os seus dados ou tente novamente.',
+    otroPais: '🌐 Outro (+)',
   },
   legal: {
     provisionalAviso: 'Texto provisório, pendente de revisão legal definitiva.',

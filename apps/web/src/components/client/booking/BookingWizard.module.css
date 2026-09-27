@@ -57,6 +57,70 @@
   border-color: #b3261e;
 }
 
+.phoneContainer {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.phonePrefixSelect {
+  width: 150px;
+  flex-shrink: 0;
+  padding: var(--space-3) var(--space-2);
+  border: var(--border-hairline);
+  border-radius: 2px;
+  background: var(--surface-base);
+  color: var(--text-primary);
+  font-size: var(--text-small);
+  font-family: var(--font-sans);
+  cursor: pointer;
+}
+
+.phonePrefixSelect:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.phoneCustomPrefix {
+  width: 80px;
+  flex-shrink: 0;
+  padding: var(--space-3) var(--space-3);
+  border: var(--border-hairline);
+  border-radius: 2px;
+  background: var(--surface-base);
+  color: var(--text-primary);
+  font-size: var(--text-body);
+  font-family: var(--font-sans);
+}
+
+.phoneCustomPrefix:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.phoneInput {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-hairline);
+  border-radius: 2px;
+  background: var(--surface-base);
+  color: var(--text-primary);
+  font-size: var(--text-body);
+  font-family: var(--font-sans);
+}
+
+.phoneInput:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.phoneHelp {
+  margin-top: var(--space-1);
+  font-size: var(--text-small);
+  color: var(--text-muted);
+}
+
 .submit {
   align-self: flex-start;
   padding: var(--space-4) var(--space-6);

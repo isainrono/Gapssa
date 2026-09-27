@@ -137,6 +137,11 @@ export const es = {
     errorDemasiadasSolicitudes: 'Ya tienes solicitudes pendientes. Complétalas antes de crear otra.',
     errorCodigoIncorrecto: 'Código incorrecto, caducado o ya utilizado.',
     errorCuentaNoActiva: 'Tu cuenta no puede realizar reservas en este momento.',
+    indicativoLabel: 'Prefijo internacional',
+    telefonoAyuda: 'Selecciona tu prefijo de país e introduce tu teléfono.',
+    errorTelefonoInvalido: 'Introduce un número de teléfono válido con prefijo internacional (ej. +34 600 000 000).',
+    errorGenerico: 'Ha ocurrido un error al procesar tu solicitud. Por favor, revisa tus datos o inténtalo de nuevo.',
+    otroPais: '🌐 Otro (+)',
   },
   legal: {
     provisionalAviso: 'Texto provisional, pendiente de revisión legal definitiva.',
