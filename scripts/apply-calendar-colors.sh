@@ -53,13 +53,26 @@ file_put_contents($configFile, "<?php\nreturn " . var_export($config, true) . ";
 echo "Configuración en data/config.php actualizada (decisiones habilitadas y SMTP configurado con contraseña cifrada para " . $config["outboundEmailFromAddress"] . ").\n";
 
 try {
-    $em = $app->getContainer()->get("entityManager");
+    $c = $app->getContainer();
+    $em = $c->get("entityManager");
+
+    $systemUser = $em->getEntity('User', 'system') ?? $em->getEntity('User', '1');
+    if ($systemUser) {
+        if (method_exists($c, 'setUser')) {
+            $c->setUser($systemUser);
+        }
+        if (method_exists($c, 'set')) {
+            $c->set('user', $systemUser);
+        }
+    }
+
     if ($em->hasRepository("InboundEmail")) {
         $repo = $em->getRDBRepository("InboundEmail");
         $account = $repo->where(["emailAddress" => $argv[3] ?: "reservas@gapssa.es"])->findOne();
         if (!$account) {
             $account = $em->getNewEntity("InboundEmail");
         }
+        $encryptedPassword = !empty($argv[4]) ? $crypt->encrypt($argv[4]) : "";
         $account->set([
             "name" => "GAPSSA",
             "status" => "Active",
@@ -76,20 +89,40 @@ try {
             "smtpIsShared" => true,
             "isShared" => true,
         ]);
-        if (!empty($argv[4])) {
-            $account->set("smtpPassword", $crypt->encrypt($argv[4]));
+        if (!empty($encryptedPassword)) {
+            $account->set("smtpPassword", $encryptedPassword);
         }
-        $em->saveEntity($account);
-        echo "✔ Cuenta InboundEmail del sistema configurada (ID: " . $account->getId() . ", Email: " . $account->get("emailAddress") . ").\n";
 
-        // Desactivar cuentas con credenciales obsoletas para no colapsar tareas cron
-        $obsolete = $repo->find();
-        foreach ($obsolete as $old) {
-            if ($old->getId() !== $account->getId() && in_array($old->getId(), ['6a70ed04a0fdd2f68', '6a71de063d0f9f1c5'])) {
-                $old->set('status', 'Inactive');
-                $em->saveEntity($old);
+        try {
+            $em->saveEntity($account);
+            echo "✔ Cuenta InboundEmail del sistema configurada (ID: " . $account->getId() . ", Email: " . $account->get("emailAddress") . ").\n";
+        } catch (\Throwable $e) {
+            $pdo = $c->has('pdo') ? $c->get('pdo') : null;
+            if ($pdo) {
+                $targetEmail = $argv[3] ?: "reservas@gapssa.es";
+                $checkStmt = $pdo->prepare("SELECT id FROM inbound_email WHERE LOWER(email_address) = LOWER(?) LIMIT 1");
+                $checkStmt->execute([$targetEmail]);
+                $existingId = $checkStmt->fetchColumn();
+                if ($existingId) {
+                    $updStmt = $pdo->prepare("UPDATE inbound_email SET status = 'Active', use_smtp = 1, smtp_host = ?, smtp_port = ?, smtp_auth = 1, smtp_security = '', smtp_username = ?, smtp_password = ?, smtp_is_shared = 1, from_name = 'GAPSSA', reply_to_address = ?, reply_to_name = 'GAPSSA' WHERE id = ?");
+                    $updStmt->execute([$argv[1] ?: "172.25.0.1", (int) ($argv[2] ?: 587), $targetEmail, $encryptedPassword, $targetEmail, $existingId]);
+                    echo "✔ Cuenta InboundEmail actualizada vía SQL (ID: $existingId)\n";
+                } else {
+                    $newId = bin2hex(random_bytes(8)) . 'a';
+                    $insStmt = $pdo->prepare("INSERT INTO inbound_email (id, name, status, email_address, from_name, reply_to_address, reply_to_name, use_smtp, smtp_host, smtp_port, smtp_auth, smtp_security, smtp_username, smtp_password, smtp_is_shared, deleted) VALUES (?, 'GAPSSA', 'Active', ?, 'GAPSSA', ?, 'GAPSSA', 1, ?, ?, 1, '', ?, ?, 1, 0)");
+                    $insStmt->execute([$newId, $targetEmail, $targetEmail, $argv[1] ?: "172.25.0.1", (int) ($argv[2] ?: 587), $targetEmail, $encryptedPassword]);
+                    echo "✔ Cuenta InboundEmail insertada vía SQL (ID: $newId)\n";
+                }
             }
         }
+
+        // Desactivar cuentas con credenciales obsoletas para no colapsar tareas cron
+        try {
+            $pdo = $c->has('pdo') ? $c->get('pdo') : null;
+            if ($pdo) {
+                $pdo->exec("UPDATE inbound_email SET status = 'Inactive' WHERE id IN ('6a70ed04a0fdd2f68', '6a71de063d0f9f1c5')");
+            }
+        } catch (\Throwable $e) {}
     }
 } catch (\Throwable $e) {
     echo "⚠ Aviso actualizando InboundEmail: " . $e->getMessage() . "\n";

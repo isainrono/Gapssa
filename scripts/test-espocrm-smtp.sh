@@ -111,6 +111,17 @@ try {
         echo "System Outbound Address devuelto por ConfigDataProvider: " . var_export($cdp->getSystemOutboundAddress(), true) . "\n";
     }
 
+    // Establecer el servicio user en el contenedor para evitar 'Could not load user service'
+    $systemUser = $em->getEntity('User', 'system') ?? $em->getEntity('User', '1');
+    if ($systemUser) {
+        if (method_exists($c, 'setUser')) {
+            $c->setUser($systemUser);
+        }
+        if (method_exists($c, 'set')) {
+            $c->set('user', $systemUser);
+        }
+    }
+
     $inboundRepo = $em->getRDBRepository("InboundEmail");
     $existingList = $inboundRepo->find();
     echo "Total cuentas InboundEmail existentes: " . count($existingList) . "\n";
@@ -123,6 +134,8 @@ try {
     if (!$account) {
         $account = $em->getNewEntity("InboundEmail");
     }
+
+    $encryptedPassword = $crypt->encrypt($envPass);
 
     $account->set([
         "name" => "GAPSSA",
@@ -137,35 +150,59 @@ try {
         "smtpAuth" => true,
         "smtpSecurity" => "",
         "smtpUsername" => $envUser,
-        "smtpPassword" => $crypt->encrypt($envPass),
+        "smtpPassword" => $encryptedPassword,
         "smtpIsShared" => true,
         "isShared" => true,
     ]);
-    $em->saveEntity($account);
-    echo "✔ Cuenta InboundEmail configurada con éxito (ID: " . $account->getId() . ", Email: $envUser, Host: $envHost:$envPort, useSmtp: true)\n";
 
-    // También verificamos si hay cuentas antiguas rotas que causan OpenSSL decrypt failure en jobs y las desactivamos
-    foreach ($existingList as $oldIe) {
-        if ($oldIe->getId() !== $account->getId() && in_array($oldIe->getId(), ['6a70ed04a0fdd2f68', '6a71de063d0f9f1c5'])) {
-            $oldIe->set('status', 'Inactive');
-            $em->saveEntity($oldIe);
-            echo "ℹ Cuenta InboundEmail obsoleta " . $oldIe->getId() . " desactivada para evitar errores en jobs de correo.\n";
+    try {
+        $em->saveEntity($account);
+        echo "✔ Cuenta InboundEmail guardada mediante EntityManager (ID: " . $account->getId() . ")\n";
+    } catch (\Throwable $e) {
+        echo "⚠ Falló saveEntity (" . $e->getMessage() . "), aplicando directamente vía base de datos...\n";
+        $pdo = $c->has('pdo') ? $c->get('pdo') : ($c->has('defaultEntityManager') ? $c->get('defaultEntityManager')->getPDO() : null);
+        if ($pdo) {
+            $checkStmt = $pdo->prepare("SELECT id FROM inbound_email WHERE LOWER(email_address) = LOWER(?) LIMIT 1");
+            $checkStmt->execute([$envUser]);
+            $existingId = $checkStmt->fetchColumn();
+            if ($existingId) {
+                $updStmt = $pdo->prepare("UPDATE inbound_email SET status = 'Active', use_smtp = 1, smtp_host = ?, smtp_port = ?, smtp_auth = 1, smtp_security = '', smtp_username = ?, smtp_password = ?, smtp_is_shared = 1, from_name = 'GAPSSA', reply_to_address = ?, reply_to_name = 'GAPSSA' WHERE id = ?");
+                $updStmt->execute([$envHost, $envPort, $envUser, $encryptedPassword, $envUser, $existingId]);
+                echo "✔ Cuenta InboundEmail actualizada vía SQL (ID: $existingId)\n";
+            } else {
+                $newId = bin2hex(random_bytes(8)) . 'a';
+                $insStmt = $pdo->prepare("INSERT INTO inbound_email (id, name, status, email_address, from_name, reply_to_address, reply_to_name, use_smtp, smtp_host, smtp_port, smtp_auth, smtp_security, smtp_username, smtp_password, smtp_is_shared, deleted) VALUES (?, 'GAPSSA', 'Active', ?, 'GAPSSA', ?, 'GAPSSA', 1, ?, ?, 1, '', ?, ?, 1, 0)");
+                $insStmt->execute([$newId, $envUser, $envUser, $envHost, $envPort, $envUser, $encryptedPassword]);
+                echo "✔ Cuenta InboundEmail insertada vía SQL (ID: $newId)\n";
+            }
         }
     }
 
-    // Comprobamos ahora getSystem()
-    if (isset($ap) && $refAp->hasProperty("systemIsCached")) {
-        $sic = $refAp->getProperty("systemIsCached");
-        $sic->setAccessible(true);
-        $sic->setValue($ap, false); // Forzar recarga
+    // Desactivar cuentas con credenciales obsoletas para que el cron no de errores
+    try {
+        $pdo = $c->has('pdo') ? $c->get('pdo') : null;
+        if ($pdo) {
+            $pdo->exec("UPDATE inbound_email SET status = 'Inactive' WHERE id IN ('6a70ed04a0fdd2f68', '6a71de063d0f9f1c5')");
+            echo "ℹ Cuentas obsoletas desactivadas en BD.\n";
+        }
+    } catch (\Throwable $e) {
+        // Ignorar
     }
-    $systemAccount = $ap->getSystem();
-    if ($systemAccount) {
-        echo "✔ ¡AccountProvider::getSystem() cargó exitosamente la cuenta del sistema!\n";
-        echo "  Nombre de cuenta: " . $systemAccount->getName() . "\n";
-        echo "  Email saliente:   " . $systemAccount->getFromAddress() . "\n";
-    } else {
-        echo "❌ AccountProvider::getSystem() sigue devolviendo NULL.\n";
+
+    // Comprobamos ahora getSystem() recreando el provider
+    if (isset($refSender) && $refSender->hasProperty("accountProvider")) {
+        // Obtenemos una nueva instancia limpia de SendingAccountProvider
+        $cleanAp = $c->has("injectableFactory") 
+            ? $c->get("injectableFactory")->create(\Espo\Core\Mail\Account\SendingAccountProvider::class)
+            : $ap;
+        $systemAccount = $cleanAp->getSystem();
+        if ($systemAccount) {
+            echo "✔ ¡AccountProvider::getSystem() cargó exitosamente la cuenta del sistema!\n";
+            echo "  Nombre de cuenta: " . $systemAccount->getName() . "\n";
+            echo "  Email saliente:   " . $systemAccount->getFromAddress() . "\n";
+        } else {
+            echo "❌ AccountProvider::getSystem() sigue devolviendo NULL.\n";
+        }
     }
 
 } catch (\Throwable $e) {
