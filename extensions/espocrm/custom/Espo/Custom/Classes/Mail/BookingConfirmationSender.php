@@ -21,8 +21,11 @@ class BookingConfirmationSender
     private Config $config;
     private ?Log $log;
 
+    private Container $container;
+
     public function __construct(Container $container)
     {
+        $this->container = $container;
         $this->entityManager = $container->get('entityManager');
         $this->mailSender = $container->get('mailSender');
         $this->config = $container->get('config');
@@ -33,110 +36,153 @@ class BookingConfirmationSender
     {
         $meetingId = $meeting->getId();
 
-        // 1. Obtener los contactos asociados a la cita
-        $contacts = $this->entityManager->getRelation($meeting, Meeting::LINK_CONTACTS)->find();
-
-        // Fallback por parentId / contactId si la relación no devolvió asistentes
-        if (count($contacts) === 0) {
-            $contactId = null;
-            if ($meeting->get('parentType') === 'Contact' && $meeting->get('parentId')) {
-                $contactId = (string) $meeting->get('parentId');
-            } elseif ($meeting->get('contactId')) {
-                $contactId = (string) $meeting->get('contactId');
-            }
-
-            if ($contactId) {
-                $contact = $this->entityManager->getEntity('Contact', $contactId);
-                if ($contact) {
-                    $this->entityManager->getRelation($meeting, Meeting::LINK_CONTACTS)->relate($contact);
-                    $contacts = [$contact];
+        try {
+            // Asegurar que hay un usuario activo en el contenedor para evitar 'Could not load user service'
+            if (!$this->container->has('user')) {
+                $systemUser = $this->entityManager->getEntity('User', 'system') ?? $this->entityManager->getEntity('User', '1');
+                if ($systemUser) {
+                    if (method_exists($this->container, 'setUser')) {
+                        $this->container->setUser($systemUser);
+                    }
+                    if (method_exists($this->container, 'set')) {
+                        $this->container->set('user', $systemUser);
+                    }
                 }
             }
-        }
 
-        if (count($contacts) === 0) {
-            $this->logWarning("No se encontraron contactos destinatarios para la cita: $meetingId");
+            // 1. Obtener los contactos asociados a la cita
+            $contacts = $this->entityManager->getRelation($meeting, 'contacts')->find();
+
+            // Fallback por parentId / contactId si la relación no devolvió asistentes
+            if (count($contacts) === 0) {
+                $contactId = null;
+                if ($meeting->get('parentType') === 'Contact' && $meeting->get('parentId')) {
+                    $contactId = (string) $meeting->get('parentId');
+                } elseif ($meeting->get('contactId')) {
+                    $contactId = (string) $meeting->get('contactId');
+                }
+
+                if ($contactId) {
+                    $contact = $this->entityManager->getEntity('Contact', $contactId);
+                    if ($contact) {
+                        try {
+                            $this->entityManager->getRelation($meeting, 'contacts')->relate($contact);
+                        } catch (\Throwable $e) {}
+                        $contacts = [$contact];
+                    }
+                }
+            }
+
+            // Fallback directo por SQL si ORM relation devolvió 0 contactos
+            if (count($contacts) === 0) {
+                $pdo = $this->container->has('pdo') ? $this->container->get('pdo') : null;
+                if ($pdo) {
+                    $stmt = $pdo->prepare("SELECT contact_id FROM meeting_contact WHERE meeting_id = ? AND deleted = 0");
+                    $stmt->execute([$meetingId]);
+                    $contactIds = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+                    foreach ($contactIds as $cId) {
+                        $c = $this->entityManager->getEntity('Contact', $cId);
+                        if ($c) {
+                            $contacts[] = $c;
+                        }
+                    }
+                }
+            }
+
+            if (count($contacts) === 0) {
+                echo "ℹ Cita {$meetingId} ({$meeting->get('name')}): sin contactos asociados.\n";
+                $this->logWarning("No se encontraron contactos destinatarios para la cita: $meetingId");
+                return false;
+            }
+
+            $fromAddress = $this->config->get('outboundEmailFromAddress') ?: 'info@gapssa.es';
+            $fromName = $this->config->get('outboundEmailFromName') ?: 'GAPSSA';
+
+            // 2. Preparar los datos de la cita para la plantilla
+            $serviceName = (string) ($meeting->get('name') ?: 'Cita en GAPSSA');
+            $dateStart = $meeting->get('dateStart');
+            $dateFormatted = $this->formatDateInSpanish($dateStart);
+            $assignedUserName = (string) ($meeting->get('assignedUserName') ?: 'Diana Atehortua');
+            $description = (string) ($meeting->get('description') ?: '');
+
+            $sentCount = 0;
+
+            foreach ($contacts as $contact) {
+                $emailAddress = $contact->getEmailAddress();
+                if (!$emailAddress) {
+                    echo "ℹ Contacto {$contact->getId()} ({$contact->get('name')}) sin dirección de correo.\n";
+                    continue;
+                }
+
+                $clientName = (string) ($contact->get('name') ?: 'Estimado/a cliente');
+
+                // 3. Renderizar la plantilla HTML de GAPSSA
+                $subject = "GAPSSA | Confirmación de Cita: {$serviceName} - {$dateFormatted}";
+                $bodyHtml = $this->renderHtmlTemplate([
+                    'inviteeName' => htmlspecialchars($clientName, ENT_QUOTES, 'UTF-8'),
+                    'name' => htmlspecialchars($serviceName, ENT_QUOTES, 'UTF-8'),
+                    'dateStartFull' => $dateFormatted,
+                    'timeZone' => 'Europe/Madrid',
+                    'assignedUserName' => htmlspecialchars($assignedUserName, ENT_QUOTES, 'UTF-8'),
+                    'description' => nl2br(htmlspecialchars($description, ENT_QUOTES, 'UTF-8')),
+                    'acceptLink' => "https://gapssa.es",
+                    'declineLink' => "https://gapssa.es",
+                    'isAllDay' => false,
+                    'joinUrl' => null,
+                    'isUser' => false,
+                ]);
+
+                try {
+                    /** @var \Espo\Entities\Email $email */
+                    $email = $this->entityManager->getNewEntity('Email');
+                    $email->set([
+                        'name' => $subject,
+                        'subject' => $subject,
+                        'body' => $bodyHtml,
+                        'isHtml' => true,
+                        'from' => $fromAddress,
+                        'fromName' => $fromName,
+                        'fromString' => "{$fromName} <{$fromAddress}>",
+                        'to' => $emailAddress,
+                        'toString' => "{$clientName} <{$emailAddress}>",
+                        'parentType' => 'Meeting',
+                        'parentId' => $meetingId,
+                        'dateSent' => date('Y-m-d H:i:s'),
+                    ]);
+
+                    // Establecer stream context para STARTTLS
+                    @stream_context_set_default([
+                        'ssl' => [
+                            'verify_peer' => false,
+                            'verify_peer_name' => false,
+                            'allow_self_signed' => true,
+                        ],
+                    ]);
+
+                    $this->mailSender->send($email);
+                    $this->entityManager->saveEntity($email);
+                    $sentCount++;
+
+                    echo "✔ Correo de confirmación oficial enviado a {$emailAddress} para la cita {$serviceName} (ID: {$meetingId})\n";
+                    if ($this->log) {
+                        $this->log->info("✔ Confirmación oficial de GAPSSA enviada a {$emailAddress} para la cita {$meetingId}");
+                    }
+                } catch (\Throwable $e) {
+                    echo "❌ Error enviando correo a {$emailAddress} (Cita {$meetingId}): " . $e->getMessage() . "\n";
+                    if ($this->log) {
+                        $this->log->error("❌ Fallo enviando confirmación a {$emailAddress} para la cita {$meetingId}: " . $e->getMessage());
+                    }
+                }
+            }
+
+            return $sentCount > 0;
+        } catch (\Throwable $e) {
+            echo "❌ Error general en sendConfirmation (Cita {$meetingId}): " . $e->getMessage() . "\n";
+            if ($this->log) {
+                $this->log->error("❌ Error general en sendConfirmation para cita {$meetingId}: " . $e->getMessage());
+            }
             return false;
         }
-
-        $fromAddress = $this->config->get('outboundEmailFromAddress') ?: 'info@gapssa.es';
-        $fromName = $this->config->get('outboundEmailFromName') ?: 'GAPSSA';
-
-        // 2. Preparar los datos de la cita para la plantilla
-        $serviceName = (string) ($meeting->get('name') ?: 'Cita en GAPSSA');
-        $dateStart = $meeting->get('dateStart');
-        $dateFormatted = $this->formatDateInSpanish($dateStart);
-        $assignedUserName = (string) ($meeting->get('assignedUserName') ?: 'Diana Atehortua');
-        $description = (string) ($meeting->get('description') ?: '');
-
-        $sentCount = 0;
-
-        foreach ($contacts as $contact) {
-            $emailAddress = $contact->getEmailAddress();
-            if (!$emailAddress) {
-                continue;
-            }
-
-            $clientName = (string) ($contact->get('name') ?: 'Estimado/a cliente');
-
-            // 3. Renderizar la plantilla HTML de GAPSSA
-            $subject = "GAPSSA | Confirmación de Cita: {$serviceName} - {$dateFormatted}";
-            $bodyHtml = $this->renderHtmlTemplate([
-                'inviteeName' => htmlspecialchars($clientName, ENT_QUOTES, 'UTF-8'),
-                'name' => htmlspecialchars($serviceName, ENT_QUOTES, 'UTF-8'),
-                'dateStartFull' => $dateFormatted,
-                'timeZone' => 'Europe/Madrid',
-                'assignedUserName' => htmlspecialchars($assignedUserName, ENT_QUOTES, 'UTF-8'),
-                'description' => nl2br(htmlspecialchars($description, ENT_QUOTES, 'UTF-8')),
-                'acceptLink' => "https://gapssa.es",
-                'declineLink' => "https://gapssa.es",
-                'isAllDay' => false,
-                'joinUrl' => null,
-                'isUser' => false,
-            ]);
-
-            try {
-                /** @var \Espo\Entities\Email $email */
-                $email = $this->entityManager->getNewEntity('Email');
-                $email->set([
-                    'name' => $subject,
-                    'subject' => $subject,
-                    'body' => $bodyHtml,
-                    'isHtml' => true,
-                    'status' => 'Sent',
-                    'from' => "{$fromName} <{$fromAddress}>",
-                    'fromString' => "{$fromName} <{$fromAddress}>",
-                    'to' => $emailAddress,
-                    'toString' => "{$clientName} <{$emailAddress}>",
-                    'parentType' => Meeting::ENTITY_TYPE,
-                    'parentId' => $meetingId,
-                    'dateSent' => date('Y-m-d H:i:s'),
-                ]);
-
-                // Establecer stream context para STARTTLS
-                @stream_context_set_default([
-                    'ssl' => [
-                        'verify_peer' => false,
-                        'verify_peer_name' => false,
-                        'allow_self_signed' => true,
-                    ],
-                ]);
-
-                $this->mailSender->send($email);
-                $this->entityManager->saveEntity($email);
-                $sentCount++;
-
-                if ($this->log) {
-                    $this->log->info("✔ Confirmación oficial de GAPSSA enviada a {$emailAddress} para la cita {$meetingId}");
-                }
-            } catch (\Throwable $e) {
-                if ($this->log) {
-                    $this->log->error("❌ Fallo enviando confirmación a {$emailAddress} para la cita {$meetingId}: " . $e->getMessage());
-                }
-            }
-        }
-
-        return $sentCount > 0;
     }
 
     private function renderHtmlTemplate(array $params): string

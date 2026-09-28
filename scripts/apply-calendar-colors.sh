@@ -246,12 +246,7 @@ try {
         ->find();
 
     foreach ($meetings as $meeting) {
-        $ok = $sender->sendConfirmation($meeting);
-        if ($ok) {
-            echo "✔ Correo de confirmación oficial enviado para la cita " . $meeting->get("name") . " (ID: " . $meeting->getId() . ")\n";
-        } else {
-            echo "ℹ Sin destinatarios o no enviado para la cita " . $meeting->getId() . "\n";
-        }
+        $sender->sendConfirmation($meeting);
     }
 } catch (\Throwable $e) {
     echo "⚠ Aviso general en despacho de confirmaciones: " . $e->getMessage() . "\n";
