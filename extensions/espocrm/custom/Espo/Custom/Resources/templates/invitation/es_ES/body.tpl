@@ -31,10 +31,10 @@
                     <!-- Body Content -->
                     <tr>
                         <td style="padding: 36px 32px;">
-                            <h2 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 600; color: #1c1814;">Reserva de Cita</h2>
+                            <h2 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 600; color: #1c1814;">Cita Confirmada</h2>
                             <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 1.6; color: #5c5048;">
                                 Estimado/a <strong>{{inviteeName}}</strong>,<br>
-                                Le confirmamos los detalles de su cita en GAPSSA:
+                                Le confirmamos que su cita en GAPSSA ha sido confirmada y agendada exitosamente:
                             </p>
 
                             <!-- Details Card -->
@@ -48,7 +48,7 @@
                                             </tr>
                                             <tr>
                                                 <td style="padding: 6px 0; font-size: 14px; color: #6b5f52; font-weight: 600;">Fecha y hora:</td>
-                                                <td style="padding: 6px 0; font-size: 14px; color: #c4a257; font-weight: 700;">{{#if isAllDay}}{{dateStartFull}}{{else}}{{dateStartFull}} ({{timeZone}}){{/if}}</td>
+                                                <td style="padding: 6px 0; font-size: 14px; color: #c4a257; font-weight: 700;">{{dateStartFull}}</td>
                                             </tr>
                                             {{#if assignedUserName}}
                                             <tr>
@@ -67,19 +67,14 @@
                                 </tr>
                             </table>
 
-                            <!-- Buttons -->
-                            <p style="margin: 0 0 16px 0; font-size: 14px; color: #6b5f52; text-align: center;">Por favor, confirme su asistencia:</p>
+                            <!-- Portal Link -->
                             <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 24px;">
                                 <tr>
                                     <td align="center">
                                         <table border="0" cellpadding="0" cellspacing="0">
                                             <tr>
                                                 <td align="center" style="border-radius: 6px; background-color: #c4a257;">
-                                                    <a href="{{acceptLink}}" style="font-size: 14px; font-weight: 600; color: #ffffff; text-decoration: none; display: inline-block; padding: 12px 24px; border-radius: 6px;">✓ Confirmar Asistencia</a>
-                                                </td>
-                                                <td width="12"></td>
-                                                <td align="center" style="border-radius: 6px; border: 1px solid #9a8e84;">
-                                                    <a href="{{declineLink}}" style="font-size: 14px; font-weight: 500; color: #5c5048; text-decoration: none; display: inline-block; padding: 11px 18px; border-radius: 6px;">Declinar</a>
+                                                    <a href="https://gapssa.es" style="font-size: 14px; font-weight: 600; color: #ffffff; text-decoration: none; display: inline-block; padding: 12px 28px; border-radius: 6px;">Ver en Portal GAPSSA</a>
                                                 </td>
                                             </tr>
                                         </table>

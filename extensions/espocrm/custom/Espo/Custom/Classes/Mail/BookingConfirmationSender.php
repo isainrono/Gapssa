@@ -196,7 +196,20 @@ class BookingConfirmationSender
 
         $template = file_exists($templatePath) ? file_get_contents($templatePath) : $this->fallbackTemplate();
 
-        // Reemplazo de variables simples {{variable}}
+        // 1. Evaluar bloques condicionales {{#if key}}...{{else}}...{{/if}} y {{#if key}}...{{/if}}
+        $template = preg_replace_callback(
+            '/\{\{#if\s+([a-zA-Z0-9_]+)\}\}(.*?)(?:\{\{else\}\}(.*?))?\{\{\/if\}\}/s',
+            function ($matches) use ($params) {
+                $var = $matches[1];
+                $ifPart = $matches[2];
+                $elsePart = $matches[3] ?? '';
+                $isTrue = !empty($params[$var]);
+                return $isTrue ? $ifPart : $elsePart;
+            },
+            $template
+        );
+
+        // 2. Reemplazo de variables simples {{{variable}}} y {{variable}}
         foreach ($params as $key => $val) {
             if (is_string($val) || is_numeric($val)) {
                 $template = str_replace('{{{' . $key . '}}}', (string) $val, $template);
@@ -204,23 +217,8 @@ class BookingConfirmationSender
             }
         }
 
-        // Limpieza de bloques condicionales no utilizados
-        if (empty($params['joinUrl'])) {
-            $template = preg_replace('/\{\{#if joinUrl\}\}.*?\{\{\/if\}\}/s', '', $template);
-        }
-        if (empty($params['isUser'])) {
-            $template = preg_replace('/\{\{#if isUser\}\}.*?\{\{\/if\}\}/s', '', $template);
-        }
-        if (empty($params['description'])) {
-            $template = preg_replace('/\{\{#if description\}\}.*?\{\{\/if\}\}/s', '', $template);
-        } else {
-            $template = str_replace(['{{#if description}}', '{{/if}}'], '', $template);
-        }
-        if (empty($params['assignedUserName'])) {
-            $template = preg_replace('/\{\{#if assignedUserName\}\}.*?\{\{\/if\}\}/s', '', $template);
-        } else {
-            $template = str_replace(['{{#if assignedUserName}}', '{{/if}}'], '', $template);
-        }
+        // 3. Limpieza de cualquier etiqueta de plantilla residual {{...}}
+        $template = preg_replace('/\{\{[#\/]?.*?\}\}/s', '', $template);
 
         return $template;
     }
