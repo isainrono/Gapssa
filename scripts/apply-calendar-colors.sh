@@ -239,8 +239,7 @@ try {
         }
     }
 
-    /** @var \Espo\Custom\Classes\Mail\BookingConfirmationSender $sender */
-    $sender = $container->get("injectableFactory")->create(\Espo\Custom\Classes\Mail\BookingConfirmationSender::class);
+    $sender = new \Espo\Custom\Classes\Mail\BookingConfirmationSender($container);
 
     $meetings = $em->getRDBRepository("Meeting")
         ->where(["cEstadoReserva" => "Confirmed"])

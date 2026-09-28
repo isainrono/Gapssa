@@ -2,7 +2,7 @@
 
 namespace Espo\Custom\Classes\Mail;
 
-use Espo\Core\Mail\MailSender;
+use Espo\Core\Container;
 use Espo\Core\Utils\Config;
 use Espo\Core\Utils\Log;
 use Espo\Modules\Crm\Entities\Meeting;
@@ -15,12 +15,19 @@ use Espo\ORM\EntityManager;
  */
 class BookingConfirmationSender
 {
-    public function __construct(
-        private EntityManager $entityManager,
-        private MailSender $mailSender,
-        private Config $config,
-        private ?Log $log = null,
-    ) {}
+    private EntityManager $entityManager;
+    /** @var mixed */
+    private $mailSender;
+    private Config $config;
+    private ?Log $log;
+
+    public function __construct(Container $container)
+    {
+        $this->entityManager = $container->get('entityManager');
+        $this->mailSender = $container->get('mailSender');
+        $this->config = $container->get('config');
+        $this->log = $container->has('log') ? $container->get('log') : null;
+    }
 
     public function sendConfirmation(Meeting $meeting): bool
     {

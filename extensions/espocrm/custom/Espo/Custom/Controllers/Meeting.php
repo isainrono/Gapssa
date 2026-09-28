@@ -37,8 +37,7 @@ class Meeting extends BaseMeeting
                     ]);
                     $em->saveEntity($meeting);
 
-                    /** @var BookingConfirmationSender $sender */
-                    $sender = $this->getInjectableFactory()->create(BookingConfirmationSender::class);
+                    $sender = new BookingConfirmationSender($this->getContainer());
                     $sender->sendConfirmation($meeting);
                 }
             }

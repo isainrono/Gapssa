@@ -2,14 +2,12 @@
 
 namespace Espo\Custom\Classes\RecordHooks\Meeting;
 
-use Espo\Core\Mail\MailSender;
+use Espo\Core\Container;
 use Espo\Core\Record\Hook\SaveHook;
-use Espo\Core\Utils\Config;
 use Espo\Core\Utils\Log;
 use Espo\Custom\Classes\Mail\BookingConfirmationSender;
 use Espo\Modules\Crm\Entities\Meeting;
 use Espo\ORM\Entity;
-use Espo\ORM\EntityManager;
 
 /**
  * Reenvía la invitación / confirmación de cita a los clientes cuando:
@@ -28,12 +26,14 @@ class SendInvitationsAfterUpdate implements SaveHook
         'assignedUserId',
     ];
 
-    public function __construct(
-        private EntityManager $entityManager,
-        private MailSender $mailSender,
-        private Config $config,
-        private ?Log $log = null,
-    ) {}
+    private BookingConfirmationSender $confirmationSender;
+    private ?Log $log;
+
+    public function __construct(Container $container)
+    {
+        $this->confirmationSender = new BookingConfirmationSender($container);
+        $this->log = $container->has('log') ? $container->get('log') : null;
+    }
 
     public function process(Entity $entity): void
     {
@@ -58,15 +58,8 @@ class SendInvitationsAfterUpdate implements SaveHook
         }
 
         try {
-            $confirmationSender = new BookingConfirmationSender(
-                $this->entityManager,
-                $this->mailSender,
-                $this->config,
-                $this->log
-            );
-
             if ($entity instanceof Meeting) {
-                $confirmationSender->sendConfirmation($entity);
+                $this->confirmationSender->sendConfirmation($entity);
             }
         } catch (\Throwable $e) {
             if ($this->log) {
