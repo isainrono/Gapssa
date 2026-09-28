@@ -9,6 +9,10 @@ docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm ph
 require_once "/var/www/html/bootstrap.php";
 $app = new \Espo\Core\Application();
 $c = $app->getContainer();
+$em = $c->get('entityManager');
+$systemUser = $em->getEntity('User', 'system') ?? $em->getEntity('User', '1');
+$c->setUser($systemUser);
+
 $injectableFactory = $c->get('injectableFactory');
 
 echo "1. Probando creación de BookingConfirmationSender via InjectableFactory...\n";
@@ -22,19 +26,20 @@ try {
 echo "\n2. Probando creación de Espo\\Custom\\Controllers\\Meeting via InjectableFactory...\n";
 try {
     $controller = $injectableFactory->create(\Espo\Custom\Controllers\Meeting::class);
-    echo "  ✔ Meeting Controller creado con éxito via InjectableFactory!\n";
+    echo "  ✔ Meeting Controller creado con éxito!\n";
     $ref = new ReflectionClass($controller);
     foreach ($ref->getProperties() as $p) {
-        echo "    Propiedad: " . $p->getName() . "\n";
+        $p->setAccessible(true);
+        $val = $p->getValue($controller);
+        $type = is_object($val) ? get_class($val) : gettype($val);
+        echo "    Propiedad: $" . $p->getName() . " (" . $type . ")\n";
+    }
+
+    echo "\n3. Probando métodos disponibles en Meeting Controller...\n";
+    foreach (get_class_methods($controller) as $method) {
+        echo "    Método: $method\n";
     }
 } catch (\Throwable $e) {
     echo "  ❌ Error: " . $e->getMessage() . "\n";
-}
-
-echo "\n3. Probando métodos disponibles en Meeting Controller...\n";
-foreach (get_class_methods($controller) as $method) {
-    if (stripos($method, 'entity') !== false || stripos($method, 'container') !== false || stripos($method, 'log') !== false || stripos($method, 'record') !== false) {
-        echo "    Método: $method\n";
-    }
 }
 PHP_EOF
