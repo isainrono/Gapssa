@@ -159,6 +159,7 @@ class BookingConfirmationSender
                         ],
                     ]);
 
+                    $this->ensureTlsStreamPrepared();
                     $this->mailSender->send($email);
                     $this->entityManager->saveEntity($email);
                     $sentCount++;
@@ -168,9 +169,10 @@ class BookingConfirmationSender
                         $this->log->info("✔ Confirmación oficial de GAPSSA enviada a {$emailAddress} para la cita {$meetingId}");
                     }
                 } catch (\Throwable $e) {
-                    echo "❌ Error enviando correo a {$emailAddress} (Cita {$meetingId}): " . $e->getMessage() . "\n";
+                    $prevMsg = $e->getPrevious() ? " (Causa: " . $e->getPrevious()->getMessage() . ")" : "";
+                    echo "❌ Error enviando correo a {$emailAddress} (Cita {$meetingId}): " . $e->getMessage() . $prevMsg . "\n";
                     if ($this->log) {
-                        $this->log->error("❌ Fallo enviando confirmación a {$emailAddress} para la cita {$meetingId}: " . $e->getMessage());
+                        $this->log->error("❌ Fallo enviando confirmación a {$emailAddress} para la cita {$meetingId}: " . $e->getMessage() . $prevMsg);
                     }
                 }
             }
@@ -253,6 +255,78 @@ class BookingConfirmationSender
         return '<html><body><h2>Confirmación de Cita - GAPSSA</h2><p>Estimado/a {{inviteeName}}, le confirmamos su cita para el servicio <strong>{{name}}</strong> el día {{dateStartFull}} con {{assignedUserName}}.</p></body></html>';
     }
 
+    private function ensureTlsStreamPrepared(): void
+    {
+        try {
+            $refSender = new \ReflectionClass($this->mailSender);
+
+            if ($refSender->hasProperty("transport")) {
+                $transProp = $refSender->getProperty("transport");
+                $transProp->setAccessible(true);
+                $t = $transProp->getValue($this->mailSender);
+                if ($t instanceof \Symfony\Component\Mailer\Transport\Smtp\EsmtpTransport) {
+                    $stream = $t->getStream();
+                    if ($stream instanceof \Symfony\Component\Mailer\Transport\Smtp\Stream\SocketStream) {
+                        $stream->setStreamOptions([
+                            'ssl' => [
+                                'verify_peer' => false,
+                                'verify_peer_name' => false,
+                                'allow_self_signed' => true,
+                            ],
+                        ]);
+                    }
+                } else {
+                    $transProp->setValue($this->mailSender, null);
+                }
+            }
+
+            if ($refSender->hasProperty("transportPreparatorFactory")) {
+                $tpfProp = $refSender->getProperty("transportPreparatorFactory");
+                $tpfProp->setAccessible(true);
+                $innerTpf = $tpfProp->getValue($this->mailSender);
+
+                if (!$innerTpf || !(new \ReflectionClass($innerTpf))->isAnonymous()) {
+                    $injectableFactory = $this->container->get("injectableFactory");
+                    $customTpf = new class($injectableFactory, $innerTpf) extends \Espo\Core\Mail\Sender\TransportPreparatorFactory {
+                        private $inner;
+                        public function __construct($injectableFactory, $inner) {
+                            parent::__construct($injectableFactory);
+                            $this->inner = $inner;
+                        }
+                        public function create(\Espo\Core\Mail\SmtpParams $smtpParams): \Espo\Core\Mail\Sender\TransportPreparator {
+                            $innerPrep = $this->inner ? $this->inner->create($smtpParams) : parent::create($smtpParams);
+                            return new class($innerPrep) implements \Espo\Core\Mail\Sender\TransportPreparator {
+                                private $inner;
+                                public function __construct($inner) { $this->inner = $inner; }
+                                public function prepare(\Espo\Core\Mail\SmtpParams $params): \Symfony\Component\Mailer\Transport\TransportInterface {
+                                    $t = $this->inner->prepare($params);
+                                    if ($t instanceof \Symfony\Component\Mailer\Transport\Smtp\EsmtpTransport) {
+                                        $stream = $t->getStream();
+                                        if ($stream instanceof \Symfony\Component\Mailer\Transport\Smtp\Stream\SocketStream) {
+                                            $stream->setStreamOptions([
+                                                'ssl' => [
+                                                    'verify_peer' => false,
+                                                    'verify_peer_name' => false,
+                                                    'allow_self_signed' => true,
+                                                ],
+                                            ]);
+                                        }
+                                    }
+                                    return $t;
+                                }
+                            };
+                        }
+                    };
+                    $tpfProp->setValue($this->mailSender, $customTpf);
+                }
+            }
+        } catch (\Throwable $e) {
+            if ($this->log) {
+                $this->log->warning("Aviso configurando TLS en MailSender: " . $e->getMessage());
+            }
+        }
+    }
+
     private function logWarning(string $msg): void
     {
         if ($this->log) {
@@ -260,3 +334,4 @@ class BookingConfirmationSender
         }
     }
 }
+
