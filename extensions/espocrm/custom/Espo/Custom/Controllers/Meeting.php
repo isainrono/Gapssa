@@ -3,7 +3,6 @@
 namespace Espo\Custom\Controllers;
 
 use Espo\Core\Api\Request;
-use Espo\Core\Api\Response;
 use Espo\Custom\Classes\Mail\BookingConfirmationSender;
 use Espo\Modules\Crm\Controllers\Meeting as BaseMeeting;
 
@@ -15,9 +14,9 @@ use Espo\Modules\Crm\Controllers\Meeting as BaseMeeting;
  */
 class Meeting extends BaseMeeting
 {
-    public function postActionSetAcceptanceStatus(Request $request, Response $response): void
+    public function postActionSetAcceptanceStatus(Request $request): bool
     {
-        parent::postActionSetAcceptanceStatus($request, $response);
+        $result = parent::postActionSetAcceptanceStatus($request);
 
         try {
             $data = $request->getParsedBody();
@@ -44,5 +43,7 @@ class Meeting extends BaseMeeting
         } catch (\Throwable $e) {
             $this->getLog()->error("Error en postActionSetAcceptanceStatus confirmación GAPSSA: " . $e->getMessage());
         }
+
+        return $result;
     }
 }
