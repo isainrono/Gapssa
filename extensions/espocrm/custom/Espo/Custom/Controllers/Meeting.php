@@ -19,29 +19,17 @@ class Meeting extends BaseMeeting
         $result = parent::postActionSetAcceptanceStatus($request);
 
         try {
-            $data = $request->getParsedBody();
-            $id = $data->id ?? null;
-            $status = $data->status ?? null;
+            $body = $request->getParsedBody();
+            $id = is_object($body) ? ($body->id ?? null) : (is_array($body) ? ($body['id'] ?? null) : null);
+            $status = is_object($body) ? ($body->status ?? null) : (is_array($body) ? ($body['status'] ?? null) : null);
 
             if ($id && $status === 'Accepted') {
-                $em = $this->getEntityManager();
-                $meeting = $em->getEntity('Meeting', $id);
-
-                if ($meeting) {
-                    $meeting->set([
-                        'cEstadoReserva' => 'Confirmed',
-                        'color' => '#10B981',
-                        'cMotivoResolucionReserva' => 'Approved',
-                        'status' => 'Planned',
-                    ]);
-                    $em->saveEntity($meeting);
-
-                    $sender = new BookingConfirmationSender($this->getContainer());
-                    $sender->sendConfirmation($meeting);
-                }
+                /** @var BookingConfirmationSender $sender */
+                $sender = $this->injectableFactory->create(BookingConfirmationSender::class);
+                $sender->sendConfirmationById((string) $id);
             }
         } catch (\Throwable $e) {
-            $this->getLog()->error("Error en postActionSetAcceptanceStatus confirmación GAPSSA: " . $e->getMessage());
+            error_log("GAPSSA Acceptance Notification: " . $e->getMessage());
         }
 
         return $result;

@@ -32,6 +32,22 @@ class BookingConfirmationSender
         $this->log = $container->has('log') ? $container->get('log') : null;
     }
 
+    public function sendConfirmationById(string $meetingId): bool
+    {
+        try {
+            $meeting = $this->entityManager->getEntity('Meeting', $meetingId);
+            if ($meeting instanceof Meeting) {
+                return $this->sendConfirmation($meeting);
+            }
+        } catch (\Throwable $e) {
+            if ($this->log) {
+                $this->log->error("Error en sendConfirmationById para cita {$meetingId}: " . $e->getMessage());
+            }
+        }
+
+        return false;
+    }
+
     public function sendConfirmation(Meeting $meeting): bool
     {
         $meetingId = $meeting->getId();
