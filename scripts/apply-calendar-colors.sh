@@ -16,7 +16,7 @@ echo "==> 2. Reconstruyendo metadatos y limpiando caché de EspoCRM..."
 docker compose --env-file .env.production -f compose.prod.yml exec espocrm bin/command rebuild
 docker compose --env-file .env.production -f compose.prod.yml exec espocrm bin/command clear-cache
 
-smtp_host="$(grep -E '^ *SMTP_HOST *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '172.25.0.1')"
+smtp_host="$(grep -E '^ *SMTP_HOST *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo 'gapssa.es')"
 smtp_port="$(grep -E '^ *SMTP_PORT *=' .env.production 2>/dev/null | head -n1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || echo '587')"
 # EspoCRM utiliza info@gapssa.es como cuenta saliente oficial del CRM
 smtp_user="info@gapssa.es"
@@ -39,7 +39,7 @@ if (!in_array("6a71e26f5a32d9575", $config["gapssaBookingDecisionAuthorizedUserI
     $config["gapssaBookingDecisionAuthorizedUserIds"][] = "6a71e26f5a32d9575";
 }
 // Configuración de SMTP saliente en EspoCRM para envío de confirmaciones
-$config["smtpServer"] = $argv[1] ?: "172.25.0.1";
+$config["smtpServer"] = $argv[1] ?: "gapssa.es";
 $config["smtpPort"] = (int) ($argv[2] ?: 587);
 $config["smtpAuth"] = true;
 $config["smtpSecurity"] = "TLS";
@@ -92,7 +92,7 @@ try {
                     "replyToAddress" => $targetEmail,
                     "replyToName" => "GAPSSA",
                     "useSmtp" => true,
-                    "smtpHost" => $argv[1] ?: "172.25.0.1",
+                    "smtpHost" => $argv[1] ?: "gapssa.es",
                     "smtpPort" => (int) ($argv[2] ?: 587),
                     "smtpAuth" => true,
                     "smtpSecurity" => "TLS",
@@ -120,7 +120,7 @@ try {
         $pdo = $c->has('pdo') ? $c->get('pdo') : null;
         if ($pdo && $activeId) {
             $updStmt = $pdo->prepare("UPDATE inbound_email SET status = 'Active', use_smtp = 1, smtp_host = ?, smtp_port = ?, smtp_auth = 1, smtp_security = 'TLS', smtp_username = ?, smtp_password = ?, smtp_is_shared = 1, from_name = 'GAPSSA', reply_to_address = ?, reply_to_name = 'GAPSSA' WHERE id = ?");
-            $updStmt->execute([$argv[1] ?: "172.25.0.1", (int) ($argv[2] ?: 587), $targetEmail, $encryptedPassword, $targetEmail, $activeId]);
+            $updStmt->execute([$argv[1] ?: "gapssa.es", (int) ($argv[2] ?: 587), $targetEmail, $encryptedPassword, $targetEmail, $activeId]);
             $pdo->exec("UPDATE inbound_email SET status = 'Inactive' WHERE email_address = '$targetEmail' AND id != '$activeId'");
             $pdo->exec("UPDATE inbound_email SET status = 'Inactive' WHERE id = '6a70ed04a0fdd2f68' AND id != '$activeId'");
         }
