@@ -1,0 +1,275 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>GAPSSA Hero Reveal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Jost:wght@400;500&display=swap">
+<style>
+:root{
+  --page:#EDE5DA; --ink:#3B3128; --muted:#7B6C5A; --gold:#AD8B5C; --gold-deep:#8E6F44;
+  --olive:#877E58; --ivory:#FAF6F0; --line:#D9CCBB; --chip:#F6F0E8;
+  --serif:"Cormorant Garamond","Iowan Old Style",Georgia,serif;
+  --sans:"Jost","Avenir Next","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+body{background:var(--page);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;padding-inline:clamp(16px,4vw,48px);padding-block:28px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:22px}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:end;gap:10px 24px}
+.eyebrow{font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:var(--serif);font-weight:500;font-size:clamp(28px,4vw,40px);line-height:1.05;margin:4px 0 0;text-wrap:balance}
+h1 em{color:var(--gold-deep)}
+.spec{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* Stage */
+.stage{position:relative;aspect-ratio:16/9;max-width:100%;overflow:hidden;background:var(--ivory);border-radius:6px;box-shadow:0 1px 0 #fff8 inset,0 24px 60px -28px #6e5a4366}
+@media (max-width:640px){.stage{aspect-ratio:4/5}}
+.stage .bg{position:absolute;inset:0;background:
+  radial-gradient(120% 90% at 50% 0%, #FFFDF9 0%, #FAF6F0 38%, #F1E6DA 78%, #E9DCC9 100%)}
+.stage .light{position:absolute;inset:-10%;background:radial-gradient(55% 45% at 38% 18%, #FFF9EE 0%, #FFF9EE00 70%);opacity:0}
+.silk{position:absolute;border-radius:50%;filter:blur(60px);opacity:.55;will-change:transform}
+.silk.a{width:70%;height:38%;left:-12%;top:52%;background:#EFE1CF;animation:drift1 16s ease-in-out infinite alternate}
+.silk.b{width:60%;height:34%;right:-14%;top:8%;background:#F5EADB;animation:drift2 19s ease-in-out infinite alternate}
+@keyframes drift1{to{transform:translate(9%,-7%) rotate(-6deg) scaleX(1.12)}}
+@keyframes drift2{to{transform:translate(-8%,8%) rotate(5deg) scaleX(1.08)}}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%}
+.vignette{position:absolute;inset:0;background:radial-gradient(90% 80% at 50% 45%,#0000 60%,#6E5A4312 100%);pointer-events:none}
+.grain{position:absolute;inset:-50%;opacity:.07;pointer-events:none;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .43 0 0 0 0 .35 0 0 0 0 .26 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation:grain 1s steps(6) infinite}
+@keyframes grain{0%{transform:translate(0,0)}20%{transform:translate(-3%,2%)}40%{transform:translate(2%,-3%)}60%{transform:translate(-2%,-1%)}80%{transform:translate(3%,3%)}100%{transform:translate(0,0)}}
+.cam{position:absolute;inset:0}
+#logo{position:absolute;inset:0;margin:auto;width:100%;height:66%;overflow:visible}
+@media (max-width:640px){#logo{width:86%;height:74%}}
+
+/* Controls */
+.controls{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px}
+button{font:inherit;cursor:pointer}
+.play{display:inline-flex;align-items:center;gap:8px;background:var(--ink);color:var(--ivory);border:0;border-radius:999px;padding:9px 18px 9px 14px;font-size:14px;letter-spacing:.02em}
+.play:hover{background:#2A231E}
+.play svg{width:14px;height:14px;fill:currentColor}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;background:var(--chip)}
+.seg button{border:0;background:none;color:var(--muted);border-radius:999px;padding:5px 12px;font-size:13px;font-variant-numeric:tabular-nums}
+.seg button[aria-pressed="true"]{background:var(--ivory);color:var(--ink);box-shadow:0 1px 3px #6e5a4322}
+.scrub{flex:1 1 260px;display:flex;align-items:center;gap:12px;min-width:0}
+input[type=range]{flex:1;min-width:0;accent-color:var(--gold-deep)}
+.time{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:92px;text-align:right}
+:focus-visible{outline:2px solid var(--gold-deep);outline-offset:2px}
+
+/* Beats */
+.beats{list-style:none;margin:6px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.beats li{background:var(--page);padding:12px 14px;display:grid;gap:2px;transition:background .3s}
+.beats li button{all:unset;cursor:pointer;display:grid;gap:2px}
+.beats .t{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.beats .n{font-family:var(--serif);font-size:19px;font-weight:600;line-height:1.2}
+.beats .d{font-size:13px;color:var(--muted)}
+.beats li.on{background:var(--chip)}
+.beats li.on .n{color:var(--gold-deep)}
+.note{font-size:13px;color:var(--muted);max-width:70ch}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">GAPSSA by Nana · Belleza integral</div>
+      <h1>Animación <em>hero</em>, prototipo 1</h1>
+    </div>
+    <div class="spec">7,0 s · se reproduce una vez y queda en el logo completo</div>
+  </header>
+
+  <div class="stage" id="stage" aria-label="Animación del logotipo GAPSSA by Nana">
+    <div class="bg"></div>
+    <div class="silk a"></div><div class="silk b"></div>
+    <div class="light" id="light"></div>
+    <canvas id="dust"></canvas>
+    <div class="cam" id="cam">
+      <svg id="logo" viewBox="-40 -40 2000 1815" role="img" aria-label="GAPSSA by Nana, Belleza integral">
+        <defs>
+          <mask id="m-face" maskUnits="userSpaceOnUse" x="-200" y="-200" width="2400" height="2200"><path id="mk-face" d="M945.39,590.15c185.74,40.16,345.52,71.88,531.11,18.07l61.49-21.01c-28.75,22.5-61.42,33.65-95.69,44.6-116.31,37.17-279.83,29.17-400.17,4.48l-193.13-39.62c-135.16-27.73-260.57-46.91-395.42.62,28.62-22.87,64.23-30.33,99.58-37.48,117.36-23.74,255.66,3.67,378.54,28.16-13.06-50.29-57.65-103.65-108.66-102.46-26.82.63-52.91,5.89-78.68.09s-43.36-26.9-36.5-52.31l7.67-28.45c-12.06-11-15.05-25.55-7.98-40.03-9.94-15.37-4.66-31.52,9.39-42.94l-19.59-15.77c-9.58-7.71-13.58-18.2-12.62-30.04,2.4-29.7,75.95-32.67,79.68-118.48,2.45-56.44,32.42-118.91,86.82-138.99-14.54,86.42,17.52,172.06,70.08,237.71l76.13,85.19c19.44,21.75,36.38,44.74,47.65,71.74,16.87,40.42,24.33,88.45-.14,128.26,17.67-87.76-24.68-149.71-85.58-210.3-32.04-31.88-59.63-65.22-83.64-103.7-36.88-59.11-46.68-126.51-33-197.39-36.97,33.24-51.92,78.95-56.5,126.84-6.34,66.29-22.95,82.22-78.05,122.81,9.72,16.01,27.73,22.03,44.57,26.44,1.99,5.55-6.42,11.02-13.73,6.85.94,14.42-3.82,21.02-11.39,30.88-7.26,9.45,30.24,18.68,15.94,28.32l-16.72,11.26c30.55,20.68-4.03,48.15,5.62,66.19,17.54,32.8,131.55,8.62,185.31-6.36-13.8,17.89-33.42,21.42-53.55,29.16,46.94,18.76,76.08,62.51,81.15,117.64Z" fill="none" stroke="#fff" stroke-width="74" stroke-linecap="butt" stroke-linejoin="round"/></mask>
+<mask id="m-medio" maskUnits="userSpaceOnUse" x="-200" y="-200" width="2400" height="2200"><path id="mk-medio" d="M1035.5,587.67c16.84-29.27,31.76-55.37,39.71-87.23,15.19-60.89-.23-122.15-40.66-170.25-61.26-72.86-162.57-114.29-172.09-246.81,1.01-22.25-.13-45.6,17.35-63.62-21.68,107.63,39.78,178.93,118.17,243.73,25.42,21.01,47.65,42.24,66.5,69.09,43.86,62.47,48.7,140.61,11.65,207.47-10.71,17.51-17.28,38.65-40.63,47.61Z" fill="none" stroke="#fff" stroke-width="96" stroke-linecap="butt" stroke-linejoin="round"/></mask>
+<mask id="m-cabeza" maskUnits="userSpaceOnUse" x="-200" y="-200" width="2400" height="2200"><path id="mk-cabeza" d="M1174.09,124.11c-27.39-47.25-71.09-78-120.98-96.34-42.23-15.52-83.42-16.56-129.94-18.39,49.13-16.45,98.65-9.15,145.56,5.72,31.61,10.8,58.37,27.13,81.8,50.8,37.6,37.22,61.04,88.62,50.63,142.96-6.03-31.01-10.11-57.67-27.06-84.74Z" fill="none" stroke="#fff" stroke-width="66" stroke-linecap="butt" stroke-linejoin="round"/></mask>
+<mask id="m-by" maskUnits="userSpaceOnUse" x="-200" y="-200" width="2400" height="2200"><path id="mk-by" d="M740.22,1248.66l-46.33,20.05c6.88-16.81,15.33-30.42,12.42-50.27l-29.32,27.03c-10.92,10.07-22.12,20.65-39.6,21.41,5.53-27.04,34.4-44.51,21.2-51.64-9.77-5.28-21.96,20.71-31.54,32.25-6.64,8.01-19.53,11.27-30.16,11.56,14.87-15.87,19.25-33.91,7.87-41.97-15.76-11.17-42.85,14.16-63.52,32.13,24.29-49.87,58.26-91.31,96.34-130.21,3.19-3.26,4.55-8.72,2.76-11.73-14.53-24.48-146.71,160.89-113.13,167.98,10.09,2.13,29.63-44.82,62.12-50.66,9.9,4.11,1.75,19.82-3.82,25.64-12.76,13.33-23.76,20.08-44.81,17.37,3.53,6.91,8.42,5.03,15.01,5.04-6.39,5.11-14.39,4.47-24.18,6.8,19.31,11.71,38.65.79,56.52-9.74l34.07-11.71c-.02,9.18,2.04,15.8,7.1,18.62,12.75,7.12,39.1-14.33,58.03-30.3-4.44,11.02-8.22,25.72-18.4,32.79-32.77,22.79-65.74,42.57-89.96,74.85-5.38,7.18-13.56,21.14-5.3,27.97,30.68,25.38,93.78-60.24,114.76-102.26l54.11-28.23-2.24-2.77ZM618.82,1355.09c-9.05,7.57-15.46,15.62-31.81,17.96.4-31.09,44.95-60,75.25-78.55-11.23,23.45-27.33,41.21-43.44,60.59Z" fill="none" stroke="#fff" stroke-width="50" stroke-linecap="butt" stroke-linejoin="round"/></mask>
+<mask id="m-N" maskUnits="userSpaceOnUse" x="-200" y="-200" width="2400" height="2200"><path id="mk-N" d="M1048.23,1119.71c-19.07,3.83-30.62,13.87-43.91,23.94-55.17,41.81-100.58,92.69-141.75,148.15-12.17,16.39-24.01,31.81-36.51,30.21-2.21-.28-7.21-4.5-5.36-7.48l43.09-69.69c22.75-36.79,87.66-118.95,65.61-141.09-7.67-7.7-24.73-2.9-34.25,1.49-38.56,17.78-68.97,47.12-91.83,82.39-7.66,11.82-7.5,23.47-7.11,38.35-15.01-4.7-16.65-18.82-13.79-30.61,16.24-66.82,128.46-120.49,157.49-97.24,15.08,12.07,4.79,42.41-8.15,66.2l-34.69,63.77c33.7-35.5,141.17-139.63,163.49-120.98,4.3,3.6,6.54,12.24,3.51,18.57-25.78,53.75-94.71,172.69-53.29,206.23,9.1,7.37,20.63,4.83,32.55,5.65-12.78,10.44-33.32,8.32-47.14-.88-34.65-23.07-16.2-90.15,5.91-131.24l46.13-85.72Z" fill="none" stroke="#fff" stroke-width="54" stroke-linecap="butt" stroke-linejoin="round"/></mask>
+<mask id="m-ana" maskUnits="userSpaceOnUse" x="-200" y="-200" width="2400" height="2200"><path id="mk-ana" d="M1376.71,1274c-7.81.39-12.79-5.54-10.33-11.44l12.83-30.8c2.01-13.8-17.06-19.33-27.56-16.78-26.17,6.37-43.18,19.33-58.27,40.26-7.17,9.96-28.34,18.95-39.88,15.95-7.97-4.78-2.16-19.56,1.19-25.94,4.22-8.01.22-22.14-8.57-21.01-20.1,2.58-33.84,16.98-51.48,26,9.94-19.4,10.96-34.5,1.55-33.33-9.73,1.2-3.46,27.75-35.28,44.83-9.23,4.96-24,16.95-35.06,10.09-10.4-15.63,15.03-34.77,10.37-45.7-1.72-4.04-7.7-11.14-14.65-11.41-46.34-1.86-87.98,47.63-68.4,64.13,4.21,3.56,11.64,4.97,17.14,1.64l34.11-20.67c.07,14.71,7.12,23.03,18.67,22.47,15.01-.73,25.38-7.39,39.68-13.92-1.16,41.65,26.88-14.87,74.64-34.33,1.95,13.72-13.38,28.36-.4,41.65,11.59,11.86,31.23,2.03,51.2-7.62,6.31,13.33,17.54,17.62,24.97,13.03l35.48-21.92c-.15,6.92.06,13.16,3.54,17.86,10.18,13.75,54.96-1.94,71.77-24.96-17.31,6.33-27.69,20.96-47.26,21.92ZM1064.68,1270.22c6.63-29.64,34.24-47.21,61.79-45.9-16,21.47-36.59,39.07-61.79,45.9ZM1308.45,1270.44c5.75-26.6,30.91-46.23,58.61-45.33-12.75,22.01-33.71,38.36-58.61,45.33Z" fill="none" stroke="#fff" stroke-width="46" stroke-linecap="butt" stroke-linejoin="round"/></mask>
+<mask id="m-bud" maskUnits="userSpaceOnUse" x="-200" y="-200" width="2400" height="2200"><circle id="budCircle" cx="1138" cy="520" r="0" fill="url(#budGrad)"/></mask>
+          <clipPath id="arcClip"><rect id="arcRect" x="952" y="1480" width="0" height="280"/></clipPath>
+          <clipPath id="goldClip"><use href="#p-face"/><use href="#p-medio"/><use href="#p-cabeza"/><use href="#p-hojas"/><use href="#g-G"/><use href="#g-A1"/><use href="#g-P"/><use href="#g-S1"/><use href="#g-S2"/><use href="#g-A2"/><use href="#p-by"/><use href="#p-N"/><use href="#p-ana"/><use href="#p-arc"/></clipPath>
+          <linearGradient id="sheenGrad" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0" stop-color="#FFF7E8" stop-opacity="0"/>
+            <stop offset=".5" stop-color="#FFF7E8" stop-opacity=".55"/>
+            <stop offset="1" stop-color="#FFF7E8" stop-opacity="0"/>
+          </linearGradient>
+          <radialGradient id="budGrad">
+            <stop offset=".72" stop-color="#fff"/>
+            <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+          </radialGradient>
+          <filter id="f-0" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur id="bl-0" stdDeviation="0"/></filter>
+<filter id="f-1" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur id="bl-1" stdDeviation="0"/></filter>
+<filter id="f-2" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur id="bl-2" stdDeviation="0"/></filter>
+<filter id="f-3" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur id="bl-3" stdDeviation="0"/></filter>
+<filter id="f-4" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur id="bl-4" stdDeviation="0"/></filter>
+<filter id="f-5" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur id="bl-5" stdDeviation="0"/></filter>
+        </defs>
+        <g id="g-iso">
+<path id="p-face" d="M945.39,590.15c185.74,40.16,345.52,71.88,531.11,18.07l61.49-21.01c-28.75,22.5-61.42,33.65-95.69,44.6-116.31,37.17-279.83,29.17-400.17,4.48l-193.13-39.62c-135.16-27.73-260.57-46.91-395.42.62,28.62-22.87,64.23-30.33,99.58-37.48,117.36-23.74,255.66,3.67,378.54,28.16-13.06-50.29-57.65-103.65-108.66-102.46-26.82.63-52.91,5.89-78.68.09s-43.36-26.9-36.5-52.31l7.67-28.45c-12.06-11-15.05-25.55-7.98-40.03-9.94-15.37-4.66-31.52,9.39-42.94l-19.59-15.77c-9.58-7.71-13.58-18.2-12.62-30.04,2.4-29.7,75.95-32.67,79.68-118.48,2.45-56.44,32.42-118.91,86.82-138.99-14.54,86.42,17.52,172.06,70.08,237.71l76.13,85.19c19.44,21.75,36.38,44.74,47.65,71.74,16.87,40.42,24.33,88.45-.14,128.26,17.67-87.76-24.68-149.71-85.58-210.3-32.04-31.88-59.63-65.22-83.64-103.7-36.88-59.11-46.68-126.51-33-197.39-36.97,33.24-51.92,78.95-56.5,126.84-6.34,66.29-22.95,82.22-78.05,122.81,9.72,16.01,27.73,22.03,44.57,26.44,1.99,5.55-6.42,11.02-13.73,6.85.94,14.42-3.82,21.02-11.39,30.88-7.26,9.45,30.24,18.68,15.94,28.32l-16.72,11.26c30.55,20.68-4.03,48.15,5.62,66.19,17.54,32.8,131.55,8.62,185.31-6.36-13.8,17.89-33.42,21.42-53.55,29.16,46.94,18.76,76.08,62.51,81.15,117.64Z" fill="#AC8C5B" mask="url(#m-face)"/>
+<path id="p-medio" d="M1035.5,587.67c16.84-29.27,31.76-55.37,39.71-87.23,15.19-60.89-.23-122.15-40.66-170.25-61.26-72.86-162.57-114.29-172.09-246.81,1.01-22.25-.13-45.6,17.35-63.62-21.68,107.63,39.78,178.93,118.17,243.73,25.42,21.01,47.65,42.24,66.5,69.09,43.86,62.47,48.7,140.61,11.65,207.47-10.71,17.51-17.28,38.65-40.63,47.61Z" fill="#AC8C5B" mask="url(#m-medio)"/>
+<path id="p-cabeza" d="M1174.09,124.11c-27.39-47.25-71.09-78-120.98-96.34-42.23-15.52-83.42-16.56-129.94-18.39,49.13-16.45,98.65-9.15,145.56,5.72,31.61,10.8,58.37,27.13,81.8,50.8,37.6,37.22,61.04,88.62,50.63,142.96-6.03-31.01-10.11-57.67-27.06-84.74Z" fill="#AC8C5B" mask="url(#m-cabeza)"/>
+<g id="g-hojas"><path id="p-hojas" d="M1189.63,310.59c2.44-101.4-43.9-140.12-139.47-163.61-24.52-6.03-43.27-18.09-63.62-37.88-15.85,89.89,26.12,172.92,111.08,200.15,20.8,6.67,40.92,10.17,62.97,11.51,18.65,37.2,19.51,77.4,10.9,117.86-10.35,48.65-38.89,84.13-67.3,129.58,54.82-32.32,82.6-93.81,95.06-154.9,60.5-30.55,106.48-37.09,115.44-120.18l7.54-69.88c-57.18,2.39-108.67,32.62-132.6,87.35ZM1049.12,198.09c9.75,17.26,28.28,24.31,42.68,36.15,22.28,18.3,42.54,36.54,56.75,61.98-84.01-7.56-136.78-59.75-145.11-146.07,18.97,9.91,35.4,15.83,54.92,20.87,58.33,15.04,100.31,44.38,109.5,106.75-28.72-37.84-68-67.64-118.74-79.68ZM1292.15,304.27c-4.11,39.3-39.75,64.91-75.77,75.12,13.69-36.05,59.16-84.19,57.28-90.39-2.56-8.47-54.73,37.82-72.01,69.27.61-56.08,40.12-102.26,96.57-112.06l-6.07,58.06Z" fill="#AC8C5B" mask="url(#m-bud)"/></g></g>
+<g id="g-word"><path id="g-S1" d="M1251.56,993.37c-16.15,78.34-154.54,92.5-221.84,35.53-1.92-20.13-4.89-39.27-.52-61.12,17.89,24.92,30.51,47.27,53.4,63.94,29.81,21.71,69.29,21.54,101,3.79,15.49-8.67,25.11-22.39,27.17-36.99,9.4-66.51-105.84-78.89-162.59-136.07-18.75-18.9-22.67-45.52-15.22-71.8,19.7-69.41,139.46-82.15,201.37-31.59.06,18.07,3.13,32.56-1.88,51.57-16.76-25.65-31.68-46.66-57.52-58.42-27.88-12.69-59.72-12.33-84.51,5.32-13.54,9.64-20.7,22.95-20.79,37.97-.09,15.89,7.23,31.41,22.16,39.77l72.28,40.53c53.75,30.14,101.47,49.73,87.48,117.56Z" fill="#AC8C5B" filter="url(#f-3)" opacity="0"/><path id="g-S2" d="M1508.08,1043.28c-53.55,31.42-141.25,26.8-185.36-15.95-4.94-17.13-4.48-40.63-.67-58.8l41.56,53.74c34.39,32.31,91.39,36.65,126.81,3.31,23.1-21.74,14.6-58.7-8.28-76.85-39.19-31.09-102.8-47.92-141.75-87.9-18.45-18.94-19.67-46.36-12.07-72.29,19.55-66.69,135.89-79.31,198.82-30.94.49,18.84,4.1,34.42-2.8,52.25-15.75-25.7-31.32-45.61-55.96-57.37-29.14-13.91-62.46-11.7-87.59,8.14-21.86,17.26-23.75,47.31-3.82,67.45,14.11,14.27,32.86,22.82,50.81,32.65l79.05,43.29c26.51,14.52,41.85,40.31,41.42,68.87-.44,29.29-13.81,54.92-40.18,70.4Z" fill="#AC8C5B" filter="url(#f-4)" opacity="0"/><path id="g-G" d="M256.52,943.93c.04-9.64-.24-16.86-4.16-23.25-3.92-6.4-11.93-5.26-22.11-14.16l92.32-2.19c3.69-.09,6.51.52,5.36,6.22-11.67-.14-23.13,7.51-23.31,20.25l-1.29,88.49c-70.2,58.72-178.96,59.48-249.43.77C19.41,991.35,2.12,948.79.17,903.94c-3.25-75.03,40.21-138.33,110.67-164.14,58-21.24,122.74-13.69,176.76,17.69,3.82,21.31,9.32,39.73,5.98,63.72-19.77-25.8-33.67-47.47-59.1-61.75-57.45-32.25-126.41-14.41-158.24,43.8-24.83,45.41-27.89,97.37-14.47,147.48,10.93,40.79,39.35,70.83,73.15,86.01,41.1,18.46,83.43,12.64,121.22-8.89l.36-83.93Z" fill="#AC8C5B" filter="url(#f-0)" opacity="0"/><path id="g-P" d="M839.02,735.37l-117.89,1.3c16.64,8.32,29.2,12.66,29.19,30.23l-.26,252.92c-.01,9.16-1.98,18.28-7.65,24.4-3.54,3.82-14.28,1.42-20.55,11.03l97.81,1.67c2.9.05,5.29-1.25,6.01-2.75,2.75-5.8-28.43-.9-28.46-32.53l-.08-83.12c33.13.54,64.19,1.54,95.27-6.52,43.57-11.3,72-44.58,74.21-89.73,3.5-71.51-58.9-107.66-127.6-106.9ZM916.8,840.74c-.94,43.12-22.43,77.27-65.95,81.55l-53.78.42.03-170.93,47.85.34c47.02,4.74,72.87,42.12,71.85,88.62Z" fill="#AC8C5B" filter="url(#f-2)" opacity="0"/><path id="g-A1" d="M596.42,1046.78c-2.83,1.95-10.48-.84-14.16,9.07l101.68-1.52c-16.98-8.72-26.05-13.21-32.57-28.14l-123.36-282.58c-2.7-6.19-4.57-9.25-10.3-9.3-5.82-.06-7.94,2.89-10.58,9.15l-121.31,287.9c-5.72,13.55-15.95,14.9-30.77,22.79,27.42,4.52,50.39,3.31,76.77.72-7.79-8-16.08-6.24-19.6-10.63-4.52-5.62-5.25-13.66-2.41-20.61l30.16-73.89,127.56.12,33.14,79.85c2.47,5.95.35,13.89-4.25,17.07ZM445.6,936.61l56.9-138.21,58.86,137.57-115.76.64Z" fill="#AC8C5B" filter="url(#f-1)" opacity="0"/><path id="g-A2" d="M1834,1044.25l-17.37,11.03,103.07.21c-14.17-9.54-25.3-11.45-31.73-26.05l-125.96-286.01c-2.75-6.23-4.66-9.39-10.67-9.32-6.08.07-7.09,3.92-9.73,10.2l-118.29,281.06c-6.59,15.64-15.22,21.38-34.05,28.68,26.53,5.64,50.16,1.56,77.25,2.37-3.75-10.31-13.66-7.53-18.89-11.48-7.15-5.4-5.57-16.06-2.7-23.13l29.2-71.99,128.82.45,31.47,75.54c2.51,6.04,4.54,15.29-.42,18.44ZM1679.3,936.45l58.4-137.5,58.37,136.7-116.77.8Z" fill="#AC8C5B" filter="url(#f-5)" opacity="0"/></g>
+<g id="g-script"><path id="p-by" d="M740.22,1248.66l-46.33,20.05c6.88-16.81,15.33-30.42,12.42-50.27l-29.32,27.03c-10.92,10.07-22.12,20.65-39.6,21.41,5.53-27.04,34.4-44.51,21.2-51.64-9.77-5.28-21.96,20.71-31.54,32.25-6.64,8.01-19.53,11.27-30.16,11.56,14.87-15.87,19.25-33.91,7.87-41.97-15.76-11.17-42.85,14.16-63.52,32.13,24.29-49.87,58.26-91.31,96.34-130.21,3.19-3.26,4.55-8.72,2.76-11.73-14.53-24.48-146.71,160.89-113.13,167.98,10.09,2.13,29.63-44.82,62.12-50.66,9.9,4.11,1.75,19.82-3.82,25.64-12.76,13.33-23.76,20.08-44.81,17.37,3.53,6.91,8.42,5.03,15.01,5.04-6.39,5.11-14.39,4.47-24.18,6.8,19.31,11.71,38.65.79,56.52-9.74l34.07-11.71c-.02,9.18,2.04,15.8,7.1,18.62,12.75,7.12,39.1-14.33,58.03-30.3-4.44,11.02-8.22,25.72-18.4,32.79-32.77,22.79-65.74,42.57-89.96,74.85-5.38,7.18-13.56,21.14-5.3,27.97,30.68,25.38,93.78-60.24,114.76-102.26l54.11-28.23-2.24-2.77ZM618.82,1355.09c-9.05,7.57-15.46,15.62-31.81,17.96.4-31.09,44.95-60,75.25-78.55-11.23,23.45-27.33,41.21-43.44,60.59Z" fill="#A38356" mask="url(#m-by)"/><path id="p-N" d="M1048.23,1119.71c-19.07,3.83-30.62,13.87-43.91,23.94-55.17,41.81-100.58,92.69-141.75,148.15-12.17,16.39-24.01,31.81-36.51,30.21-2.21-.28-7.21-4.5-5.36-7.48l43.09-69.69c22.75-36.79,87.66-118.95,65.61-141.09-7.67-7.7-24.73-2.9-34.25,1.49-38.56,17.78-68.97,47.12-91.83,82.39-7.66,11.82-7.5,23.47-7.11,38.35-15.01-4.7-16.65-18.82-13.79-30.61,16.24-66.82,128.46-120.49,157.49-97.24,15.08,12.07,4.79,42.41-8.15,66.2l-34.69,63.77c33.7-35.5,141.17-139.63,163.49-120.98,4.3,3.6,6.54,12.24,3.51,18.57-25.78,53.75-94.71,172.69-53.29,206.23,9.1,7.37,20.63,4.83,32.55,5.65-12.78,10.44-33.32,8.32-47.14-.88-34.65-23.07-16.2-90.15,5.91-131.24l46.13-85.72Z" fill="#A38356" mask="url(#m-N)"/><path id="p-ana" d="M1376.71,1274c-7.81.39-12.79-5.54-10.33-11.44l12.83-30.8c2.01-13.8-17.06-19.33-27.56-16.78-26.17,6.37-43.18,19.33-58.27,40.26-7.17,9.96-28.34,18.95-39.88,15.95-7.97-4.78-2.16-19.56,1.19-25.94,4.22-8.01.22-22.14-8.57-21.01-20.1,2.58-33.84,16.98-51.48,26,9.94-19.4,10.96-34.5,1.55-33.33-9.73,1.2-3.46,27.75-35.28,44.83-9.23,4.96-24,16.95-35.06,10.09-10.4-15.63,15.03-34.77,10.37-45.7-1.72-4.04-7.7-11.14-14.65-11.41-46.34-1.86-87.98,47.63-68.4,64.13,4.21,3.56,11.64,4.97,17.14,1.64l34.11-20.67c.07,14.71,7.12,23.03,18.67,22.47,15.01-.73,25.38-7.39,39.68-13.92-1.16,41.65,26.88-14.87,74.64-34.33,1.95,13.72-13.38,28.36-.4,41.65,11.59,11.86,31.23,2.03,51.2-7.62,6.31,13.33,17.54,17.62,24.97,13.03l35.48-21.92c-.15,6.92.06,13.16,3.54,17.86,10.18,13.75,54.96-1.94,71.77-24.96-17.31,6.33-27.69,20.96-47.26,21.92ZM1064.68,1270.22c6.63-29.64,34.24-47.21,61.79-45.9-16,21.47-36.59,39.07-61.79,45.9ZM1308.45,1270.44c5.75-26.6,30.91-46.23,58.61-45.33-12.75,22.01-33.71,38.36-58.61,45.33Z" fill="#A38356" mask="url(#m-ana)"/>
+<path id="g-lineL" d="M477.94,1264.8l-197.2-3.53c-14.18-.25-27.83-2.91-42.59-4.09l84.39-2,154.75-4.02c5-.13,6.84,3.7,7.22,5.78s-1.1,7.96-6.57,7.86Z" fill="#A98C64"/><path id="g-lineR" d="M1703.84,1257.16l-41.68,4.1-196.12,3.67c-4.39.08-6.94-2.69-7.62-4.87-1.1-3.53,1.01-8.91,7.14-8.76l148.37,3.59,89.91,2.27Z" fill="#A98C64"/></g>
+<g id="g-slogan"><path class="sl" d="M1060.65,1526.21l-49.17-54.72-1.65,51.4c-.09,2.73-9.99,1.75-9.88-2.02l2.37-77.09,48.72,57.81.98-52.56c.08-4.22,10.37-3.82,10.29-.07l-1.66,77.26Z" fill="#847E59" opacity="0"/><path class="sl" d="M1307.16,1495.1c-3.09-1.08-15.28.54-12.42-7.46,2.06-5.78,20.19-5.59,24.65-1.51,3.66,6.66,3.7,23.04.77,31.45-12.04,10.79-35.4,10.35-49.13.34-22.35-16.29-20.48-51.86,1.84-66.87,15.66-10.53,44.33-5.17,45.26,2.95.2,1.8-.88,4.18-4.11,6.75-1.58,1.26-27.91-16.3-42.05,6.99-7.11,11.72-6.98,26.63,1.23,36.79,7.6,9.41,23.08,13.85,35.21,7.06,3.24-1.82,4.58-14.46-1.25-16.49Z" fill="#847E59" opacity="0"/><path class="sl" d="M454.91,1486.28c-3.77,3.65-15.27-1.16-25.16,2.85-4.33,6.69-2.94,16.82-.85,24.33l29.21.35c3.49.04,3.87,3.48,3.93,5.08s-.55,5.25-3.9,5.21l-41.5-.47-.05-76.97,42.02.06c2.64,0,2.54,8.96.11,8.99l-29.84.42c-2.4,7.61-2.27,14.5-.04,21.59h19.57c3.37,0,5.55,1.14,6.65,2.35.99,1.09,1.01,5.08-.15,6.2Z" fill="#847E59" opacity="0"/><path class="sl" d="M677.66,1487.85l-19.51.6c-1.96,8.84-1.99,16.5.04,25.16l29.19.37c3.51.04,3.78,3.3,3.87,4.9.1,1.72-.54,5.28-3.83,5.25l-41.39-.34-.07-77.05,43.2.35c1.94,1.54.82,8.82-1.16,8.82l-29.78.15c-2.31,7.8-2.21,14.52-.11,21.7l19.58-.07c3.38-.01,5.52,1.14,6.61,2.38.99,1.13,1.1,4.89-.09,6.24-.97,1.1-3.5,1.43-6.56,1.53Z" fill="#847E59" opacity="0"/><path class="sl" d="M775.93,1523.7l-57.7-.25,44-67.53-40.12-1.57c-1.69-4.76,1.48-7.69,3.68-7.62l54.3,1.6-44.68,65.02,38.97.3c2.73.02,4.35,2.33,5.15,3.14,1.16,1.17,1.22,6.94-3.61,6.91Z" fill="#847E59" opacity="0"/><path class="sl" d="M1219.98,1486.79l-28.26,1.29v25.52s32.27.53,32.27.53c2.89.05,2.86,9.67.08,9.65l-43.37-.25v-76.99s42.39.31,42.39.31c3.08,2.14,1.44,9.21-2.24,9.21l-29.1.04.04,21.61,22.31-.03c4.26,0,8.02,2.56,5.87,9.11Z" fill="#847E59" opacity="0"/><path class="sl" d="M1125.59,1522.02c-.01,1.61-6.46,3.37-10.39,1.57l-1-67.31-20.74-.66c-2.67-.09-2.69-9.06.16-9.04l54.79.47c3.04.03,2.8,9.06-2.58,9.1l-19.7.14-.54,65.73Z" fill="#847E59" opacity="0"/><path class="sl" d="M1571.02,1513.2c5.71-.06,5.94,9.82,3.41,9.86l-43.5.61v-74.12c0-3.3,2.88-3.07,4.06-3.3,2.1-.42,6.52.64,6.55,4.09l.68,63.18,28.79-.31Z" fill="#847E59" opacity="0"/><path class="sl" d="M608.24,1513.42c5,.17,7.09,3.7,7.16,5.47.07,2.14-2.06,5.26-5.61,5.22l-38.73-.43.07-74.97c0-2.98,10.2-3.11,10.24.16l.72,63.66,26.15.88Z" fill="#847E59" opacity="0"/><path class="sl" d="M534.19,1513.27c6.37-.03,6.61,9.7,3.74,9.74l-41.78.64.08-74.67c0-3.84,10.11-3.87,10.14-.06l.43,64.45,27.38-.11Z" fill="#847E59" opacity="0"/><rect class="sl" x="950.58" y="1446.21" width="11.21" height="78.47" fill="#847E59" opacity="0"/><path class="sl" d="M1390.37,1491.01c9.79-6.08,14.24-13.66,13.23-23.47-.79-7.66-5.05-16.37-14.42-19.17-10.53-3.15-21.59-2.38-32.44-1.46l.1,76.23c3.47,1.14,7.23,1.18,10.71-.05l.43-28.81c1.48-2.14,9.38-2.59,10.94-.23l15.42,23.4c4.2,6.37,10.52,8.75,16,4.77l-19.97-31.21ZM1386.8,1480.83c-4.48,3.24-15.74,5.64-18.12-1.52-2.65-7.95-1.01-15.84-.12-22.61,8.84-2.53,16.54-.53,21.42,5.31,4.09,4.9,1.65,15.32-3.18,18.82Z" fill="#847E59" opacity="0"/><path class="sl" d="M371.19,1481.19c4.44-6.79,8.47-14.99,5.11-22.27-2.55-5.54-7.54-11.41-16.37-11.51l-27.45-.31.06,76.38,25.33.48c11.97.23,20.39-6.46,22.99-15.02,3.51-11.55-2.15-19.61-9.67-27.75ZM364.24,1460.64c4.99,5.99,1.66,13.05-1.57,15.28-4.47,3.09-11.5,4.19-19.1,2.38l-.32-21.72c5.76-1.44,15.72-2.27,20.99,4.06ZM364.69,1512.62c-8.53,2.57-15.1,2.08-21.73.87l.05-25.35c6.73-1.84,15.41-1.92,22.3,2.62,7.18,4.73,6.87,16.15-.62,21.86Z" fill="#847E59" opacity="0"/><path class="sl" d="M1500.32,1520.84l-28.95-70.57c-1.27-3.1-4.87-3.83-6.94-3.14-1.06.36-2.24,2.05-3.25,4.52l-29.14,70.94c15.71,7.24,12.23-15.57,20.85-19.8,3.65-1.79,24.25-1.8,28.07.58,4.51,2.82,3.16,13.61,11.95,20.71,2.51,2.03,8.62-.29,7.41-3.24ZM1455.11,1492.76l11.74-27.8,10.31,27.04c-7.84,2.39-14.5,1.63-22.05.76Z" fill="#847E59" opacity="0"/><path class="sl" d="M872.16,1520.53l-33.56-76.85-36.38,79.02c17.57,7.35,14.48-15.61,21-19.64,3.27-2.02,25.9-2.43,30.11,1.21,4.84,4.19,2.53,15.56,13.13,20.34,1.64.74,6.66-1.9,5.7-4.08ZM826.64,1492.63l10.74-27.39c5.28,10.91,9.04,18.41,10.62,28.07l-21.36-.68Z" fill="#847E59" opacity="0"/></g>
+<path id="p-arc" d="M1786.61,1505.17c-91.25,64.62-192.25,104.68-294.8,142-181.83,61.03-369.93,91.85-562.41,86.38-212.57-6.04-420.15-49.11-616.46-129-68.62-27.92-133.99-58.41-194.95-100.22,80.41,36.84,156.34,71.16,240.42,96.6,139.78,45.13,281.94,70.88,428.96,84.11,170.07,15.31,337.98,10.35,506.13-16.82,174.08-28.13,337.38-83.62,493.11-163.07Z" fill="#AC8C5B" clip-path="url(#arcClip)"/>
+        <g clip-path="url(#goldClip)" style="mix-blend-mode:screen">
+          <rect id="sheen" x="-700" y="-200" width="420" height="2200" fill="url(#sheenGrad)" transform="rotate(18 960 870)"/>
+        </g>
+      </svg>
+    </div>
+    <div class="vignette"></div>
+    <div class="grain"></div>
+  </div>
+
+  <div class="controls">
+    <button class="play" id="replay" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2a6 6 0 1 1-5.66 4H0l3-3.5L6 6H3.95A4.5 4.5 0 1 0 8 3.5V2z"/></svg>Repetir</button>
+    <div class="seg" role="group" aria-label="Velocidad">
+      <button type="button" id="sp05" aria-pressed="false">0,5×</button>
+      <button type="button" id="sp1" aria-pressed="true">1×</button>
+    </div>
+    <div class="scrub">
+      <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Posición en la animación">
+      <span class="time" id="time">0,0 / 7,0 s</span>
+    </div>
+  </div>
+
+  <ol class="beats" id="beats"></ol>
+  <p class="note">Pulsa cualquier fase para saltar a ella, o arrastra la barra para revisar fotograma a fotograma. Para pedir cambios basta con nombrar la fase y lo que quieres, por ejemplo "fase 4, las letras más lentas".</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const DUR=7;
+
+/* ---------- stroke-mask reveal: grow a dash on the outline from an anchor ---------- */
+function makeReveal(maskPathId, anchor, both){
+  const el=$(maskPathId); const L=el.getTotalLength(); const a=anchor*L;
+  const o={p:0};
+  const set=()=>{
+    const p=o.p; if(p<=0){el.setAttribute('stroke-dasharray','0 '+(L+10));return;}
+    let s,len; if(both){s=a-p*L/2;len=p*L}else{s=a;len=p*L}
+    let segs=[]; if(len>=L){segs=[[0,L]]}else{s=((s%L)+L)%L; if(s+len<=L)segs=[[s,s+len]];else segs=[[0,s+len-L],[s,L]]}
+    const arr=[0]; let pos=0; for(const [x,y] of segs){arr.push(x-pos,y-x);pos=y} arr.push(L-pos+10);
+    el.setAttribute('stroke-dasharray',arr.map(v=>v.toFixed(2)).join(' '));
+  };
+  set(); o.set=set; return o;
+}
+const rv={
+  face: makeReveal('mk-face',0.52,true),
+  medio:makeReveal('mk-medio',0.50,true),
+  cabeza:makeReveal('mk-cabeza',0.38,true),
+  by:   makeReveal('mk-by',0.35,true),
+  N:    makeReveal('mk-N',0.30,true),
+  ana:  makeReveal('mk-ana',0.40,true),
+};
+function draw(tl,key,t,d,ease){tl.to(rv[key],{p:1,duration:d,ease:ease||'power2.inOut',onUpdate:rv[key].set},t)}
+
+/* ---------- letter geometry ---------- */
+function centerX(el){const b=el.getBBox();return b.x+b.width/2}
+const word=['g-G','g-A1','g-P','g-S1','g-S2','g-A2'].map($);
+const wordC=960;
+const slogan=[...document.querySelectorAll('.sl')];
+const sloganC=953;
+
+/* ---------- timeline ---------- */
+const tl=gsap.timeline({paused:true,defaults:{ease:'expo.out'}});
+const E='cubic-bezier(0.22,1,0.36,1)';
+
+// 0.0–0.6 atmosphere
+tl.fromTo('#light',{opacity:0},{opacity:1,duration:1.4,ease:'sine.out'},0);
+tl.fromTo('#dust',{opacity:0},{opacity:1,duration:1.6,ease:'sine.out'},0.1);
+tl.fromTo('#cam',{scale:1.03},{scale:1,duration:6.4,ease:'sine.out'},0);
+
+// 0.5–2.9 isotipo
+draw(tl,'face',0.5,2.35,'power1.inOut');
+draw(tl,'medio',1.1,1.3,'power2.inOut');
+draw(tl,'cabeza',1.45,1.15,'power2.inOut');
+tl.fromTo('#budCircle',{attr:{r:0}},{attr:{r:520},duration:1.15,ease:'power2.out'},1.8);
+tl.fromTo('#g-hojas',{scale:.9,rotation:-7,svgOrigin:'1138 520'},{scale:1,rotation:0,svgOrigin:'1138 520',duration:1.3,ease:'power3.out'},1.75);
+
+// 2.7–3.8 GAPSSA, centre outwards, blur → sharp, tracking closes
+const order=[[2],[1,3],[0,4],[5]];
+order.forEach((grp,i)=>grp.forEach(k=>{
+  const el=word[k]; const dx=(centerX(el)-wordC)*0.13; const t=2.7+i*0.16;
+  tl.fromTo(el,{x:dx,opacity:0},{x:0,opacity:1,duration:1.0,ease:'power3.out'},t);
+  tl.fromTo('#bl-'+k,{attr:{stdDeviation:14}},{attr:{stdDeviation:0},duration:.9,ease:'power2.out'},t);
+}));
+
+// 3.6–4.9 by Nana write-on, then the side rules
+draw(tl,'by',3.6,.55,'power1.inOut');
+draw(tl,'N',3.85,.6,'power1.inOut');
+draw(tl,'ana',4.15,.55,'power1.inOut');
+tl.fromTo('#g-lineL',{scaleX:0,svgOrigin:'480 1258'},{scaleX:1,svgOrigin:'480 1258',duration:.75,ease:'power3.out'},4.4);
+tl.fromTo('#g-lineR',{scaleX:0,svgOrigin:'1457 1258'},{scaleX:1,svgOrigin:'1457 1258',duration:.75,ease:'power3.out'},4.4);
+
+// 4.4–5.1 slogan rises, tracking opens slightly
+slogan.forEach(el=>{
+  const dx=-(centerX(el)-sloganC)*0.045;
+  tl.fromTo(el,{x:dx,y:14,opacity:0},{x:0,y:0,opacity:1,duration:.85,ease:'power3.out'},4.4);
+});
+
+// 4.9–5.7 arc from centre outwards
+tl.fromTo('#arcRect',{attr:{x:952,width:0}},{attr:{x:100,width:1704},duration:.85,ease:'power2.inOut'},4.9);
+
+// 5.7–6.4 satin sheen
+tl.fromTo('#sheen',{attr:{x:-700}},{attr:{x:2300},duration:.95,ease:'sine.inOut'},5.6);
+tl.to({},{duration:0.01},DUR-0.01);
+
+/* ---------- beats ---------- */
+const beats=[
+  [0.0,'Luz','La luz cálida se abre y aparece el polvo dorado'],
+  [0.5,'Rostro','El pincel dibuja el perfil desde los labios'],
+  [1.1,'Cabello','Mechón central y arco superior'],
+  [1.8,'Brote','Las hojas florecen desde el tallo'],
+  [2.7,'GAPSSA','Del centro hacia fuera, de desenfocado a nítido'],
+  [3.6,'by Nana','Se escribe la firma y se extienden sus líneas'],
+  [4.4,'Belleza integral','Sube con el tracking abriéndose'],
+  [4.9,'Arco','Se dibuja desde el centro hacia los extremos'],
+  [5.6,'Brillo','Un reflejo satinado recorre los dorados'],
+  [6.4,'Reposo','Logo completo y estático'],
+];
+const ol=$('beats');
+beats.forEach(([t,n,d],i)=>{const li=document.createElement('li');
+  li.innerHTML='<button type="button"><span class="t">Fase '+(i+1)+' · '+t.toFixed(1).replace('.',',')+' s</span><span class="n">'+n+'</span><span class="d">'+d+'</span></button>';
+  li.querySelector('button').onclick=()=>{tl.pause();tl.time(Math.min(t+0.45,DUR));sync()};
+  ol.appendChild(li)});
+const lis=[...ol.children];
+
+/* ---------- controls ---------- */
+const scrub=$('scrub'),time=$('time');
+function sync(){const t=tl.time();scrub.value=Math.round(t/DUR*1000);
+  time.textContent=t.toFixed(1).replace('.',',')+' / 7,0 s';
+  let on=0;beats.forEach(([bt],i)=>{if(t>=bt)on=i});lis.forEach((l,i)=>l.classList.toggle('on',i===on))}
+tl.eventCallback('onUpdate',sync);
+scrub.addEventListener('input',()=>{tl.pause();tl.time(scrub.value/1000*DUR);sync()});
+$('replay').onclick=()=>{tl.restart()};
+function speed(s){tl.timeScale(s);$('sp05').setAttribute('aria-pressed',s===.5);$('sp1').setAttribute('aria-pressed',s===1)}
+$('sp05').onclick=()=>speed(.5);$('sp1').onclick=()=>speed(1);
+
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+if(reduce){tl.progress(1);sync()}else{setTimeout(()=>tl.play(),350)}
+
+/* ---------- ambient gold dust ---------- */
+const cv=$('dust'),cx=cv.getContext('2d');let W,H,dpr;
+function rs(){dpr=Math.min(2,devicePixelRatio||1);W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;cx.setTransform(dpr,0,0,dpr,0,0)}
+rs();addEventListener('resize',rs);
+const P=Array.from({length:26},(_,i)=>({x:Math.random(),y:Math.random(),r:.004+Math.random()*.012,
+  vx:(Math.random()-.5)*.00012,vy:-.00006-Math.random()*.00012,a:.18+Math.random()*.32,ph:Math.random()*6.28}));
+function frame(ts){cx.clearRect(0,0,W,H);const m=Math.max(W,H);
+  for(const p of P){ if(!reduce){p.x+=p.vx;p.y+=p.vy;if(p.y<-.05){p.y=1.05;p.x=Math.random()} if(p.x<-.05)p.x=1.05;if(p.x>1.05)p.x=-.05}
+    const R=p.r*m,X=p.x*W,Y=p.y*H,al=p.a*(.7+.3*Math.sin(ts/1400+p.ph));
+    const g=cx.createRadialGradient(X,Y,0,X,Y,R);g.addColorStop(0,'rgba(201,168,118,'+al+')');g.addColorStop(1,'rgba(201,168,118,0)');
+    cx.fillStyle=g;cx.beginPath();cx.arc(X,Y,R,0,6.2832);cx.fill()}
+  if(!reduce)requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+})();
+</script>
+
+</body></html>

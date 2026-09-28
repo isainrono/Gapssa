@@ -19,6 +19,7 @@ import { buildLocalizedMetadata } from '@/lib/seo/metadata'
 
 import { JsonLd } from '@/components/server/JsonLd'
 import { DiferenciadoresSection } from '@/components/server/site/DiferenciadoresSection'
+import { HeroLogoReveal } from '@/components/server/site/HeroLogoReveal'
 import { ProcesoSection } from '@/components/server/site/ProcesoSection'
 import { QuienSoySection } from '@/components/server/site/QuienSoySection'
 import { SectionHeading } from '@/components/server/site/SectionHeading'
@@ -66,7 +67,6 @@ export default async function HomePage({ params }: Args) {
   ])
 
   const contacto = contactoConfigurado(ajustes)
-  const heroImageUrl = mediaUrl(inicio.heroImagen, 'hero')
   const ctaRuta = ajustes.ctaPrincipal?.ruta ?? 'reservar'
   const ctaLabel = ajustes.ctaPrincipal?.texto || dict.common.reservarCita
 
@@ -81,12 +81,7 @@ export default async function HomePage({ params }: Args) {
       />
 
       <section className={styles.hero} aria-label={dict.home.contactoTitulo}>
-        {heroImageUrl ? (
-          <div className={styles.heroImage}>
-            <Image src={heroImageUrl} alt="" fill priority sizes="100vw" />
-          </div>
-        ) : null}
-        <div className={styles.heroOverlay} />
+        <HeroLogoReveal />
         <div className={styles.heroContent}>
           <h1 className={styles.heroTitle}>{inicio.heroTitulo}</h1>
           {inicio.heroSubtitulo ? <p className={styles.heroSubtitle}>{inicio.heroSubtitulo}</p> : null}

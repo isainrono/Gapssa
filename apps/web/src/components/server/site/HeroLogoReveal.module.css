@@ -1,0 +1,272 @@
+/**
+ * Estado por defecto (sin media query): logo ya asentado en su posición
+ * final — completo, sin recortes — esto es lo que ven los navegadores
+ * sin soporte de animación de propiedades SVG y quienes tienen
+ * `prefers-reduced-motion: reduce`. La coreografía (dibujarse grande y
+ * centrado, luego desplazarse a la columna izquierda) solo se añade bajo
+ * `prefers-reduced-motion: no-preference`, nunca al revés.
+ *
+ * El ancho asentado combina vw y vh (`min()`) a propósito: el logo es
+ * más alto que ancho, así que limitar solo por vw permite que en
+ * pantallas anchas y poco altas se salga verticalmente del hero y
+ * `overflow:hidden` le recorte arriba/abajo. Lo mismo aplica al tamaño
+ * "grande" de la fase de revelado, más abajo.
+ */
+.wrap {
+  --hlr-gold-deep: #9c7d47;
+  --hlr-gold-line: #a98c64;
+
+  /* Posición/tamaño asentados, mobile-first: centrado, arriba del
+     título (ver padding-top de .heroContent en Home.module.css, que
+     reserva justo este hueco). */
+  --hlr-settle-top: 21%;
+  --hlr-settle-left: 50%;
+  --hlr-settle-w: clamp(180px, min(46vw, 34vh), 300px);
+
+  /* Fase de revelado (grande, centrada) expresada como desplazamiento +
+     escala RESPECTO a la posición asentada, para animar solo `transform`
+     (compuesto en GPU) en vez de top/left/width (layout + repintado del
+     SVG en cada fotograma, que era lo que hacía el salto tan brusco).
+     - dx/dy: distancia del centro del hero al punto asentado. En móvil
+       el hero mide ~88vh (min-height), así que 29% de alto ≈ 25.5vh.
+     - scale: tamaño grande = asentado × escala (la proporción se fija
+       aquí porque CSS no puede dividir dos longitudes). */
+  --hlr-reveal-dx: 0px;
+  --hlr-reveal-dy: 25.5vh;
+  --hlr-reveal-scale: 1.7;
+
+  position: absolute;
+  top: var(--hlr-settle-top);
+  left: var(--hlr-settle-left);
+  transform: translate(-50%, -50%);
+  width: var(--hlr-settle-w);
+  pointer-events: none;
+  z-index: 0;
+}
+
+@media (min-width: 880px) {
+  .wrap {
+    /* Asentado en el centro de la columna izquierda (grid 1fr 1fr en
+       .hero) una vez termina la animación. */
+    --hlr-settle-top: 50%;
+    --hlr-settle-left: 25%;
+    --hlr-settle-w: clamp(260px, min(30vw, 58vh), 440px);
+    /* De 50% a 25% del ancho del hero (.hero es container inline-size,
+       ver Home.module.css). Verticalmente ya está centrado: dy = 0. */
+    --hlr-reveal-dx: 25cqw;
+    --hlr-reveal-dy: 0px;
+    --hlr-reveal-scale: 1.75;
+  }
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.icon {
+  opacity: 1;
+}
+
+.word {
+  opacity: 1;
+  filter: blur(0);
+}
+
+.script {
+  opacity: 1;
+}
+
+.slogan {
+  opacity: 1;
+}
+
+.sheen {
+  opacity: 0;
+}
+
+.strokePath {
+  stroke-dashoffset: 0;
+}
+
+.bud {
+  r: 520;
+}
+
+.hojas {
+  transform-box: view-box;
+  transform-origin: 1138px 520px;
+  transform: scale(1) rotate(0deg);
+}
+
+.lineL,
+.lineR {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.arcRect {
+  x: 100;
+  width: 1704;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wrap {
+    animation: hlrSettle 1.1s 4.75s cubic-bezier(0.65, 0, 0.35, 1) both;
+  }
+
+  .strokePath {
+    stroke-dasharray: 3600;
+    animation: hlrDraw 1.55s 0.2s cubic-bezier(0.65, 0, 0.35, 1) both;
+  }
+
+  .icon {
+    animation: hlrFadeIn 0.4s 0.1s ease-out both;
+  }
+
+  .bud {
+    animation: hlrBud 0.75s 0.75s ease-out both;
+  }
+
+  .hojas {
+    animation: hlrHojas 0.85s 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  .word {
+    animation: hlrWordIn 0.95s 1.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .script .strokePath {
+    animation: hlrDraw 0.75s 2.55s cubic-bezier(0.65, 0, 0.35, 1) both;
+  }
+
+  .script {
+    animation: hlrFadeIn 0.55s 2.5s ease-out both;
+  }
+
+  .lineL {
+    animation: hlrLineL 0.65s 2.95s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .lineR {
+    animation: hlrLineR 0.65s 2.95s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .slogan {
+    animation: hlrFadeIn 0.75s 3.2s ease-out both;
+  }
+
+  .arcRect {
+    animation: hlrArc 0.7s 3.85s cubic-bezier(0.65, 0, 0.35, 1) both;
+  }
+
+  .sheen {
+    /* El brillo termina justo antes de que el logo empiece a moverse,
+       para que no compitan visualmente. */
+    animation: hlrFadeInOut 0.8s 3.95s ease-in-out both;
+  }
+}
+
+@keyframes hlrSettle {
+  from {
+    transform: translate(-50%, -50%) translate(var(--hlr-reveal-dx), var(--hlr-reveal-dy))
+      scale(var(--hlr-reveal-scale));
+  }
+  to {
+    transform: translate(-50%, -50%) translate(0px, 0px) scale(1);
+  }
+}
+
+@keyframes hlrDraw {
+  from {
+    stroke-dashoffset: 3600;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes hlrFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes hlrFadeInOut {
+  0% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  78% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes hlrBud {
+  from {
+    r: 0;
+  }
+  to {
+    r: 520;
+  }
+}
+
+@keyframes hlrHojas {
+  from {
+    transform: scale(0.9) rotate(-7deg);
+  }
+  to {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes hlrWordIn {
+  from {
+    opacity: 0;
+    filter: blur(14px);
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+@keyframes hlrLineL {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes hlrLineR {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes hlrArc {
+  from {
+    x: 952;
+    width: 0;
+  }
+  to {
+    x: 100;
+    width: 1704;
+  }
+}

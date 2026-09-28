@@ -1,51 +1,136 @@
 .hero {
   position: relative;
   min-height: 88vh;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr;
   align-items: center;
-  justify-content: center;
   overflow: hidden;
   background: var(--surface-deep);
+  /* Permite a HeroLogoReveal usar `cqw` para calcular su desplazamiento
+     de la fase centrada a la columna izquierda. */
+  container-type: inline-size;
 }
 
-.heroImage {
+/* Fondo decorativo de hojas doradas (ilustración con transparencia,
+   extraída de banner.svg y pasada a WebP porque next/image va con
+   `unoptimized`). Como background CSS y no <img>: es puramente
+   decorativo, no compite con el LCP y no llega al árbol accesible.
+   Muy baja opacidad para que solo dé textura al fondo liso; queda por
+   debajo del logo (z-index 0 pero anterior en el DOM) y del texto. */
+.hero::before {
+  content: '';
   position: absolute;
   inset: 0;
   z-index: 0;
+  background: url('/images/marca/hero-hojas-1280.webp') center / cover no-repeat;
+  opacity: 0.12;
+  pointer-events: none;
 }
 
-.heroImage img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+@media (min-width: 880px) {
+  .hero::before {
+    background-image: url('/images/marca/hero-hojas-2560.webp');
+  }
 }
 
-.heroOverlay {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background: linear-gradient(
-    105deg,
-    rgba(250, 248, 244, 0.97) 0%,
-    rgba(250, 248, 244, 0.9) 40%,
-    rgba(250, 248, 244, 0.6) 70%,
-    rgba(244, 237, 224, 0.3) 100%
-  );
+@media (prefers-reduced-motion: no-preference) {
+  .hero::before {
+    animation: heroBgIn 1.6s ease-out both;
+  }
 }
 
+@keyframes heroBgIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.12;
+  }
+}
+
+@media (min-width: 880px) {
+  .hero {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* El logo (HeroLogoReveal) se dibuja centrado y grande sobre todo el
+   hero y, al terminar, se desplaza a la columna 1 — por eso vive fuera
+   del flujo (position: absolute, ver HeroLogoReveal.module.css) y esta
+   columna 1 se deja vacía: es el hueco donde queda asentado. */
 .heroContent {
   position: relative;
   z-index: 1;
+  grid-column: 1;
   text-align: center;
-  max-width: 52rem;
+  max-width: 30rem;
+  margin: 0 auto;
   padding: var(--space-8) var(--space-5);
+  /* Reserva el hueco del logo asentado, que en móvil queda arriba,
+     centrado, en vez de a la izquierda. */
+  padding-top: 40vh;
 }
 
+@media (min-width: 880px) {
+  .heroContent {
+    grid-column: 2;
+    /* Titular y CTA centrados entre sí: con el texto a la izquierda el
+       botón quedaba desplazado, porque la caja del h1 (text-wrap:
+       balance) es más ancha que sus líneas. */
+    text-align: center;
+    max-width: 38rem;
+    margin: 0;
+    padding: var(--space-8) clamp(var(--space-6), 6vw, var(--space-9)) var(--space-8) var(--space-5);
+  }
+}
+
+/* Entrada escalonada: el título arranca a mitad del desplazamiento del
+   logo (hlrSettle: 4.75s + 1.1s) y subtítulo/CTAs le siguen a 120ms,
+   así el logo "deja sitio" en vez de aparecer todo de golpe. */
+@media (prefers-reduced-motion: no-preference) {
+  .heroTitle,
+  .heroSubtitle,
+  .heroCtas {
+    animation: heroContentIn 0.7s 5.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .heroSubtitle {
+    animation-delay: 5.32s;
+  }
+
+  .heroCtas {
+    animation-delay: 5.44s;
+  }
+}
+
+@keyframes heroContentIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Antes era un titular de 3 líneas con su propio subtítulo debajo;
+   ahora es una única frase, así que baja de --text-hero a --text-h1
+   (si no, se ve desproporcionada frente al botón) y hereda el margen
+   inferior que antes aportaba el subtítulo. */
 .heroTitle {
-  font-size: var(--text-hero);
+  /* Cormorant en peso 300 y algo más pequeño que --text-h1: con 400 y
+     54px la frase se partía en 5 líneas desiguales. `balance` reparte
+     las palabras en líneas de longitud parecida (3 en escritorio) sea
+     cual sea el idioma que venga del CMS. */
+  font-size: clamp(2rem, 3vw, 2.75rem);
+  font-weight: 300;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
   color: var(--text-primary);
   white-space: pre-line;
-  margin-bottom: var(--space-5);
+  margin-bottom: var(--space-7);
 }
 
 .heroSubtitle {
@@ -64,10 +149,14 @@
   flex-wrap: wrap;
 }
 
+
+
 .buttonGold {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   padding: var(--space-4) var(--space-7);
   background: var(--color-gold);
   color: var(--color-white);
@@ -79,12 +168,49 @@
   border: 1px solid var(--color-gold);
   transition:
     background var(--motion-fast),
-    color var(--motion-fast);
+    color var(--motion-fast),
+    transform var(--motion-fast),
+    box-shadow var(--motion-fast);
 }
 
 .buttonGold:hover {
   background: transparent;
   color: var(--color-gold);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px -10px rgba(196, 162, 87, 0.6);
+}
+
+/* Brillo que recorre el botón cada pocos segundos — mismo lenguaje del
+   destello del logo — para que el CTA principal siga invitando a tocar
+   una vez terminada la animación de entrada. */
+.buttonGold::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
+  transform: skewX(-20deg);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .buttonGold::after {
+    animation: ctaSheen 4.5s ease-in-out infinite;
+  }
+}
+
+@keyframes ctaSheen {
+  0% {
+    left: -60%;
+  }
+  16% {
+    left: 140%;
+  }
+  100% {
+    left: 140%;
+  }
 }
 
 .buttonOutline {
