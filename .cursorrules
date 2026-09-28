@@ -1,0 +1,18 @@
+# Reglas Críticas de Producción GAPSSA (EspoCRM + Next.js + Mail)
+
+1. En controladores de EspoCRM (PHP 8):
+   - Respeta estrictamente las firmas de la clase base.
+   - NUNCA uses $this->getLog(), $this->getEntityManager() ni $this->getContainer() en controladores. Usa $this->injectableFactory->create(...).
+   - Aísla siempre los envíos de correo en try/catch con error_log() nativo de PHP para nunca romper la acción HTTP principal.
+
+2. Cifrado y MariaDB:
+   - Toda contraseña en inbound_email / email_account debe cifrarse con Crypt. Si no hay contraseña, usa NULL, nunca "".
+   - Consulta scripts/fix-decrypt-and-500.sh si hay excepciones 'OpenSSL decrypt failure'.
+
+3. SMTP Docker a Plesk:
+   - Requiere CustomTransportPreparator con allow_self_signed => true para STARTTLS en puerto 587.
+
+4. Docker Logs:
+   - NUNCA uses tail sobre /var/log/apache2/error.log dentro del contenedor espocrm (es un FIFO pipe). Usa docker compose logs --tail N espocrm.
+
+Consulta docs/RUNBOOK_TROUBLESHOOTING_PRODUCCION.md para más detalles.
