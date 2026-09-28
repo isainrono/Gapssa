@@ -239,58 +239,19 @@ try {
         }
     }
 
-    if ($container->has(\Espo\Modules\Crm\Tools\Meeting\InvitationService::class)) {
-        $invitationService = $container->get(\Espo\Modules\Crm\Tools\Meeting\InvitationService::class);
-    } elseif ($container->has("injectableFactory")) {
-        $invitationService = $container->get("injectableFactory")->create(\Espo\Modules\Crm\Tools\Meeting\InvitationService::class);
-    } else {
-        $invitationService = $container->get(\Espo\Modules\Crm\Tools\Meeting\InvitationService::class);
-    }
+    /** @var \Espo\Custom\Classes\Mail\BookingConfirmationSender $sender */
+    $sender = $container->get("injectableFactory")->create(\Espo\Custom\Classes\Mail\BookingConfirmationSender::class);
 
     $meetings = $em->getRDBRepository("Meeting")
         ->where(["cEstadoReserva" => "Confirmed"])
         ->find();
 
     foreach ($meetings as $meeting) {
-        $targets = [];
-        $contacts = $em->getRelation($meeting, \Espo\Modules\Crm\Entities\Meeting::LINK_CONTACTS)->find();
-        
-        // Si no está en la relación, verificar parentId
-        if (count($contacts) === 0) {
-            $contactId = null;
-            if ($meeting->get("parentType") === "Contact" && $meeting->get("parentId")) {
-                $contactId = (string) $meeting->get("parentId");
-            } elseif ($meeting->get("contactId")) {
-                $contactId = (string) $meeting->get("contactId");
-            }
-            if ($contactId) {
-                $parentContact = $em->getEntity("Contact", $contactId);
-                if ($parentContact) {
-                    $em->getRelation($meeting, \Espo\Modules\Crm\Entities\Meeting::LINK_CONTACTS)->relate($parentContact);
-                    $contacts = [$parentContact];
-                }
-            }
-        }
-
-        foreach ($contacts as $contact) {
-            if ($contact->getEmailAddress()) {
-                $targets[] = new \Espo\Modules\Crm\Tools\Meeting\Invitation\Invitee(
-                    $contact->getEntityType(),
-                    $contact->getId(),
-                    $contact->getEmailAddress()
-                );
-            }
-        }
-
-        if (!empty($targets)) {
-            try {
-                $invitationService->send("Meeting", $meeting->getId(), $targets);
-                echo "✔ Correo de confirmación enviado exitosamente a " . $targets[0]->getEmailAddress() . " para la cita " . $meeting->get("name") . "\n";
-            } catch (\Throwable $e) {
-                echo "⚠ Aviso enviando correo para la cita " . $meeting->getId() . ": " . $e->getMessage() . "\n";
-            }
+        $ok = $sender->sendConfirmation($meeting);
+        if ($ok) {
+            echo "✔ Correo de confirmación oficial enviado para la cita " . $meeting->get("name") . " (ID: " . $meeting->getId() . ")\n";
         } else {
-            echo "ℹ No se encontró email de contacto para la cita " . $meeting->getId() . "\n";
+            echo "ℹ Sin destinatarios o no enviado para la cita " . $meeting->getId() . "\n";
         }
     }
 } catch (\Throwable $e) {
