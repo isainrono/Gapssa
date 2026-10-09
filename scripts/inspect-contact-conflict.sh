@@ -3,45 +3,65 @@ set -e
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-echo "=== 1. Detalle de la revisión en booking_review_records ==="
-docker compose --env-file .env.production -f compose.prod.yml exec -T apps-db psql -U gapssa_apps -d gapssa_booking -x -c "
+echo "=== 1. Detalle de la última revisión en Postgres (gapssa_booking) ==="
+REV_INFO=$(docker compose --env-file .env.production -f compose.prod.yml exec -T apps-db psql -U gapssa_apps -d gapssa_booking -t -A -c "
 SELECT 
-    r.id AS review_id,
+    r.id,
     r.booking_request_id,
     r.conflict_type,
     r.candidate_contact_ids,
-    r.candidate_meeting_ids,
-    r.status AS review_status,
-    r.created_at,
-    b.start_at,
-    b.status AS booking_status
+    r.status,
+    r.created_at
 FROM booking_review_records r
-JOIN booking_request_records b ON b.id = r.booking_request_id
 ORDER BY r.created_at DESC
 LIMIT 1;
-"
+")
 
-echo "=== 2. Inspeccionar los Contactos candidatos en EspoCRM ==="
-docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm php -- << 'PHP_EOF'
+if [ -z "$REV_INFO" ]; then
+    echo "No hay revisiones en la base de datos."
+    exit 0
+fi
+
+echo "Registro de revisión encontrado:"
+echo "$REV_INFO"
+echo ""
+
+CANDIDATES=$(docker compose --env-file .env.production -f compose.prod.yml exec -T apps-db psql -U gapssa_apps -d gapssa_booking -t -A -c "
+SELECT r.candidate_contact_ids::text
+FROM booking_review_records r
+ORDER BY r.created_at DESC
+LIMIT 1;
+")
+
+echo "Candidate Contact IDs (JSON): $CANDIDATES"
+echo ""
+
+echo "=== 2. Buscando los contactos en conflicto en EspoCRM real ==="
+docker compose --env-file .env.production -f compose.prod.yml exec -T -e CANDIDATES_JSON="$CANDIDATES" espocrm php -- << 'PHP_EOF'
 <?php
 require_once "/var/www/html/bootstrap.php";
 $app = new \Espo\Core\Application();
 $em = $app->getContainer()->get("entityManager");
 
-// Obtenemos los candidateContactIds de la última revisión en Postgres
-// Para hacerlo directamente en PHP, busquemos los últimos contactos modificados o creados
-$contacts = $em->getRDBRepository("Contact")
-    ->order("createdAt", "DESC")
-    ->limit(10)
-    ->find();
+$json = getenv('CANDIDATES_JSON');
+$candidateIds = json_decode($json, true) ?: [];
 
-echo "Últimos contactos en EspoCRM:\n";
-foreach ($contacts as $c) {
-    echo "ID: " . $c->getId() . "\n";
-    echo "  Nombre:   " . $c->get("name") . "\n";
-    echo "  Email:    " . $c->getEmailAddress() . "\n";
-    echo "  Teléfono: " . $c->getPhoneNumber() . "\n";
-    echo "  Creado:   " . $c->get("createdAt") . "\n";
-    echo "----------------------------------------\n";
+echo "IDs a consultar: " . implode(", ", $candidateIds) . "\n\n";
+
+foreach ($candidateIds as $cid) {
+    $contact = $em->getEntity("Contact", $cid);
+    if ($contact) {
+        echo "✔ CONTACTO ENCONTRADO:\n";
+        echo "   ID:       " . $contact->getId() . "\n";
+        echo "   Nombre:   " . $contact->get("name") . "\n";
+        echo "   Email:    " . $contact->getEmailAddress() . "\n";
+        echo "   Teléfono: " . $contact->getPhoneNumber() . "\n";
+    } else {
+        echo "✖ Contacto con ID $cid no encontrado en EspoCRM.\n";
+    }
+    echo "--------------------------------------------------\n";
 }
 PHP_EOF
+
+echo ""
+echo "=== Diagnóstico de conflicto completado ==="
