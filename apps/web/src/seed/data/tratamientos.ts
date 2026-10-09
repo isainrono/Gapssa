@@ -720,32 +720,32 @@ export const TRATAMIENTOS_SEED: TratamientoSeed[] = [
     porLocale: {
       es: {
         titulo: 'Diseño de cejas',
-        descripcion: 'Definición y forma de cejas adaptada a tus facciones.',
+        descripcion: 'Definición y forma de cejas adaptada a tus facciones, con hilo.',
         beneficios: ['Resultado a medida de tu rostro', 'Técnica precisa'],
       },
       ca: {
         titulo: 'Disseny de celles',
-        descripcion: 'Definició i forma de celles adaptada als teus trets.',
+        descripcion: 'Definició i forma de celles adaptada als teus trets, amb fil.',
         beneficios: ['Resultat fet a mida del teu rostre', 'Tècnica precisa'],
       },
       en: {
         titulo: 'Eyebrow shaping',
-        descripcion: 'Eyebrow definition and shape adapted to your features.',
+        descripcion: 'Eyebrow definition and shape adapted to your features, with thread.',
         beneficios: ['A result tailored to your face', 'A precise technique'],
       },
       it: {
         titulo: 'Disegno delle sopracciglia',
-        descripcion: 'Definizione e forma delle sopracciglia adattate ai tuoi lineamenti.',
+        descripcion: 'Definizione e forma delle sopracciglia adattate ai tuoi lineamenti, con filo.',
         beneficios: ['Un risultato su misura per il tuo viso', 'Tecnica precisa'],
       },
       fr: {
         titulo: 'Dessin des sourcils',
-        descripcion: 'Une définition et une forme des sourcils adaptées à vos traits.',
+        descripcion: 'Une définition et une forme des sourcils adaptées à vos traits, au fil.',
         beneficios: ['Un résultat sur mesure pour votre visage', 'Une technique précise'],
       },
       pt: {
         titulo: 'Design de sobrancelhas',
-        descripcion: 'Definição e forma de sobrancelhas adaptada aos seus traços.',
+        descripcion: 'Definição e forma de sobrancelhas adaptada aos seus traços, com linha.',
         beneficios: ['Um resultado à medida do seu rosto', 'Técnica precisa'],
       },
     },
@@ -757,32 +757,32 @@ export const TRATAMIENTOS_SEED: TratamientoSeed[] = [
     porLocale: {
       es: {
         titulo: 'Depilación de cejas',
-        descripcion: 'Mantenimiento de la forma de las cejas.',
+        descripcion: 'Mantenimiento de la forma de las cejas con pinza.',
         beneficios: ['Mirada siempre cuidada', 'Servicio rápido de mantenimiento'],
       },
       ca: {
         titulo: 'Depilació de celles',
-        descripcion: 'Manteniment de la forma de les celles.',
+        descripcion: 'Manteniment de la forma de les celles amb pinça.',
         beneficios: ['Mirada sempre cuidada', 'Servei ràpid de manteniment'],
       },
       en: {
         titulo: 'Eyebrow hair removal',
-        descripcion: 'Maintaining the shape of your eyebrows.',
+        descripcion: 'Maintaining the shape of your eyebrows with tweezers.',
         beneficios: ['A consistently well-groomed look', 'A quick maintenance service'],
       },
       it: {
         titulo: 'Depilazione sopracciglia',
-        descripcion: 'Mantenimento della forma delle sopracciglia.',
+        descripcion: 'Mantenimento della forma delle sopracciglia con pinzetta.',
         beneficios: ['Uno sguardo sempre curato', 'Servizio rapido di mantenimento'],
       },
       fr: {
         titulo: 'Épilation des sourcils',
-        descripcion: 'Entretien de la forme des sourcils.',
+        descripcion: 'Entretien de la forme des sourcils à la pince.',
         beneficios: ['Un regard toujours soigné', 'Un service d’entretien rapide'],
       },
       pt: {
         titulo: 'Depilação de sobrancelhas',
-        descripcion: 'Manutenção da forma das sobrancelhas.',
+        descripcion: 'Manutenção da forma das sobrancelhas com pinça.',
         beneficios: ['Olhar sempre cuidado', 'Serviço rápido de manutenção'],
       },
     },
@@ -794,32 +794,32 @@ export const TRATAMIENTOS_SEED: TratamientoSeed[] = [
     porLocale: {
       es: {
         titulo: 'Depilación labio superior',
-        descripcion: 'Depilación precisa de la zona del labio superior.',
+        descripcion: 'Depilación precisa de la zona del labio superior con hilo o cera.',
         beneficios: ['Técnica delicada', 'Resultado natural'],
       },
       ca: {
         titulo: 'Depilació del llavi superior',
-        descripcion: 'Depilació precisa de la zona del llavi superior.',
+        descripcion: 'Depilació precisa de la zona del llavi superior amb fil o cera.',
         beneficios: ['Tècnica delicada', 'Resultat natural'],
       },
       en: {
         titulo: 'Upper lip hair removal',
-        descripcion: 'Precise hair removal of the upper lip area.',
+        descripcion: 'Precise hair removal of the upper lip area with thread or wax.',
         beneficios: ['A delicate technique', 'A natural-looking result'],
       },
       it: {
         titulo: 'Depilazione labbro superiore',
-        descripcion: 'Depilazione precisa della zona del labbro superiore.',
+        descripcion: 'Depilazione precisa della zona del labbro superiore con filo o cera.',
         beneficios: ['Tecnica delicata', 'Risultato naturale'],
       },
       fr: {
         titulo: 'Épilation lèvre supérieure',
-        descripcion: 'Une épilation précise de la zone de la lèvre supérieure.',
+        descripcion: 'Une épilation précise de la zone de la lèvre supérieure au fil ou à la cire.',
         beneficios: ['Une technique délicate', 'Un résultat naturel'],
       },
       pt: {
         titulo: 'Depilação do lábio superior',
-        descripcion: 'Depilação precisa da zona do lábio superior.',
+        descripcion: 'Depilação precisa da zona do lábio superior com linha ou cera.',
         beneficios: ['Técnica delicada', 'Resultado natural'],
       },
     },
@@ -831,32 +831,32 @@ export const TRATAMIENTOS_SEED: TratamientoSeed[] = [
     porLocale: {
       es: {
         titulo: 'Depilación mentón',
-        descripcion: 'Depilación específica de la zona del mentón.',
+        descripcion: 'Depilación específica de la zona del mentón con hilo.',
         beneficios: ['Técnica precisa y delicada', 'Servicio breve'],
       },
       ca: {
         titulo: 'Depilació de la barbeta',
-        descripcion: 'Depilació específica de la zona de la barbeta.',
+        descripcion: 'Depilació específica de la zona de la barbeta amb fil.',
         beneficios: ['Tècnica precisa i delicada', 'Servei breu'],
       },
       en: {
         titulo: 'Chin hair removal',
-        descripcion: 'Specific hair removal of the chin area.',
+        descripcion: 'Specific hair removal of the chin area with thread.',
         beneficios: ['A precise, gentle technique', 'A brief service'],
       },
       it: {
         titulo: 'Depilazione mento',
-        descripcion: 'Depilazione specifica della zona del mento.',
+        descripcion: 'Depilazione specifica della zona del mento con filo.',
         beneficios: ['Tecnica precisa e delicata', 'Servizio breve'],
       },
       fr: {
         titulo: 'Épilation du menton',
-        descripcion: 'Une épilation spécifique de la zone du menton.',
+        descripcion: 'Une épilation spécifique de la zone du menton au fil.',
         beneficios: ['Une technique précise et délicate', 'Un service bref'],
       },
       pt: {
         titulo: 'Depilação do queixo',
-        descripcion: 'Depilação específica da zona do queixo.',
+        descripcion: 'Depilação específica da zona do queixo com linha.',
         beneficios: ['Técnica precisa e delicada', 'Serviço breve'],
       },
     },
@@ -868,32 +868,32 @@ export const TRATAMIENTOS_SEED: TratamientoSeed[] = [
     porLocale: {
       es: {
         titulo: 'Depilación de patillas',
-        descripcion: 'Depilación de la zona de las patillas.',
+        descripcion: 'Depilación de la zona de las patillas con hilo.',
         beneficios: ['Definición del contorno facial', 'Servicio rápido'],
       },
       ca: {
         titulo: 'Depilació de patilles',
-        descripcion: 'Depilació de la zona de les patilles.',
+        descripcion: 'Depilació de la zona de les patilles amb fil.',
         beneficios: ['Definició del contorn facial', 'Servei ràpid'],
       },
       en: {
         titulo: 'Sideburns hair removal',
-        descripcion: 'Hair removal of the sideburns area.',
+        descripcion: 'Hair removal of the sideburns area with thread.',
         beneficios: ['Defines the facial contour', 'A quick service'],
       },
       it: {
         titulo: 'Depilazione basette',
-        descripcion: 'Depilazione della zona delle basette.',
+        descripcion: 'Depilazione della zona delle basette con filo.',
         beneficios: ['Definizione del contorno del viso', 'Servizio rapido'],
       },
       fr: {
         titulo: 'Épilation des favoris',
-        descripcion: 'Une épilation de la zone des favoris.',
+        descripcion: 'Une épilation de la zone des favoris au fil.',
         beneficios: ['Définit le contour du visage', 'Un service rapide'],
       },
       pt: {
         titulo: 'Depilação de suíças',
-        descripcion: 'Depilação da zona das suíças.',
+        descripcion: 'Depilação da zona das suíças com linha.',
         beneficios: ['Definição do contorno facial', 'Serviço rápido'],
       },
     },
@@ -905,32 +905,32 @@ export const TRATAMIENTOS_SEED: TratamientoSeed[] = [
     porLocale: {
       es: {
         titulo: 'Depilación facial completa',
-        descripcion: 'Depilación del conjunto del rostro en una misma sesión.',
+        descripcion: 'Depilación de todo el rostro en una misma sesión, con hilo.',
         beneficios: ['Ahorra tiempo frente a zonas por separado', 'Resultado homogéneo'],
       },
       ca: {
         titulo: 'Depilació facial completa',
-        descripcion: 'Depilació de tot el rostre en una mateixa sessió.',
+        descripcion: 'Depilació de tot el rostre en una mateixa sessió, amb fil.',
         beneficios: ['Estalvia temps respecte a fer les zones per separat', 'Resultat homogeni'],
       },
       en: {
         titulo: 'Full face hair removal',
-        descripcion: 'Hair removal of the whole face in a single session.',
+        descripcion: 'Hair removal of the whole face in a single session, with thread.',
         beneficios: ['Saves time compared to separate areas', 'A uniform result'],
       },
       it: {
         titulo: 'Depilazione viso completa',
-        descripcion: 'Depilazione dell’intero viso in un’unica seduta.',
+        descripcion: 'Depilazione dell’intero viso in un’unica seduta, con filo.',
         beneficios: ['Fa risparmiare tempo rispetto alle zone separate', 'Risultato omogeneo'],
       },
       fr: {
         titulo: 'Épilation complète du visage',
-        descripcion: 'Une épilation de l’ensemble du visage en une seule séance.',
+        descripcion: 'Une épilation de l’ensemble du visage en une seule séance, au fil.',
         beneficios: ['Un gain de temps par rapport aux zones séparées', 'Un résultat homogène'],
       },
       pt: {
         titulo: 'Depilação facial completa',
-        descripcion: 'Depilação de todo o rosto numa única sessão.',
+        descripcion: 'Depilação de todo o rosto numa única sessão, com linha.',
         beneficios: ['Poupa tempo em comparação com zonas separadas', 'Resultado homogéneo'],
       },
     },
@@ -1090,32 +1090,32 @@ export const TRATAMIENTOS_SEED: TratamientoSeed[] = [
     porLocale: {
       es: {
         titulo: 'Depilación de pecho',
-        descripcion: 'Depilación de la zona del pecho.',
+        descripcion: 'Depilación de la zona del pecho con cera o hilo.',
         beneficios: ['Servicio adaptado a tu piel', 'Atención personalizada'],
       },
       ca: {
         titulo: 'Depilació de pit',
-        descripcion: 'Depilació de la zona del pit.',
+        descripcion: 'Depilació de la zona del pit amb cera o fil.',
         beneficios: ['Servei adaptat a la teva pell', 'Atenció personalitzada'],
       },
       en: {
         titulo: 'Chest hair removal',
-        descripcion: 'Hair removal of the chest area.',
+        descripcion: 'Hair removal of the chest area with wax or thread.',
         beneficios: ['A service adapted to your skin', 'Personalised attention'],
       },
       it: {
         titulo: 'Depilazione petto',
-        descripcion: 'Depilazione della zona del petto.',
+        descripcion: 'Depilazione della zona del petto con cera o filo.',
         beneficios: ['Servizio adattato alla tua pelle', 'Attenzione personalizzata'],
       },
       fr: {
         titulo: 'Épilation du torse',
-        descripcion: 'Une épilation de la zone du torse.',
+        descripcion: 'Une épilation de la zone du torse à la cire ou au fil.',
         beneficios: ['Un service adapté à votre peau', 'Une attention personnalisée'],
       },
       pt: {
         titulo: 'Depilação do peito',
-        descripcion: 'Depilação da zona do peito.',
+        descripcion: 'Depilação da zona do peito com cera ou linha.',
         beneficios: ['Serviço adaptado à sua pele', 'Atenção personalizada'],
       },
     },
@@ -1127,32 +1127,32 @@ export const TRATAMIENTOS_SEED: TratamientoSeed[] = [
     porLocale: {
       es: {
         titulo: 'Depilación de abdomen',
-        descripcion: 'Depilación de la zona abdominal.',
+        descripcion: 'Depilación de la zona abdominal con cera o hilo.',
         beneficios: ['Zona tratada con delicadeza', 'Resultado homogéneo'],
       },
       ca: {
         titulo: 'Depilació d’abdomen',
-        descripcion: 'Depilació de la zona abdominal.',
+        descripcion: 'Depilació de la zona abdominal amb cera o fil.',
         beneficios: ['Zona tractada amb delicadesa', 'Resultat homogeni'],
       },
       en: {
         titulo: 'Abdomen hair removal',
-        descripcion: 'Hair removal of the abdominal area.',
+        descripcion: 'Hair removal of the abdominal area with wax or thread.',
         beneficios: ['An area treated with care', 'A uniform result'],
       },
       it: {
         titulo: 'Depilazione addome',
-        descripcion: 'Depilazione della zona addominale.',
+        descripcion: 'Depilazione della zona addominale con cera o filo.',
         beneficios: ['Zona trattata con delicatezza', 'Risultato omogeneo'],
       },
       fr: {
         titulo: 'Épilation de l’abdomen',
-        descripcion: 'Une épilation de la zone abdominale.',
+        descripcion: 'Une épilation de la zone abdominale à la cire ou au fil.',
         beneficios: ['Une zone traitée avec délicatesse', 'Un résultat homogène'],
       },
       pt: {
         titulo: 'Depilação do abdómen',
-        descripcion: 'Depilação da zona abdominal.',
+        descripcion: 'Depilação da zona abdominal com cera ou linha.',
         beneficios: ['Zona tratada com delicadeza', 'Resultado homogéneo'],
       },
     },
@@ -1164,32 +1164,32 @@ export const TRATAMIENTOS_SEED: TratamientoSeed[] = [
     porLocale: {
       es: {
         titulo: 'Depilación de glúteos',
-        descripcion: 'Depilación de la zona de los glúteos.',
+        descripcion: 'Depilación de la zona de los glúteos con cera.',
         beneficios: ['Servicio discreto y profesional', 'Piel cuidada al finalizar'],
       },
       ca: {
         titulo: 'Depilació de glutis',
-        descripcion: 'Depilació de la zona dels glutis.',
+        descripcion: 'Depilació de la zona dels glutis amb cera.',
         beneficios: ['Servei discret i professional', 'Pell cuidada en acabar'],
       },
       en: {
         titulo: 'Buttocks hair removal',
-        descripcion: 'Hair removal of the buttocks area.',
+        descripcion: 'Hair removal of the buttocks area with wax.',
         beneficios: ['A discreet, professional service', 'Cared-for skin afterwards'],
       },
       it: {
         titulo: 'Depilazione glutei',
-        descripcion: 'Depilazione della zona dei glutei.',
+        descripcion: 'Depilazione della zona dei glutei con cera.',
         beneficios: ['Servizio discreto e professionale', 'Pelle curata al termine'],
       },
       fr: {
         titulo: 'Épilation des fessiers',
-        descripcion: 'Une épilation de la zone des fessiers.',
+        descripcion: 'Une épilation de la zone des fessiers à la cire.',
         beneficios: ['Un service discret et professionnel', 'Une peau soignée à la fin'],
       },
       pt: {
         titulo: 'Depilação de glúteos',
-        descripcion: 'Depilação da zona dos glúteos.',
+        descripcion: 'Depilação da zona dos glúteos com cera.',
         beneficios: ['Serviço discreto e profissional', 'Pele cuidada no final'],
       },
     },
@@ -1201,32 +1201,32 @@ export const TRATAMIENTOS_SEED: TratamientoSeed[] = [
     porLocale: {
       es: {
         titulo: 'Depilación perianal',
-        descripcion: 'Depilación de la zona perianal.',
+        descripcion: 'Depilación de la zona perianal con láser o cera.',
         beneficios: ['Servicio discreto y profesional', 'Máxima higiene y cuidado'],
       },
       ca: {
         titulo: 'Depilació perianal',
-        descripcion: 'Depilació de la zona perianal.',
+        descripcion: 'Depilació de la zona perianal amb làser o cera.',
         beneficios: ['Servei discret i professional', 'Màxima higiene i cura'],
       },
       en: {
         titulo: 'Perianal hair removal',
-        descripcion: 'Hair removal of the perianal area.',
+        descripcion: 'Hair removal of the perianal area with laser or wax.',
         beneficios: ['A discreet, professional service', 'Maximum hygiene and care'],
       },
       it: {
         titulo: 'Depilazione perianale',
-        descripcion: 'Depilazione della zona perianale.',
+        descripcion: 'Depilazione della zona perianale con laser o cera.',
         beneficios: ['Servizio discreto e professionale', 'Massima igiene e cura'],
       },
       fr: {
         titulo: 'Épilation périanale',
-        descripcion: 'Une épilation de la zone périanale.',
+        descripcion: 'Une épilation de la zone périanale au laser ou à la cire.',
         beneficios: ['Un service discret et professionnel', 'Une hygiène et un soin maximaux'],
       },
       pt: {
         titulo: 'Depilação perianal',
-        descripcion: 'Depilação da zona perianal.',
+        descripcion: 'Depilação da zona perianal com laser ou cera.',
         beneficios: ['Serviço discreto e profissional', 'Máxima higiene e cuidado'],
       },
     },
@@ -1312,32 +1312,32 @@ export const TRATAMIENTOS_SEED: TratamientoSeed[] = [
     porLocale: {
       es: {
         titulo: 'Depilación ingles integrales',
-        descripcion: 'Depilación completa de la zona de ingles.',
+        descripcion: 'Depilación completa de la zona de ingles y perianal.',
         beneficios: ['Servicio discreto y profesional', 'Máxima cobertura de la zona'],
       },
       ca: {
         titulo: 'Depilació d’engonals integral',
-        descripcion: 'Depilació completa de la zona d’engonals.',
+        descripcion: 'Depilació completa de la zona d’engonals i perianal.',
         beneficios: ['Servei discret i professional', 'Màxima cobertura de la zona'],
       },
       en: {
         titulo: 'Full bikini hair removal',
-        descripcion: 'Complete hair removal of the bikini area.',
+        descripcion: 'Complete hair removal of the bikini and perianal area.',
         beneficios: ['A discreet, professional service', 'Maximum coverage of the area'],
       },
       it: {
         titulo: 'Depilazione inguine integrale',
-        descripcion: 'Depilazione completa della zona inguinale.',
+        descripcion: 'Depilazione completa della zona inguinale e perianale.',
         beneficios: ['Servizio discreto e professionale', 'Massima copertura della zona'],
       },
       fr: {
         titulo: 'Épilation maillot intégral',
-        descripcion: 'Une épilation complète de la zone du maillot.',
+        descripcion: 'Une épilation complète de la zone du maillot et périanale.',
         beneficios: ['Un service discret et professionnel', 'Une couverture maximale de la zone'],
       },
       pt: {
         titulo: 'Depilação virilha integral',
-        descripcion: 'Depilação completa da zona da virilha.',
+        descripcion: 'Depilação completa da zona da virilha e perianal.',
         beneficios: ['Serviço discreto e profissional', 'Máxima cobertura da zona'],
       },
     },
@@ -1556,32 +1556,32 @@ export const TRATAMIENTOS_SEED: TratamientoSeed[] = [
     porLocale: {
       es: {
         titulo: 'Limpieza facial básica',
-        descripcion: 'Limpieza en profundidad para renovar la piel del rostro.',
+        descripcion: 'Para pieles que necesitan mantenimiento, frescura e hidratación, sin demasiadas impurezas acumuladas.',
         beneficios: ['Piel más limpia y luminosa', 'Buen punto de partida para el cuidado facial'],
       },
       ca: {
         titulo: 'Neteja facial bàsica',
-        descripcion: 'Neteja en profunditat per renovar la pell del rostre.',
+        descripcion: 'Per a pells que necessiten manteniment, frescor i hidratació, sense massa impureses acumulades.',
         beneficios: ['Pell més neta i lluminosa', 'Un bon punt de partida per a la cura facial'],
       },
       en: {
         titulo: 'Basic facial cleansing',
-        descripcion: 'A thorough cleanse to renew the skin of the face.',
+        descripcion: 'For skin that needs maintenance, freshness and hydration, without excess accumulated impurities.',
         beneficios: ['Cleaner, more radiant skin', 'A good starting point for facial care'],
       },
       it: {
         titulo: 'Pulizia del viso base',
-        descripcion: 'Pulizia in profondità per rinnovare la pelle del viso.',
+        descripcion: 'Per pelli che necessitano di mantenimento, freschezza e idratazione, senza troppe impurità accumulate.',
         beneficios: ['Pelle più pulita e luminosa', 'Un buon punto di partenza per la cura del viso'],
       },
       fr: {
         titulo: 'Nettoyage de peau simple',
-        descripcion: 'Un nettoyage en profondeur pour renouveler la peau du visage.',
+        descripcion: 'Pour les peaux nécessitant entretien, fraîcheur et hydratation, sans trop d’impuretés accumulées.',
         beneficios: ['Une peau plus propre et lumineuse', 'Un bon point de départ pour le soin du visage'],
       },
       pt: {
         titulo: 'Limpeza facial básica',
-        descripcion: 'Limpeza em profundidade para renovar a pele do rosto.',
+        descripcion: 'Para peles que necessitam de manutenção, frescura e hidratação, sem demasiadas impurezas acumuladas.',
         beneficios: ['Pele mais limpa e luminosa', 'Um bom ponto de partida para o cuidado facial'],
       },
     },
@@ -1594,32 +1594,32 @@ export const TRATAMIENTOS_SEED: TratamientoSeed[] = [
     porLocale: {
       es: {
         titulo: 'Limpieza facial profunda',
-        descripcion: 'Eliminación de impurezas y renovación para una piel limpia y luminosa.',
+        descripcion: 'Tratamiento completo que limpia la piel en profundidad, especialmente cuando hay puntos negros, poros obstruidos o exceso de grasa.',
         beneficios: ['Piel visiblemente más limpia', 'Rutina completa de higiene facial', 'Sensación de piel renovada'],
       },
       ca: {
         titulo: 'Neteja facial profunda',
-        descripcion: 'Eliminació d’impureses i renovació per a una pell neta i lluminosa.',
+        descripcion: 'Tractament complet que neteja la pell en profunditat, especialment quan hi ha punts negres, porus obstruïts o excés de greix.',
         beneficios: ['Pell visiblement més neta', 'Rutina completa d’higiene facial', 'Sensació de pell renovada'],
       },
       en: {
         titulo: 'Deep facial cleansing',
-        descripcion: 'Impurity removal and renewal for clean, radiant skin.',
+        descripcion: 'Comprehensive treatment that deep-cleanses the skin, especially when there are blackheads, clogged pores, or excess oil.',
         beneficios: ['Visibly cleaner skin', 'A complete facial hygiene routine', 'A feeling of renewed skin'],
       },
       it: {
         titulo: 'Pulizia del viso profonda',
-        descripcion: 'Eliminazione delle impurità e rinnovamento per una pelle pulita e luminosa.',
+        descripcion: 'Trattamento completo che pulisce la pelle in profondità, soprattutto in presenza di punti neri, pori ostruiti o eccesso di sebo.',
         beneficios: ['Pelle visibilmente più pulita', 'Una routine completa di igiene del viso', 'Sensazione di pelle rinnovata'],
       },
       fr: {
         titulo: 'Nettoyage de peau en profondeur',
-        descripcion: 'Élimination des impuretés et renouvellement pour une peau propre et lumineuse.',
+        descripcion: 'Soin complet qui nettoie la peau en profondeur, notamment en cas de points noirs, pores obstrués ou excès de sébum.',
         beneficios: ['Une peau visiblement plus propre', 'Une routine complète d’hygiène du visage', 'Une sensation de peau renouvelée'],
       },
       pt: {
         titulo: 'Limpeza facial profunda',
-        descripcion: 'Eliminação de impurezas e renovação para uma pele limpa e luminosa.',
+        descripcion: 'Tratamento completo que limpa a pele em profundidade, especialmente quando há pontos negros, poros obstruídos ou excesso de oleosidade.',
         beneficios: ['Pele visivelmente mais limpa', 'Rotina completa de higiene facial', 'Sensação de pele renovada'],
       },
     },
