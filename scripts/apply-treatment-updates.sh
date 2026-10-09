@@ -11,65 +11,76 @@ echo ""
 echo "==> 1. Actualizando entidades CTratamiento en EspoCRM..."
 docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm php -- << 'PHP_EOF'
 <?php
-require_once "/var/www/html/bootstrap.php";
-$app = new \Espo\Core\Application();
-$em = $app->getContainer()->get("entityManager");
+try {
+    require_once "/var/www/html/bootstrap.php";
+    $app = new \Espo\Core\Application();
+    $container = $app->getContainer();
+    $em = $container->get("entityManager");
 
-// Mapeo de actualizaciones para EspoCRM
-// [buscar_patron_nombre, nueva_duracion_o_null, nuevo_precio_o_null, nuevo_nombre_o_null]
-$configs = [
-    // Duraciones
-    ['Limpieza básica 45 min', 60, null, 'Limpieza básica 60 min'],
-    ['Limpieza profunda 60 min', 80, null, 'Limpieza profunda 80 min'],
-    ['Mesoterapia facial 45 min', 30, null, 'Mesoterapia facial 30 min'],
-    ['Rejuvenecimiento facial Skin Pen 60 min', 80, null, 'Rejuvenecimiento facial Skin Pen 80 min'],
-    ['Lifting de pestañas 45 min', 60, null, 'Lifting de pestañas 60 min'],
-    ['Lifting + tinte 60 min', 75, null, 'Lifting + tinte 75 min'],
-    ['Cera espalda 30 min', 40, null, 'Cera espalda 40 min'],
-    ['Cera piernas completas 45 min', 30, null, 'Cera piernas completas 30 min'],
-    ['Cera medias piernas 30 min', 20, null, 'Cera medias piernas 20 min'],
-    ['Manicura express 25 min', 30, null, 'Manicura express 30 min'],
-    ['Manicura semipermanente 50 min', 60, null, 'Manicura semipermanente 60 min'],
-    ['Presoterapia + masaje 50 min', 60, null, 'Presoterapia + masaje 60 min'],
-
-    // Precios
-    ['Pinzas diseño 20 min', null, 17.0, null],
-    ['Diseño hilo cejas 25 min', null, 17.0, null],
-    ['Masaje relajante 60 min', null, 65.0, null],
-    ['Masaje descontracturante 60 min', null, 75.0, null],
-    ['Masaje con piedras calientes 60 min', null, 75.0, null],
-    ['Drenaje linfático manual 60 min', null, 70.0, null],
-];
-
-$updated = 0;
-foreach ($configs as $item) {
-    [$namePattern, $newDuration, $newPrice, $newName] = $item;
-    
-    // Buscar por nombre exacto o si ya fue renombrado
-    $treatment = $em->getRDBRepository('CTratamiento')->where(['name' => $namePattern])->findOne();
-    if (!$treatment && $newName) {
-        $treatment = $em->getRDBRepository('CTratamiento')->where(['name' => $newName])->findOne();
+    $user = $em->getRDBRepository('User')->where(['userName' => 'admin'])->findOne();
+    if ($user) {
+        $container->set('user', $user);
     }
-    
-    if ($treatment) {
-        if ($newDuration !== null) {
-            $treatment->set('duracionMinutos', $newDuration);
+
+    // Mapeo de actualizaciones para EspoCRM
+    // [buscar_patron_nombre, nueva_duracion_o_null, nuevo_precio_o_null, nuevo_nombre_o_null]
+    $configs = [
+        // Duraciones
+        ['Limpieza básica 45 min', 60, null, 'Limpieza básica 60 min'],
+        ['Limpieza profunda 60 min', 80, null, 'Limpieza profunda 80 min'],
+        ['Mesoterapia facial 45 min', 30, null, 'Mesoterapia facial 30 min'],
+        ['Rejuvenecimiento facial Skin Pen 60 min', 80, null, 'Rejuvenecimiento facial Skin Pen 80 min'],
+        ['Lifting de pestañas 45 min', 60, null, 'Lifting de pestañas 60 min'],
+        ['Lifting + tinte 60 min', 75, null, 'Lifting + tinte 75 min'],
+        ['Cera espalda 30 min', 40, null, 'Cera espalda 40 min'],
+        ['Cera piernas completas 45 min', 30, null, 'Cera piernas completas 30 min'],
+        ['Cera medias piernas 30 min', 20, null, 'Cera medias piernas 20 min'],
+        ['Manicura express 25 min', 30, null, 'Manicura express 30 min'],
+        ['Manicura semipermanente 50 min', 60, null, 'Manicura semipermanente 60 min'],
+        ['Presoterapia + masaje 50 min', 60, null, 'Presoterapia + masaje 60 min'],
+
+        // Precios
+        ['Pinzas diseño 20 min', null, 17.0, null],
+        ['Diseño hilo cejas 25 min', null, 17.0, null],
+        ['Masaje relajante 60 min', null, 65.0, null],
+        ['Masaje descontracturante 60 min', null, 75.0, null],
+        ['Masaje con piedras calientes 60 min', null, 75.0, null],
+        ['Drenaje linfático manual 60 min', null, 70.0, null],
+    ];
+
+    $updated = 0;
+    foreach ($configs as $item) {
+        [$namePattern, $newDuration, $newPrice, $newName] = $item;
+        
+        // Buscar por nombre exacto o si ya fue renombrado
+        $treatment = $em->getRDBRepository('CTratamiento')->where(['name' => $namePattern])->findOne();
+        if (!$treatment && $newName) {
+            $treatment = $em->getRDBRepository('CTratamiento')->where(['name' => $newName])->findOne();
         }
-        if ($newPrice !== null) {
-            $treatment->set('precioOrientativo', $newPrice);
+        
+        if ($treatment) {
+            if ($newDuration !== null) {
+                $treatment->set('duracionMinutos', $newDuration);
+            }
+            if ($newPrice !== null) {
+                $treatment->set('precioOrientativo', $newPrice);
+            }
+            if ($newName !== null) {
+                $treatment->set('name', $newName);
+            }
+            $em->saveEntity($treatment);
+            echo " ✔ Actualizado CTratamiento: {$treatment->get('name')} | Duración: {$treatment->get('duracionMinutos')} min | Precio: {$treatment->get('precioOrientativo')} €\n";
+            $updated++;
+        } else {
+            echo " ⚠ No se encontró tratamiento para el patrón: $namePattern\n";
         }
-        if ($newName !== null) {
-            $treatment->set('name', $newName);
-        }
-        $em->saveEntity($treatment);
-        echo " ✔ Actualizado CTratamiento: {$treatment->get('name')} | Duración: {$treatment->get('duracionMinutos')} min | Precio: {$treatment->get('precioOrientativo')} €\n";
-        $updated++;
-    } else {
-        echo " ⚠ No se encontró tratamiento para el patrón: $namePattern\n";
     }
+
+    echo "Total actualizados en EspoCRM: $updated\n";
+} catch (\Throwable $e) {
+    echo "ERROR en EspoCRM: " . $e->getMessage() . "\n" . $e->getTraceAsString() . "\n";
+    exit(1);
 }
-
-echo "Total actualizados en EspoCRM: $updated\n";
 PHP_EOF
 echo ""
 
