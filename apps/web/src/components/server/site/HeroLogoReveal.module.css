@@ -33,7 +33,7 @@
        aquí porque CSS no puede dividir dos longitudes). */
   --hlr-reveal-dx: 0px;
   --hlr-reveal-dy: 25.5vh;
-  --hlr-reveal-scale: 1.7;
+  --hlr-reveal-scale: 1.36;
 
   position: absolute;
   top: var(--hlr-settle-top);
@@ -55,7 +55,7 @@
        ver Home.module.css). Verticalmente ya está centrado: dy = 0. */
     --hlr-reveal-dx: 25cqw;
     --hlr-reveal-dy: 0px;
-    --hlr-reveal-scale: 1.75;
+    --hlr-reveal-scale: 1.4;
   }
 }
 
