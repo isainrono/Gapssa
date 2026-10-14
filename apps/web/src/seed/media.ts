@@ -476,6 +476,51 @@ export const MEDIA_FILES: MediaFileSeed[] = [
     relativePath: 'masajes/exfoliacion-corporal.jpeg',
     altPorLocale: { es: 'Exfoliación corporal', ca: 'Exfoliació corporal', en: 'Body scrub and exfoliation', it: 'Esfoliazione corporea', fr: 'Gommage corporel', pt: 'Esfoliação corporal' },
   },
+  {
+    key: 'masajes-presoterapia',
+    relativePath: 'masajes/presoterapia.jpeg',
+    altPorLocale: { es: 'Tratamiento de presoterapia', ca: 'Tractament de pressoteràpia', en: 'Pressotherapy treatment', it: 'Trattamento di pressoterapia', fr: 'Soin de pressothérapie', pt: 'Tratamento de pressoterapia' },
+  },
+  {
+    key: 'masajes-presoterapia-masaje',
+    relativePath: 'masajes/presoterapia-masaje.jpeg',
+    altPorLocale: { es: 'Tratamiento de presoterapia con masaje', ca: 'Tractament de pressoteràpia amb massatge', en: 'Pressotherapy treatment with massage', it: 'Trattamento di pressoterapia con massaggio', fr: 'Soin de pressothérapie avec massage', pt: 'Tratamento de pressoterapia com massagem' },
+  },
+  {
+    key: 'masajes-lipolaser-radiofrecuencia',
+    relativePath: 'masajes/lipolaser-radiofrecuencia.jpeg',
+    altPorLocale: { es: 'Tratamiento de lipoláser y radiofrecuencia corporal', ca: 'Tractament de lipolàser i radiofreqüència corporal', en: 'Body lipolaser and radiofrequency treatment', it: 'Trattamento lipolaser e radiofrequenza corpo', fr: 'Soin lipolaser et radiofréquence corporelle', pt: 'Tratamento de lipolaser e radiofrequência corporal' },
+  },
+  {
+    key: 'masajes-vacum',
+    relativePath: 'masajes/vacum.jpeg',
+    altPorLocale: { es: 'Tratamiento de vacumterapia', ca: 'Tractament de vacumteràpia', en: 'Vacuum therapy treatment', it: 'Trattamento di vacuoterapia', fr: 'Soin de vacuothérapie', pt: 'Tratamento de vacuoterapia' },
+  },
+  {
+    key: 'masajes-laser-fisio-dolor',
+    relativePath: 'masajes/laser-fisio-dolor.jpeg',
+    altPorLocale: { es: 'Tratamiento de láser fisioterapéutico para el dolor', ca: 'Tractament de làser fisioterapèutic per al dolor', en: 'Physiotherapeutic pain relief laser treatment', it: 'Trattamento laser fisioterapico per il dolore', fr: 'Traitement laser de physiothérapie anti-douleur', pt: 'Tratamento a laser fisioterapêutico para alívio da dor' },
+  },
+  {
+    key: 'faciales-tratamientos-faciales',
+    relativePath: 'faciales/tratamientos-faciales.jpeg',
+    altPorLocale: { es: 'Tratamientos faciales en GAPSSA', ca: 'Tractaments facials a GAPSSA', en: 'Facial treatments at GAPSSA', it: 'Trattamenti viso presso GAPSSA', fr: 'Soins du visage chez GAPSSA', pt: 'Tratamentos faciais na GAPSSA' },
+  },
+  {
+    key: 'depilacion-laser-laser-gluteos',
+    relativePath: 'depilacion-laser/laser-gluteos.jpeg',
+    altPorLocale: { es: 'Depilación láser en glúteos', ca: 'Depilació làser a glutis', en: 'Laser buttocks hair removal', it: 'Depilazione laser glutei', fr: 'Épilation laser des fesses', pt: 'Depilação laser nos glúteos' },
+  },
+  {
+    key: 'depilacion-laser-depilacion-laser',
+    relativePath: 'depilacion-laser/depilacion-laser.jpeg',
+    altPorLocale: { es: 'Depilación láser en GAPSSA', ca: 'Depilació làser a GAPSSA', en: 'Laser hair removal at GAPSSA', it: 'Depilazione laser presso GAPSSA', fr: 'Épilation laser chez GAPSSA', pt: 'Depilação laser na GAPSSA' },
+  },
+  {
+    key: 'unas-unas',
+    relativePath: 'unas/unas.jpeg',
+    altPorLocale: { es: 'Servicios de manicura y pedicura en GAPSSA', ca: 'Serveis de manicura i pedicura a GAPSSA', en: 'Manicure and pedicure services at GAPSSA', it: 'Servizi di manicure e pedicure presso GAPSSA', fr: 'Services de manucure et pédicure chez GAPSSA', pt: 'Serviços de manicure e pedicure na GAPSSA' },
+  },
 ]
 
 export function mimeTypeFor(filePath: string): string {
@@ -559,9 +604,11 @@ export async function seedMedia(payload: BasePayload): Promise<Record<string, nu
         fs.existsSync(path.join(dir, thumbFilename))
     )
 
-    if (!fileExistsOnDisk) {
-      const absolutePath = path.join(PUBLIC_IMAGES_DIR, file.relativePath)
-      const buffer = fs.readFileSync(absolutePath)
+    const absolutePath = path.join(PUBLIC_IMAGES_DIR, file.relativePath)
+    const buffer = fs.readFileSync(absolutePath)
+    const currentFilesize = (doc as unknown as { filesize?: number }).filesize
+
+    if (!fileExistsOnDisk || currentFilesize !== buffer.length) {
       await payload.update({
         collection: 'media',
         id: doc!.id,

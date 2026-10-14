@@ -7,6 +7,7 @@
 data/
 backups/
 *.log
+fotos/
 
 # Excepción exacta: apps/web/src/seed/data/ es código fuente del seed de
 # Fase 2 (datos semilla en TypeScript), no datos de runtime — la regla

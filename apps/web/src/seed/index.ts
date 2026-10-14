@@ -166,11 +166,11 @@ async function seedContenidoSobreGapssa(payload: PayloadClient, mediaIds: Record
 }
 
 const FAMILIA_IMAGEN_POR_SLUG: Record<string, string> = {
-  faciales: 'tratamiento-facial',
-  'pestanas-cejas': 'hidratacion-facial',
-  depilacion: 'depilacion-facial',
-  'depilacion-laser': 'depilacion-facial',
-  unas: 'manicura',
+  faciales: 'faciales-tratamientos-faciales',
+  'pestanas-cejas': 'pestanas-cejas-lifting-pestanas',
+  depilacion: 'depilacion-facial-completa',
+  'depilacion-laser': 'depilacion-laser-depilacion-laser',
+  unas: 'unas-unas',
   masajes: 'masajes-masaje-relajante',
 }
 
@@ -185,7 +185,18 @@ async function seedFamilias(payload: PayloadClient, mediaIds: Record<string, num
       overrideAccess: true,
     })
     if (!shouldCreateDocument(existing.docs[0])) {
-      familiaIdPorSlug[familia.slug] = existing.docs[0]!.id
+      const existingDoc = existing.docs[0]!
+      familiaIdPorSlug[familia.slug] = existingDoc.id
+      const imagenKey = FAMILIA_IMAGEN_POR_SLUG[familia.slug]
+      const imagenId = imagenKey ? mediaIds[imagenKey] : undefined
+      if (imagenId !== undefined) {
+        await payload.update({
+          collection: 'familias-tratamiento',
+          id: existingDoc.id,
+          overrideAccess: true,
+          data: { imagen: imagenId },
+        })
+      }
       continue
     }
 
@@ -238,8 +249,6 @@ async function seedFamilias(payload: PayloadClient, mediaIds: Record<string, num
 }
 
 const DESTACADO_IMAGEN_POR_SLUG: Record<string, string> = {
-  'lipolaser-radiofrecuencia': 'radiofrecuencia-facial',
-
   // Uñas (fotos oficiales)
   'manicura-express': 'unas-manicura-express',
   'manicura-semipermanente': 'unas-manicura-semipermanente',
@@ -283,6 +292,7 @@ const DESTACADO_IMAGEN_POR_SLUG: Record<string, string> = {
   'depilacion-perianal': 'depilacion-perianal',
   'depilacion-ingles-brasilenas': 'depilacion-ingles-brasilenas',
   'depilacion-ingles-normales': 'depilacion-ingles-normales',
+  'depilacion-ingles-integrales': 'depilacion-ingles-integrales',
   'depilacion-piernas': 'depilacion-piernas',
   'depilacion-medias-piernas': 'depilacion-medias-piernas',
 
@@ -298,7 +308,7 @@ const DESTACADO_IMAGEN_POR_SLUG: Record<string, string> = {
   'laser-pecho': 'depilacion-laser-laser-pecho',
   'laser-ingles-brasilenas': 'depilacion-laser-laser-ingles-brasilenas',
 
-  // Masajes (fotos oficiales)
+  // Masajes y Corporal (fotos oficiales)
   'masaje-relajante': 'masajes-masaje-relajante',
   'masaje-descontracturante': 'masajes-masaje-descontracturante',
   'masaje-deportivo': 'masajes-masaje-deportivo',
@@ -307,11 +317,17 @@ const DESTACADO_IMAGEN_POR_SLUG: Record<string, string> = {
   'masaje-craneofacial': 'masajes-masaje-craneofacial',
   'masaje-facial': 'masajes-masaje-facial',
   'masaje-piernas-cansadas': 'masajes-masaje-piernas-cansadas',
-  'masaje-relajante-pies': 'masajes-masaje-relajante-pies',
-  'reflexologia-podal': 'masajes-reflexologia-podal',
+  // Intercambio de fotos solicitado en el informe oficial:
+  'masaje-relajante-pies': 'masajes-reflexologia-podal',
+  'reflexologia-podal': 'masajes-masaje-relajante-pies',
   'drenaje-manual': 'masajes-drenaje-manual',
   'piedras-calientes': 'masajes-masaje-piedras-calientes',
   'exfoliacion-corporal': 'masajes-exfoliacion-corporal',
+  'presoterapia': 'masajes-presoterapia',
+  'presoterapia-masaje': 'masajes-presoterapia-masaje',
+  'lipolaser-radiofrecuencia': 'masajes-lipolaser-radiofrecuencia',
+  'vacum': 'masajes-vacum',
+  'laser-fisio-dolor': 'masajes-laser-fisio-dolor',
 }
 
 function imagenKeyParaTratamiento(slug: string, familiaSlug: string): string {
