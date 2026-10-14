@@ -28,15 +28,13 @@ echo "==> 5. Verificando imágenes asignadas en la base de datos de Payload (Pos
 docker compose --env-file .env.production -f compose.prod.yml exec -T apps-db psql -U gapssa_apps -d gapssa_cms -c "
 SELECT 
     t.slug,
-    COUNT(ti.media_id) AS num_imagenes,
     m.filename
 FROM tratamientos t
-LEFT JOIN tratamientos_imagenes ti ON ti._parent_id = t.id
-LEFT JOIN media m ON m.id = ti.media_id
+JOIN tratamientos_rels r ON r.parent_id = t.id AND r.path = 'imagenes'
+JOIN media m ON m.id = r.media_id
 WHERE t.slug IN ('presoterapia', 'vacum', 'lipolaser-radiofrecuencia', 'masaje-relajante-pies', 'reflexologia-podal', 'mesoterapia-estetica', 'skinpen')
-GROUP BY t.slug, m.filename
 ORDER BY t.slug;
-"
+" || true
 
 echo ""
 echo "==> 6. Verificando portadas de familias en Payload..."
@@ -45,9 +43,10 @@ SELECT
     f.slug,
     m.filename AS portada_filename
 FROM familias_tratamiento f
-LEFT JOIN media m ON m.id = f.imagen_id
+LEFT JOIN familias_tratamiento_rels fr ON fr.parent_id = f.id AND fr.path = 'imagen'
+LEFT JOIN media m ON m.id = fr.media_id
 ORDER BY f.orden;
-"
+" || true
 
 echo ""
 echo "=========================================================="
