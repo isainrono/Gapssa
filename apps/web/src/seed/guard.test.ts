@@ -12,4 +12,8 @@ describe('assertSeedAllowedInEnv', () => {
     expect(() => assertSeedAllowedInEnv('test')).not.toThrow()
     expect(() => assertSeedAllowedInEnv(undefined)).not.toThrow()
   })
+
+  it('permite producción cuando allowInProduction es true', () => {
+    expect(() => assertSeedAllowedInEnv('production', true)).not.toThrow()
+  })
 })

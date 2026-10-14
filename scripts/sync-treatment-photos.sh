@@ -21,7 +21,7 @@ sleep 6
 
 echo ""
 echo "==> 4. Ejecutando seed de Media y Tratamientos en Payload CMS..."
-docker compose --env-file .env.production -f compose.prod.yml exec -T web npm run seed -w @gapssa/web
+docker compose --env-file .env.production -f compose.prod.yml exec -T -e ALLOW_SEED_IN_PRODUCTION=true web npm run seed -w @gapssa/web
 
 echo ""
 echo "==> 5. Verificando imágenes asignadas en la base de datos de Payload (Postgres)..."
