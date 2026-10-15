@@ -8,12 +8,8 @@ export type PaginaLegalSeed = {
 }
 
 /**
- * Textos legales genéricos y deliberadamente provisionales
- * (`PLAN_DESARROLLO_WEB_PORTAL.md` §9, §11). No incluyen NIF, razón
- * social, teléfono ni correo legal — ninguno de esos datos está
- * confirmado todavía (`PROJECT_CONTEXT.md` §19) y no se inventan. Cada
- * texto lo dice explícitamente y se marca `estado: "provisional"` +
- * `seoNoIndex: true` en el seed (`index.ts`).
+ * Textos legales oficiales de GAPSSA by Nana conforme a la legislación española
+ * y europea (RGPD UE 2016/679, LOPDGDD 3/2018 y LSSI-CE 34/2002).
  */
 export const PAGINAS_LEGALES_SEED: PaginaLegalSeed[] = [
   {
@@ -21,63 +17,159 @@ export const PAGINAS_LEGALES_SEED: PaginaLegalSeed[] = [
     porLocale: {
       es: {
         titulo: 'Aviso legal',
-        contenido: `Este es un texto provisional y genérico, pendiente de revisión legal definitiva por parte de Gapssa.
+        contenido: `1. Datos Identificativos del Titular
+En cumplimiento con el artículo 10 de la Ley 34/2002, de 11 de julio, de Servicios de la Sociedad de la Información y del Comercio Electrónico (LSSI-CE), se informa a las personas usuarias de los datos identificativos del titular del sitio web:
+• Titular: Diana Marcela Atehortua Ramirez
+• Nombre Comercial: GAPSSA by Nana
+• Domicilio del centro: Carrer de Gayarre 24, Entresuelo 2, 08014 Barcelona (España)
+• Teléfono: +34 680 373 663
+• Correo electrónico: gapssabynana@gmail.com
+• Actividad: Servicios integrales de estética, cuidado facial, corporal y belleza.
 
-Información legal pendiente de validación: los datos de identificación del titular del sitio (razón social, NIF, domicilio social y datos de contacto legal) se completarán antes de la puesta en producción de este sitio web.
+2. Objeto y Ámbito de Aplicación
+El presente Aviso Legal regula el acceso, navegación y uso del sitio web oficial de GAPSSA by Nana, así como las responsabilidades derivadas del uso de sus contenidos (textos, gráficos, fotografías, marcas y logotipos). El acceso a este sitio web atribuye la condición de Persona Usuaria e implica la aceptación plena y sin reservas de las presentes disposiciones.
 
-GAPSSA by Nana presta servicios de estética y belleza en Barcelona. El uso de este sitio web implica la aceptación de las condiciones que se publiquen en su versión definitiva.
+3. Condiciones de Uso
+La persona usuaria se compromete a hacer un uso lícito, diligente y de buena fe del sitio web, absteniéndose de realizar cualquier acto que dañe, inutilice, sobrecargue o impida el normal funcionamiento del portal o los derechos e intereses de GAPSSA by Nana o de terceros.
 
-Este aviso no debe interpretarse como una versión final ni vinculante. Se sustituirá por un texto validado antes del lanzamiento en producción.`,
+4. Propiedad Intelectual e Industrial
+Todos los contenidos del sitio web, incluidos logotipos, isotipo oficial, fotografías de tratamientos, diseño gráfico, código y textos, son propiedad de GAPSSA by Nana o de terceros con autorización legítima de uso. Queda expresamente prohibida su reproducción, distribución o comunicación pública sin autorización previa y por escrito.
+
+5. Responsabilidad y Enlaces
+GAPSSA by Nana no se responsabiliza de los posibles daños derivados de interferencias, interrupciones o virus informáticos ajenos a su control razonable, ni del contenido de los enlaces a sitios web de terceros que puedan constar en el portal.
+
+6. Legislación Aplicable y Jurisdicción
+La relación entre la persona usuaria y GAPSSA by Nana se regirá por la normativa española vigente. Para la resolución de cualquier controversia, las partes se someten a los Juzgados y Tribunales de la ciudad de Barcelona, sin perjuicio de los fueros imperativos aplicables a consumidores y usuarios.`,
       },
       ca: {
         titulo: 'Avís legal',
-        contenido: `Aquest és un text provisional i genèric, pendent de revisió legal definitiva per part de Gapssa.
+        contenido: `1. Dades Identificatives de la Titular
+En compliment de l'article 10 de la Llei 34/2002, d'11 de juliol, de Serveis de la Societat de la Informació i del Comerç Electrònic (LSSI-CE), s'informa a les persones usuàries de les dades identificatives de la titular del lloc web:
+• Titular: Diana Marcela Atehortua Ramirez
+• Nom Comercial: GAPSSA by Nana
+• Domicili del centre: Carrer de Gayarre 24, Entresòl 2, 08014 Barcelona (Espanya)
+• Telèfon: +34 680 373 663
+• Correu electrònic: gapssabynana@gmail.com
+• Activitat: Serveis integrals d'estètica, cura facial, corporal i bellesa.
 
-Informació legal pendent de validació: les dades d’identificació del titular del lloc web (raó social, NIF, domicili social i dades de contacte legal) es completaran abans de la posada en producció d’aquest lloc web.
+2. Objecte i Àmbit d'Aplicació
+Aquest Avís Legal regula l'accés, navegació i ús del lloc web oficial de GAPSSA by Nana, així com les responsabilitats derivades de l'ús dels seus continguts (textos, gràfics, fotografies, marques i logotips). L'accés a aquest lloc web atribueix la condició de Persona Usuària i implica l'acceptació plena i sense reserves d'aquestes disposicions.
 
-GAPSSA by Nana ofereix serveis d’estètica i bellesa a Barcelona. L’ús d’aquest lloc web implica l’acceptació de les condicions que es publiquin en la seva versió definitiva.
+3. Condicions d'Ús
+La persona usuària es compromet a fer un ús lícit, diligent i de bona fe del lloc web, abstenint-se de realitzar qualsevol acte que danyi, inutilitzi, sobrecarregui o impedeixi el funcionament normal del portal o els drets i interessos de GAPSSA by Nana o de tercers.
 
-Aquest avís no s’ha d’interpretar com una versió final ni vinculant. Se substituirà per un text validat abans del llançament en producció.`,
+4. Propietat Intel·lectual i Industrial
+Tots els continguts del lloc web, inclosos logotips, isotip oficial, fotografies de tractaments, disseny gràfic, codi i textos, són propietat de GAPSSA by Nana o de tercers amb autorització legítima d'ús. Queda expressament prohibida la seva reproducció, distribució o comunicació pública sense autorització prèvia i per escrit.
+
+5. Responsabilitat i Enllaços
+GAPSSA by Nana no es responsabilitza dels possibles danys derivats d'interferències, interrupcions o virus informàtics aliens al seu control raonable, ni del contingut dels enllaços a llocs web de tercers que puguin constar al portal.
+
+6. Legislació Aplicable i Jurisdicció
+La relació entre la persona usuària i GAPSSA by Nana es regirà per la normativa espanyola vigent. Per a la resolució de qualsevol controvèrsia, les parts es sotmeten als Jutjats i Tribunals de la ciutat de Barcelona, sens perjudici dels furs imperatius aplicables a consumidors i usuaris.`,
       },
       en: {
         titulo: 'Legal notice',
-        contenido: `This is a provisional, generic text pending final legal review by Gapssa.
+        contenido: `1. Owner Identification Details
+In compliance with Article 10 of Spanish Law 34/2002 of July 11 on Information Society Services and Electronic Commerce (LSSI-CE), users are informed of the identification details of the website owner:
+• Owner: Diana Marcela Atehortua Ramirez
+• Commercial Name: GAPSSA by Nana
+• Business Address: Carrer de Gayarre 24, Entresuelo 2, 08014 Barcelona (Spain)
+• Telephone: +34 680 373 663
+• Email: gapssabynana@gmail.com
+• Activity: Integral aesthetic services, facial and body care, and beauty treatments.
 
-Legal information pending validation: the identification details of the site owner (legal name, tax ID, registered address and legal contact details) will be completed before this website goes into production.
+2. Purpose and Scope
+This Legal Notice governs access, browsing, and use of the official GAPSSA by Nana website, as well as responsibilities arising from the use of its content (texts, graphics, photographs, trademarks, and logos). Access to this website confers User status and implies full and unreserved acceptance of these provisions.
 
-GAPSSA by Nana provides beauty and aesthetic services in Barcelona. Use of this website implies acceptance of the terms that will be published in their final version.
+3. Terms of Use
+The user agrees to make lawful, diligent, and good-faith use of the website, refraining from any action that damages, disables, overburdens, or impairs normal website operation or the rights and interests of GAPSSA by Nana or third parties.
 
-This notice should not be read as a final or binding version. It will be replaced with a validated text before the production launch.`,
+4. Intellectual and Industrial Property
+All website content, including logos, official logomark, treatment photographs, graphic design, code, and texts, is the property of GAPSSA by Nana or third parties with legitimate authorization. Reproduction, distribution, or public communication without prior written consent is strictly prohibited.
+
+5. Liability and Links
+GAPSSA by Nana shall not be held liable for potential damages resulting from interference, interruptions, or computer viruses beyond reasonable control, nor for content found on third-party links included on the portal.
+
+6. Applicable Law and Jurisdiction
+The relationship between the user and GAPSSA by Nana shall be governed by current Spanish legislation. For the resolution of any dispute, the parties submit to the Courts and Tribunals of the city of Barcelona, without prejudice to mandatory statutory consumer jurisdiction.`,
       },
       it: {
         titulo: 'Note legali',
-        contenido: `Questo è un testo provvisorio e generico, in attesa di revisione legale definitiva da parte di Gapssa.
+        contenido: `1. Dati Identificativi del Titolare
+In conformità all'articolo 10 della Legge 34/2002 dell'11 luglio sui Servizi della Società dell'Informazione e del Commercio Elettronico (LSSI-CE), si informano gli utenti sui dati identificativi della titolare del sito web:
+• Titolare: Diana Marcela Atehortua Ramirez
+• Nome Commerciale: GAPSSA by Nana
+• Indirizzo della sede: Carrer de Gayarre 24, Entresuelo 2, 08014 Barcellona (Spagna)
+• Telefono: +34 680 373 663
+• Email: gapssabynana@gmail.com
+• Attività: Servizi integrali di estetica, cura del viso, del corpo e bellezza.
 
-Informazioni legali in attesa di convalida: i dati identificativi del titolare del sito (ragione sociale, partita IVA, sede legale e recapiti legali) saranno completati prima della messa in produzione di questo sito web.
+2. Oggetto e Ambito di Applicazione
+Le presenti Note Legali regolano l'accesso, la navigazione e l'uso del sito web ufficiale di GAPSSA by Nana, nonché le responsabilità derivanti dall'utilizzo dei suoi contenuti (testi, grafica, fotografie, marchi e loghi). L'accesso a questo sito web attribuisce la qualifica di Utente e implica l'accettazione piena e senza riserve delle presenti disposizioni.
 
-GAPSSA by Nana offre servizi di estetica e bellezza a Barcellona. L’uso di questo sito web implica l’accettazione delle condizioni che verranno pubblicate nella loro versione definitiva.
+3. Condizioni d'Uso
+L'utente si impegna a fare un uso lecito, diligente e in buona fede del sito web, astenendosi da qualsiasi atto che danneggi, disabiliti, sovraccarichi o impedisca il normale funzionamento del portale o i diritti e gli interessi di GAPSSA by Nana o di terzi.
 
-Questa nota non deve essere considerata una versione finale o vincolante. Sarà sostituita da un testo convalidato prima del lancio in produzione.`,
+4. Proprietà Intellettuale e Industriale
+Tutti i contenuti del sito web, inclusi loghi, isotipo ufficiale, fotografie dei trattamenti, design grafico, codice e testi, sono di proprietà di GAPSSA by Nana o di terzi legittimamente autorizzati. È espressamente vietata la riproduzione, distribuzione o comunicazione pubblica senza previa autorizzazione scritta.
+
+5. Responsabilità e Collegamenti
+GAPSSA by Nana non è responsabile per eventuali danni derivanti da interferenze, interruzioni o virus informatici al di fuori del proprio ragionevole controllo, né per il contenuto dei link a siti web di terzi eventualmente presenti sul portale.
+
+6. Legislazione Applicabile e Giurisdizione
+Il rapporto tra l'utente e GAPSSA by Nana è regolato dalla vigente normativa spagnola. Per la risoluzione di qualsiasi controversia, le parti si sottopongono ai Tribunali della città di Barcellona, fatti salvi i fori inderogabili applicabili ai consumatori.`,
       },
       fr: {
         titulo: 'Mentions légales',
-        contenido: `Ceci est un texte provisoire et générique, en attente de révision juridique définitive par Gapssa.
+        contenido: `1. Données d'Identification de la Titulaire
+Conformément à l'article 10 de la Loi espagnole 34/2002 du 11 juillet sur les Services de la Société de l'Information et du Commerce Électronique (LSSI-CE), les utilisateurs sont informés des coordonnées de la titulaire du site web :
+• Titulaire : Diana Marcela Atehortua Ramirez
+• Nom Commercial : GAPSSA by Nana
+• Adresse de l'institut : Carrer de Gayarre 24, Entresuelo 2, 08014 Barcelone (Espagne)
+• Téléphone : +34 680 373 663
+• Courriel : gapssabynana@gmail.com
+• Activité : Soins complets d'esthétique, soins du visage, soins du corps et beauté.
 
-Informations légales en attente de validation : les données d’identification de la titulaire du site (raison sociale, numéro fiscal, siège social et coordonnées légales) seront complétées avant la mise en production de ce site web.
+2. Objet et Champ d'Application
+Les présentes Mentions Légales régissent l'accès, la navigation et l'utilisation du site web officiel de GAPSSA by Nana, ainsi que les responsabilités découlant de l'utilisation de ses contenus (textes, graphismes, photographies, marques et logos). L'accès à ce site attribue la qualité d'Utilisateur et implique l'acceptation pleine et entière de ces dispositions.
 
-GAPSSA by Nana propose des services d’esthétique et de beauté à Barcelone. L’utilisation de ce site implique l’acceptation des conditions qui seront publiées dans leur version définitive.
+3. Conditions d'Utilisation
+L'utilisateur s'engage à faire un usage licite, diligent et de bonne foi du site web, en s'abstenant de tout acte susceptible d'endommager, de désactiver, de surcharger ou d'entraver le fonctionnement normal du portail ou les droits et intérêts de GAPSSA by Nana ou de tiers.
 
-Ces mentions ne doivent pas être considérées comme une version finale ou contraignante. Elles seront remplacées par un texte validé avant le lancement en production.`,
+4. Propriété Intellectuelle et Industrielle
+L'ensemble des contenus du site web, y compris les logos, l'isotype officiel, les photographies de soins, la conception graphique, le code et les textes, est la propriété de GAPSSA by Nana ou de tiers dûment autorisés. Toute reproduction, distribution ou communication publique sans autorisation écrite préalable est strictement interdite.
+
+5. Responsabilité et Liens
+GAPSSA by Nana ne saurait être tenue responsable des dommages résultant d'interférences, d'interruptions ou de virus informatiques échappant à son contrôle raisonnable, ni du contenu des liens vers des sites tiers présents sur le portail.
+
+6. Législation Applicable et Juridiction
+Les relations entre l'utilisateur et GAPSSA by Nana sont régies par la législation espagnole en vigueur. Pour le règlement de tout litige, les parties se soumettent aux Tribunaux de la ville de Barcelone, sans préjudice des dispositions légales impératives relatives aux consommateurs.`,
       },
       pt: {
         titulo: 'Aviso legal',
-        contenido: `Este é um texto provisório e genérico, pendente de revisão legal definitiva por parte da Gapssa.
+        contenido: `1. Dados Identificativos da Titular
+Em cumprimento do artigo 10 da Lei 34/2002, de 11 de julho, de Serviços da Sociedade da Informação e do Comércio Eletrónico (LSSI-CE), informa-se os utilizadores sobre os dados identificativos da titular do site:
+• Titular: Diana Marcela Atehortua Ramirez
+• Nome Comercial: GAPSSA by Nana
+• Morada do centro: Carrer de Gayarre 24, Entresuelo 2, 08014 Barcelona (Espanha)
+• Telefone: +34 680 373 663
+• Correio eletrónico: gapssabynana@gmail.com
+• Atividade: Serviços integrais de estética, cuidados faciais, corporais e beleza.
 
-Informação legal pendente de validação: os dados de identificação da titular do site (denominação social, NIF, sede social e dados de contacto legal) serão completados antes da entrada em produção deste site.
+2. Objeto e Âmbito de Aplicação
+O presente Aviso Legal regula o acesso, navegação e utilização do site oficial da GAPSSA by Nana, bem como as responsabilidades decorrentes da utilização dos seus conteúdos (textos, gráficos, fotografias, marcas e logótipos). O acesso a este site atribui a condição de Utilizador e implica a aceitação plena e sem reservas destas disposições.
 
-A GAPSSA by Nana presta serviços de estética e beleza em Barcelona. A utilização deste site implica a aceitação das condições que serão publicadas na sua versão definitiva.
+3. Condições de Utilização
+O utilizador compromete-se a fazer uma utilização lícita, diligente e de boa-fé do site, abstendo-se de realizar qualquer ato que danifique, inutilize, sobrecarregue ou impeça o normal funcionamento do portal ou os direitos e interesses da GAPSSA by Nana ou de terceiros.
 
-Este aviso não deve ser interpretado como uma versão final ou vinculativa. Será substituído por um texto validado antes do lançamento em produção.`,
+4. Propriedade Intelectual e Industrial
+Todos os conteúdos do site, incluindo logótipos, isotipo oficial, fotografias de tratamentos, design gráfico, código e textos, são propriedade da GAPSSA by Nana ou de terceiros com autorização legítima de utilização. É expressamente proibida a sua reprodução, distribuição ou comunicação pública sem autorização prévia por escrito.
+
+5. Responsabilidade e Ligações
+A GAPSSA by Nana não se responsabiliza por eventuais danos decorrentes de interferências, interrupções ou vírus informáticos alheios ao seu controlo razoável, nem pelo conteúdo das ligações a sites de terceiros constantes no portal.
+
+6. Legislação Aplicável e Jurisdição
+A relação entre o utilizador e a GAPSSA by Nana reger-se-á pela legislação espanhola em vigor. Para a resolução de qualquer litígio, as partes submetem-se aos Tribunais da cidade de Barcelona, sem prejuízo das normas jurídicas imperativas aplicáveis aos consumidores.`,
       },
     },
   },
@@ -86,63 +178,153 @@ Este aviso não deve ser interpretado como uma versão final ou vinculativa. Ser
     porLocale: {
       es: {
         titulo: 'Política de privacidad',
-        contenido: `Este es un texto provisional y genérico, pendiente de revisión legal definitiva por parte de Gapssa.
+        contenido: `1. Responsable del Tratamiento
+• Responsable: Diana Marcela Atehortua Ramirez (GAPSSA by Nana)
+• Dirección: Carrer de Gayarre 24, Entresuelo 2, 08014 Barcelona, España
+• Teléfono: +34 680 373 663
+• Correo electrónico de contacto: gapssabynana@gmail.com
 
-Información legal pendiente de validación: la identidad y los datos de contacto del responsable del tratamiento se completarán antes de la puesta en producción de este sitio web.
+2. Datos que Recopilamos y Finalidades
+Tratamos los datos personales facilitados voluntariamente con las siguientes finalidades y bases legítimas:
+• Gestión de citas y reservas: Tramitar tu solicitud, confirmar y recordar la sesión, y prestar el servicio estético contratado (Base legal: Art. 6.1.b RGPD - ejecución de contrato).
+• Atención de dudas y consultas: Responder a solicitudes recibidas a través de formulario web, teléfono o WhatsApp (Base legal: Art. 6.1.a y 6.1.f RGPD - consentimiento e interés legítimo).
+• Valoración de aptitud para tratamientos: Evaluación en cabina de la piel y de posibles contraindicaciones de salud para garantizar la máxima seguridad en tratamientos faciales o depilación láser (Base legal: Art. 9.2.a y 9.2.h RGPD - consentimiento explícito y secreto profesional).
+• Obligaciones legales y contables: Emisión de facturas y cumplimiento tributario (Base legal: Art. 6.1.c RGPD).
 
-Los datos personales que en el futuro se recojan a través de este sitio (por ejemplo, al reservar una cita o completar un formulario de contacto) se tratarán con la finalidad de gestionar esa solicitud, con las bases legales, plazos de conservación y derechos de acceso, rectificación, supresión y oposición que se detallarán en la versión definitiva de esta política.
+3. Conservación de los Datos
+Tus datos se conservarán durante la vigencia de la relación de servicios y, posteriormente, durante los plazos legalmente establecidos por la normativa tributaria y civil española (hasta 5 años para prescripción de acciones civiles y 4 años para obligaciones fiscales).
 
-En Fase 2 de este sitio web no se procesan reservas ni formularios reales: no se recogen todavía datos personales a través de las páginas públicas más allá de lo estrictamente técnico.`,
+4. Destinatarios y Seguridad
+No cedemos datos a terceros salvo obligación legal expresa. Únicamente acceden a los datos los proveedores estrictamente necesarios para el soporte informático y alojamiento web seguro dentro del Espacio Económico Europeo, bajo contratos de encargo de tratamiento (Art. 28 RGPD).
+
+5. Derechos de Protección de Datos
+Puedes ejercer en cualquier momento tus derechos de acceso, rectificación, supresión ("derecho al olvido"), limitación del tratamiento, portabilidad y oposición enviando un correo electrónico a gapssabynana@gmail.com o por correo postal a Carrer de Gayarre 24, Entresuelo 2, 08014 Barcelona, adjuntando copia de tu documento de identidad e indicando "Protección de Datos".
+Asimismo, tienes derecho a presentar una reclamación ante la Agencia Española de Protección de Datos (AEPD, www.aepd.es) si consideras que tus derechos han sido vulnerados.`,
       },
       ca: {
         titulo: 'Política de privacitat',
-        contenido: `Aquest és un text provisional i genèric, pendent de revisió legal definitiva per part de Gapssa.
+        contenido: `1. Responsable del Tractament
+• Responsable: Diana Marcela Atehortua Ramirez (GAPSSA by Nana)
+• Direcció: Carrer de Gayarre 24, Entresòl 2, 08014 Barcelona, Espanya
+• Telèfon: +34 680 373 663
+• Correu electrònic de contacte: gapssabynana@gmail.com
 
-Informació legal pendent de validació: la identitat i les dades de contacte de la responsable del tractament es completaran abans de la posada en producció d’aquest lloc web.
+2. Dades que Recopilem i Finalitats
+Tractem les dades personals facilitades voluntàriament amb les següents finalitats i bases legítimes:
+• Gestió de cites i reserves: Tramitar la teva sol·licitud, confirmar i recordar la sessió, i prestar el servei estètic contractat (Base legal: Art. 6.1.b RGPD - execució de contracte).
+• Atenció de dubtes i consultes: Respondre a sol·licituds rebudes a través de formulari web, telèfon o WhatsApp (Base legal: Art. 6.1.a i 6.1.f RGPD - consentiment i interès legítim).
+• Valoració d'aptitud per a tractaments: Avaluació en cabina de la pell i de possibles contraindicacions de salut per garantir la màxima seguretat en tractaments facials o depilació làser (Base legal: Art. 9.2.a i 9.2.h RGPD - consentiment explícit i secret professional).
+• Obligacions legals i comptables: Emissió de factures i compliment tributari (Base legal: Art. 6.1.c RGPD).
 
-Les dades personals que en el futur es recullin a través d’aquest lloc (per exemple, en reservar una cita o completar un formulari de contacte) es tractaran amb la finalitat de gestionar aquesta sol·licitud, amb les bases legals, terminis de conservació i drets d’accés, rectificació, supressió i oposició que es detallaran en la versió definitiva d’aquesta política.
+3. Conservació de les Dades
+Les teves dades es conservaran durant la vigència de la relació de serveis i, posteriorment, durant els terminis legalment establerts per la normativa tributària i civil espanyola (fins a 5 anys per a prescripció d'accions civils i 4 anys per a obligacions fiscals).
 
-En la Fase 2 d’aquest lloc web no es processen reserves ni formularis reals: no es recullen encara dades personals a través de les pàgines públiques més enllà del que és estrictament tècnic.`,
+4. Destinataris i Seguretat
+No cedim dades a tercers excepte obligació legal expressa. Únicament accedeixen a les dades els proveïdors estrictament necessaris per al suport informàtic i allotjament web segur dins de l'Espai Econòmic Europeu, sota contractes d'encarregat de tractament (Art. 28 RGPD).
+
+5. Drets de Protecció de Dades
+Pots exercir en qualsevol moment els teus drets d'accés, rectificació, supressió ("dret a l'oblit"), limitació del tractament, portabilitat i oposició enviant un correu electrònic a gapssabynana@gmail.com o per correu postal a Carrer de Gayarre 24, Entresòl 2, 08014 Barcelona, adjuntant còpia del teu document d'identitat i indicant "Protecció de Dades".
+Així mateix, tens dret a presentar una reclamació davant l'Agència Espanyola de Protecció de Dades (AEPD, www.aepd.es) si consideres que els teus drets han estat vulnerats.`,
       },
       en: {
         titulo: 'Privacy policy',
-        contenido: `This is a provisional, generic text pending final legal review by Gapssa.
+        contenido: `1. Data Controller
+• Controller: Diana Marcela Atehortua Ramirez (GAPSSA by Nana)
+• Address: Carrer de Gayarre 24, Entresuelo 2, 08014 Barcelona, Spain
+• Telephone: +34 680 373 663
+• Contact email: gapssabynana@gmail.com
 
-Legal information pending validation: the identity and contact details of the data controller will be completed before this website goes into production.
+2. Data We Collect and Purposes
+We process personal data provided voluntarily for the following purposes and legal grounds:
+• Appointment and booking management: Processing your request, confirming and reminding you of your session, and performing the agreed aesthetic service (Legal basis: Art. 6.1.b GDPR - contract performance).
+• Inquiries and customer service: Answering inquiries received via web forms, phone, or WhatsApp (Legal basis: Art. 6.1.a and 6.1.f GDPR - consent and legitimate interest).
+• Treatment suitability assessment: In-cabin evaluation of skin suitability and health contraindications to guarantee maximum safety in facial treatments or laser hair removal (Legal basis: Art. 9.2.a and 9.2.h GDPR - explicit consent and professional secrecy).
+• Legal and accounting obligations: Billing and fiscal compliance (Legal basis: Art. 6.1.c GDPR).
 
-Any personal data collected through this site in the future (for example, when booking an appointment or submitting a contact form) will be processed to manage that request, with the legal basis, retention periods and rights of access, rectification, erasure and objection detailed in the final version of this policy.
+3. Data Retention
+Your personal data will be kept during the service relationship and subsequently for the statutory periods mandated by Spanish civil and tax laws (up to 5 years for general civil liability and 4 years for tax records).
 
-In Phase 2 of this website, no real bookings or forms are processed: no personal data is collected through the public pages beyond what is strictly technical.`,
+4. Recipients and Security
+We do not disclose data to third parties unless required by law. Data is only accessible to technological service providers essential for secure hosting within the European Economic Area under Data Processing Agreements (Art. 28 GDPR).
+
+5. Your Data Protection Rights
+You may exercise your rights of access, rectification, erasure ("right to be forgotten"), restriction of processing, data portability, and objection at any time by emailing gapssabynana@gmail.com or writing to Carrer de Gayarre 24, Entresuelo 2, 08014 Barcelona, attaching proof of identity and referencing "Data Protection".
+You also have the right to lodge a complaint with the Spanish Data Protection Agency (AEPD, www.aepd.es) if you consider that your rights have been infringed.`,
       },
       it: {
         titulo: 'Informativa sulla privacy',
-        contenido: `Questo è un testo provvisorio e generico, in attesa di revisione legale definitiva da parte di Gapssa.
+        contenido: `1. Titolare del Trattamento
+• Titolare: Diana Marcela Atehortua Ramirez (GAPSSA by Nana)
+• Indirizzo: Carrer de Gayarre 24, Entresuelo 2, 08014 Barcellona, Spagna
+• Telefono: +34 680 373 663
+• Email di contatto: gapssabynana@gmail.com
 
-Informazioni legali in attesa di convalida: l’identità e i recapiti del titolare del trattamento saranno completati prima della messa in produzione di questo sito web.
+2. Dati Raccolti e Finalità
+Trattiamo i dati personali forniti volontariamente per le seguenti finalità e basi giuridiche:
+• Gestione di appuntamenti e prenotazioni: Elaborazione della richiesta, conferma e promemoria della sessione ed esecuzione del servizio estetico concordato (Base giuridica: Art. 6.1.b RGPD - esecuzione contrattuale).
+• Risposta a domande e informazioni: Gestione delle richieste ricevute tramite modulo web, telefono o WhatsApp (Base giuridica: Art. 6.1.a e 6.1.f RGPD - consenso e legittimo interesse).
+• Valutazione dell'idoneità ai trattamenti: Valutazione in cabina della pelle e di eventuali controindicazioni per garantire la massima sicurezza nei trattamenti viso o epilazione laser (Base giuridica: Art. 9.2.a e 9.2.h RGPD - consenso esplicito e segreto professionale).
+• Obblighi legali e fiscali: Fatturazione e adempimenti fiscali (Base giuridica: Art. 6.1.c RGPD).
 
-I dati personali eventualmente raccolti in futuro tramite questo sito (ad esempio prenotando un appuntamento o compilando un modulo di contatto) saranno trattati per gestire tale richiesta, con base giuridica, periodi di conservazione e diritti di accesso, rettifica, cancellazione e opposizione descritti nella versione definitiva di questa informativa.
+3. Conservazione dei Dati
+I dati personali saranno conservati per tutta la durata del rapporto di servizio e successivamente per i termini di legge previsti dalla normativa civile e tributaria spagnola (fino a 5 anni per azioni civili e 4 anni per obblighi fiscali).
 
-Nella Fase 2 di questo sito web non vengono elaborate prenotazioni o moduli reali: non vengono ancora raccolti dati personali tramite le pagine pubbliche, salvo quanto strettamente tecnico.`,
+4. Destinatari e Sicurezza
+I dati non saranno ceduti a terzi, salvo obblighi di legge. Hanno accesso solo i fornitori tecnologici strettamente necessari per l'hosting sicuro all'interno dello Spazio Economico Europeo con accordi di responsabile del trattamento (Art. 28 RGPD).
+
+5. Diritti dell'Interessato
+È possibile esercitare in qualsiasi momento i diritti di accesso, rettifica, cancellazione ("diritto all'oblio"), limitazione del trattamento, portabilità e opposizione inviando un'email a gapssabynana@gmail.com o per posta a Carrer de Gayarre 24, Entresuelo 2, 08014 Barcellona, allegando copia del documento d'identità e indicando "Protezione dei Dati".
+È inoltre possibile presentare un reclamo all'Agenzia Spagnola per la Protezione dei Dati (AEPD, www.aepd.es).`,
       },
       fr: {
         titulo: 'Politique de confidentialité',
-        contenido: `Ceci est un texte provisoire et générique, en attente de révision juridique définitive par Gapssa.
+        contenido: `1. Responsable du Traitement
+• Responsable : Diana Marcela Atehortua Ramirez (GAPSSA by Nana)
+• Adresse : Carrer de Gayarre 24, Entresuelo 2, 08014 Barcelone, Espagne
+• Téléphone : +34 680 373 663
+• Courriel de contact : gapssabynana@gmail.com
 
-Informations légales en attente de validation : l’identité et les coordonnées de la responsable du traitement seront complétées avant la mise en production de ce site web.
+2. Données Collectées et Finalités
+Nous traitons les données personnelles fournies volontairement pour les finalités suivantes :
+• Gestion des rendez-vous et réservations : Traitement de la demande, confirmation et rappel de la séance, et exécution de la prestation esthétique (Base légale : Art. 6.1.b RGPD - exécution du contrat).
+• Réponse aux demandes et questions : Traitement des messages reçus via formulaire web, téléphone ou WhatsApp (Base légale : Art. 6.1.a et 6.1.f RGPD - consentement et intérêt légitime).
+• Évaluation de l'aptitude aux soins : Évaluation préalable en cabine de la peau et d'éventuelles contre-indications pour garantir la sécurité des soins du visage ou de l'épilation laser (Base légale : Art. 9.2.a et 9.2.h RGPD - consentement explicite et secret professionnel).
+• Obligations légales et fiscales : Facturation et tenue comptable (Base légale : Art. 6.1.c RGPD).
 
-Les données personnelles qui pourraient être collectées à l’avenir via ce site (par exemple lors d’une prise de rendez-vous ou d’un formulaire de contact) seront traitées pour gérer cette demande, avec la base légale, les durées de conservation et les droits d’accès, de rectification, d’effacement et d’opposition détaillés dans la version définitive de cette politique.
+3. Conservation des Données
+Vos données sont conservées pendant toute la durée de la relation de service, puis pendant les durées légales prévues par la législation civile et fiscale espagnole (jusqu'à 5 ans pour les responsabilités civiles et 4 ans pour les obligations fiscales).
 
-Dans la Phase 2 de ce site, aucune réservation ni aucun formulaire réel n’est traité : aucune donnée personnelle n’est encore collectée via les pages publiques, hormis ce qui est strictement technique.`,
+4. Destinataires et Sécurité
+Aucune donnée n'est cédée à des tiers, sauf obligation légale. Seuls nos prestataires techniques nécessaires à l'hébergement sécurisé dans l'Espace Économique Européen y ont accès sous contrat de sous-traitance (Art. 28 RGPD).
+
+5. Droits des Personnes Concernées
+Vous pouvez exercer à tout moment vos droits d'accès, de rectification, d'effacement (« droit à l'oubli »), de limitation, de portabilité et d'opposition en écrivant à gapssabynana@gmail.com ou à Carrer de Gayarre 24, Entresuelo 2, 08014 Barcelone, avec une copie de votre pièce d'identité et la mention « Protection des Données ».
+Vous disposez également du droit d'introduire une réclamation auprès de l'Agence Espagnole de Protection des Données (AEPD, www.aepd.es).`,
       },
       pt: {
         titulo: 'Política de privacidade',
-        contenido: `Este é um texto provisório e genérico, pendente de revisão legal definitiva por parte da Gapssa.
+        contenido: `1. Responsável pelo Tratamento
+• Responsável: Diana Marcela Atehortua Ramirez (GAPSSA by Nana)
+• Morada: Carrer de Gayarre 24, Entresuelo 2, 08014 Barcelona, Espanha
+• Telefone: +34 680 373 663
+• Correio eletrónico de contacto: gapssabynana@gmail.com
 
-Informação legal pendente de validação: a identidade e os dados de contacto do responsável pelo tratamento serão completados antes da entrada em produção deste site.
+2. Dados que Recolhemos e Finalidades
+Tratamos os dados pessoais fornecidos voluntariamente para as seguintes finalidades e bases legítimas:
+• Gestão de marcações e reservas: Tramitação do pedido, confirmação e lembrete da sessão, e prestação do serviço estético acordado (Base legal: Art. 6.1.b RGPD - execução de contrato).
+• Atendimento de dúvidas e pedidos de informação: Resposta a pedidos recebidos via formulário web, telefone ou WhatsApp (Base legal: Art. 6.1.a e 6.1.f RGPD - consentimento e interesse legítimo).
+• Avaliação de aptidão para tratamentos: Avaliação em cabine da pele e de eventuais contraindicações de saúde para garantir total segurança em tratamentos faciais ou depilação a laser (Base legal: Art. 9.2.a e 9.2.h RGPD - consentimento explícito e sigilo profissional).
+• Obrigações legais e contabilísticas: Emissão de faturas e cumprimento fiscal (Base legal: Art. 6.1.c RGPD).
 
-Os dados pessoais eventualmente recolhidos no futuro através deste site (por exemplo, ao marcar uma consulta ou preencher um formulário de contacto) serão tratados com a finalidade de gerir esse pedido, com a base legal, os prazos de conservação e os direitos de acesso, retificação, eliminação e oposição detalhados na versão definitiva desta política.
+3. Conservação dos Dados
+Os dados pessoais serão conservados durante a relação de serviço e, posteriormente, pelos prazos legalmente fixados pela legislação tributária e civil espanhola (até 5 anos para responsabilidades civis e 4 anos para obrigações fiscais).
 
-Na Fase 2 deste site não são processadas marcações nem formulários reais: não são ainda recolhidos dados pessoais através das páginas públicas, para além do estritamente técnico.`,
+4. Destinatários e Segurança
+Não partilhamos dados com terceiros, exceto por obrigação legal. Apenas têm acesso os prestadores de serviços técnicos essenciais ao alojamento seguro no Espaço Económico Europeu sob contratos de subcontratante (Art. 28 RGPD).
+
+5. Direitos dos Titulares dos Dados
+Pode exercer a qualquer momento os seus direitos de acesso, retificação, apagamento ("direito ao esquecimento"), limitação, portabilidade e oposição através do e-mail gapssabynana@gmail.com ou por correio postal para Carrer de Gayarre 24, Entresuelo 2, 08014 Barcelona, com cópia do documento de identificação e a referência "Proteção de Dados".
+Pode ainda apresentar reclamação junto da Agência Espanhola de Proteção de Dados (AEPD, www.aepd.es).`,
       },
     },
   },
@@ -151,63 +333,135 @@ Na Fase 2 deste site não são processadas marcações nem formulários reais: n
     porLocale: {
       es: {
         titulo: 'Política de cookies',
-        contenido: `Este es un texto provisional y genérico, pendiente de revisión legal definitiva por parte de Gapssa.
+        contenido: `1. ¿Qué son las cookies?
+Una cookie es un pequeño archivo de texto que los sitios web descargan en tu navegador al acceder a determinadas páginas. Permite almacenar y recuperar información técnica sobre tu visita para garantizar el correcto funcionamiento del portal y recordar tus preferencias.
 
-Actualmente este sitio web no utiliza cookies de analítica ni de publicidad. La analítica (Umami) está preparada técnicamente pero permanece desactivada: no se activará hasta disponer de un mecanismo de consentimiento adecuado.
+2. Cookies que utilizamos en este sitio web
+• Cookies técnicas estrictamente necesarias: Imprescindibles para la navegación y la seguridad del portal (por ejemplo, recordar el idioma seleccionado o registrar tu preferencia sobre cookies). Conforme al artículo 22.2 de la LSSI-CE, estas cookies no requieren tu consentimiento previo.
+• Cookies analíticas o de medición: Diseñadas para evaluar de forma agregada y anónima el uso del sitio web. Este portal no ejecuta herramientas analíticas de seguimiento hasta que pulses el botón "Aceptar todas" en nuestro banner de cookies.
 
-Solo se utilizan, en su caso, cookies o almacenamiento técnico estrictamente necesario para el funcionamiento del sitio (por ejemplo, para recordar el idioma seleccionado), que no requieren consentimiento previo según la normativa aplicable.
+3. Gestión y Configuración del Consentimiento
+En tu primera visita dispones de un panel inferior que te permite:
+• Aceptar todas: Activa las funciones técnicas y analíticas agregadas.
+• Solo necesarias: Mantiene activas exclusivamente las cookies técnicas imprescindibles.
+Puedes modificar tu decisión en cualquier momento borrando el historial y almacenamiento local de tu navegador.
 
-Esta política se actualizará antes de activar cualquier cookie no esencial.`,
+4. Cómo deshabilitar las cookies en tu navegador
+Puedes permitir, bloquear o eliminar las cookies instaladas en tu equipo mediante la configuración de las opciones de tu navegador web:
+• Google Chrome: Configuración > Privacidad y seguridad > Cookies.
+• Mozilla Firefox: Opciones > Privacidad y seguridad > Cookies.
+• Apple Safari: Preferencias > Privacidad > Gestionar datos de sitios web.
+• Microsoft Edge: Configuración > Privacidad, búsqueda y servicios > Cookies.`,
       },
       ca: {
-        titulo: 'Política de cookies',
-        contenido: `Aquest és un text provisional i genèric, pendent de revisió legal definitiva per part de Gapssa.
+        titulo: 'Política de galetes',
+        contenido: `1. Què són les galetes (cookies)?
+Una galeta és un petit fitxer de text que els llocs web descarreguen al teu navegador en accedir a determinades pàgines. Permet emmagatzemar i recuperar informació tècnica sobre la teva visita per garantir el funcionament correcte del portal i recordar les teves preferències.
 
-Actualment aquest lloc web no utilitza cookies d’analítica ni de publicitat. L’analítica (Umami) està preparada tècnicament però roman desactivada: no s’activarà fins a disposar d’un mecanisme de consentiment adequat.
+2. Galetes que utilitzem en aquest lloc web
+• Galetes tècniques estrictament necessàries: Imprescindibles per a la navegació i la seguretat del portal (per exemple, recordar l'idioma seleccionat o registrar la teva preferència sobre galetes). Conforme a l'article 22.2 de la LSSI-CE, aquestes galetes no requereixen el teu consentiment previ.
+• Galetes analítiques o de mesurament: Dissenyades per avaluar de manera agregada i anònima l'ús del lloc web. Aquest portal no executa eines analítiques de seguiment fins que premis el botó "Acceptar totes" al nostre bàner de galetes.
 
-Només s’utilitzen, si escau, cookies o emmagatzematge tècnic estrictament necessari per al funcionament del lloc (per exemple, per recordar l’idioma seleccionat), que no requereixen consentiment previ segons la normativa aplicable.
+3. Gestió i Configuració del Consentiment
+En la teva primera visita disposes d'un panell inferior que et permet:
+• Acceptar totes: Activa les funcions tècniques i analítiques agregades.
+• Només necessàries: Manté actives exclusivament les galetes tècniques imprescindibles.
+Pots modificar la teva decisió en qualsevol moment esborrant l'historial i l'emmagatzematge local del teu navegador.
 
-Aquesta política s’actualitzarà abans d’activar qualsevol cookie no essencial.`,
+4. Com deshabilitar les galetes al teu navegador
+Pots permetre, bloquejar o eliminar les galetes instal·lades al teu equip mitjançant la configuració de les opcions del teu navegador web:
+• Google Chrome: Configuració > Privacitat i seguretat > Galetes.
+• Mozilla Firefox: Opcions > Privacitat i seguretat > Galetes.
+• Apple Safari: Preferències > Privacitat > Gestionar dades de llocs web.
+• Microsoft Edge: Configuració > Privacitat, cerca i serveis > Galetes.`,
       },
       en: {
         titulo: 'Cookie policy',
-        contenido: `This is a provisional, generic text pending final legal review by Gapssa.
+        contenido: `1. What are cookies?
+A cookie is a small text file that websites download to your browser when accessing certain web pages. It stores and retrieves technical information about your visit to ensure proper website operation and remember your preferences.
 
-This website currently does not use analytics or advertising cookies. Analytics (Umami) is technically prepared but remains inactive: it will not be enabled until an appropriate consent mechanism is in place.
+2. Cookies Used on This Website
+• Strictly necessary technical cookies: Essential for website navigation and security (e.g., remembering your chosen language or saving your cookie consent preference). Under Article 22.2 of Spanish LSSI-CE, these cookies do not require prior consent.
+• Analytical or measurement cookies: Designed to assess website usage in an aggregate and anonymous manner. This portal does not activate tracking analytics until you click "Accept all" in our cookie banner.
 
-Only strictly necessary technical cookies or storage may be used (for example, to remember the selected language), which do not require prior consent under applicable regulations.
+3. Managing Your Consent
+On your first visit, a bottom banner allows you to:
+• Accept all: Enables technical and aggregate analytical functionality.
+• Necessary only: Keeps only essential technical cookies active.
+You can change your decision at any time by clearing your browser's local storage and browsing data.
 
-This policy will be updated before any non-essential cookie is activated.`,
+4. How to Disable Cookies in Your Browser
+You can allow, block, or delete cookies installed on your device through your browser settings:
+• Google Chrome: Settings > Privacy and security > Cookies.
+• Mozilla Firefox: Options > Privacy & Security > Cookies.
+• Apple Safari: Preferences > Privacy > Manage Website Data.
+• Microsoft Edge: Settings > Privacy, search, and services > Cookies.`,
       },
       it: {
-        titulo: 'Cookie policy',
-        contenido: `Questo è un testo provvisorio e generico, in attesa di revisione legale definitiva da parte di Gapssa.
+        titulo: 'Informativa sui cookie',
+        contenido: `1. Cosa sono i cookie?
+Un cookie è un piccolo file di testo che i siti web scaricano nel browser durante la navigazione. Consente di memorizzare e recuperare informazioni tecniche sulla visita per garantire il corretto funzionamento del sito e ricordare le preferenze.
 
-Attualmente questo sito web non utilizza cookie di analisi né pubblicitari. L’analisi (Umami) è predisposta tecnicamente ma resta disattivata: non verrà attivata finché non sarà disponibile un meccanismo di consenso adeguato.
+2. Cookie utilizzati in questo sito web
+• Cookie tecnici strettamente necessari: Indispensabili per la navigazione e la sicurezza del portale (ad esempio, ricordare la lingua selezionata o registrare la preferenza sui cookie). Ai sensi dell'articolo 22.2 della LSSI-CE, questi cookie non richiedono il consenso preventivo.
+• Cookie analitici o di misurazione: Progettati per valutare in forma aggregata e anonima l'utilizzo del sito web. Questo portale non attiva strumenti di analisi fino a quando non si seleziona "Accetta tutti" nel banner dei cookie.
 
-Vengono utilizzati solo, se necessario, cookie o storage tecnico strettamente necessari al funzionamento del sito (ad esempio per ricordare la lingua selezionata), che non richiedono consenso preventivo secondo la normativa applicabile.
+3. Gestione del Consenso
+Durante la prima visita, un banner inferiore consente di:
+• Accetta tutti: Attiva le funzioni tecniche e analitiche aggregate.
+• Solo necessari: Mantiene attivi solo i cookie tecnici indispensabili.
+È possibile modificare la scelta in qualsiasi momento cancellando la cronologia e l'archiviazione locale del browser.
 
-Questa informativa sarà aggiornata prima di attivare qualsiasi cookie non essenziale.`,
+4. Come disabilitare i cookie nel browser
+È possibile autorizzare, bloccare o cancellare i cookie installati sul dispositivo tramite le impostazioni del browser:
+• Google Chrome: Impostazioni > Privacy e sicurezza > Cookie.
+• Mozilla Firefox: Opzioni > Privacy e sicurezza > Cookie.
+• Apple Safari: Preferenze > Privacy > Gestisci dati siti web.
+• Microsoft Edge: Impostazioni > Privacy, ricerca e servizi > Cookie.`,
       },
       fr: {
         titulo: 'Politique de cookies',
-        contenido: `Ceci est un texte provisoire et générique, en attente de révision juridique définitive par Gapssa.
+        contenido: `1. Que sont les cookies ?
+Un cookie est un petit fichier texte que les sites web déposent dans votre navigateur lors de votre visite. Il permet de stocker et de récupérer des informations techniques afin de garantir le bon fonctionnement du site et de mémoriser vos préférences.
 
-Ce site n’utilise actuellement aucun cookie d’analyse ou publicitaire. L’outil d’analyse (Umami) est techniquement prêt mais reste désactivé : il ne sera activé qu’une fois un mécanisme de consentement approprié mis en place.
+2. Cookies utilisés sur ce site web
+• Cookies techniques strictement nécessaires : Indispensables à la navigation et à la sécurité du portale (par exemple, mémoriser la langue sélectionnée ou enregistrer votre choix relatif aux cookies). Conformément à l'article 22.2 de la LSSI-CE, ces cookies ne nécessitent pas de consentement préalable.
+• Cookies analytiques ou de mesure : Destinés à évaluer de manière agrégée et anonyme la fréquentation du site. Ce portail n'active aucun outil de mesure tant que vous n'avez pas cliqué sur « Tout accepter » dans notre bandeau de cookies.
 
-Seuls des cookies ou stockages techniques strictement nécessaires au fonctionnement du site peuvent être utilisés (par exemple pour mémoriser la langue choisie), sans consentement préalable requis selon la réglementation applicable.
+3. Gestion du Consentement
+Lors de votre première visite, un bandeau en bas de page vous permet de :
+• Tout accepter : Active les fonctionnalités techniques et d'analyse agrégée.
+• Uniquement nécessaires : Conserve uniquement les cookies techniques indispensables.
+Vous pouvez modifier votre choix à tout moment en effaçant l'historique et les données de votre navigateur.
 
-Cette politique sera mise à jour avant l’activation de tout cookie non essentiel.`,
+4. Comment désactiver les cookies dans votre navigateur
+Vous pouvez autoriser, bloquer ou supprimer les cookies installés sur votre équipement via les paramètres de votre navigateur :
+• Google Chrome : Paramètres > Confidentialité et sécurité > Cookies.
+• Mozilla Firefox : Options > Vie privée et sécurité > Cookies.
+• Apple Safari : Préférences > Confidentialité > Gérer les données de sites web.
+• Microsoft Edge : Paramètres > Confidentialité, recherche et services > Cookies.`,
       },
       pt: {
         titulo: 'Política de cookies',
-        contenido: `Este é um texto provisório e genérico, pendente de revisão legal definitiva por parte da Gapssa.
+        contenido: `1. O que são cookies?
+Um cookie é um pequeno ficheiro de texto que os sites descarregam no seu navegador ao aceder a determinadas páginas. Permite armazenar e recuperar informações técnicas sobre a visita para garantir o correto funcionamento do portal e recordar preferências.
 
-Atualmente este site não utiliza cookies de análise nem publicitários. A análise (Umami) está tecnicamente preparada mas permanece desativada: não será ativada até existir um mecanismo de consentimento adequado.
+2. Cookies utilizados neste site
+• Cookies técnicos estritamente necessários: Indispensáveis para a navegação e segurança do portal (por exemplo, recordar o idioma selecionado ou registar a preferência sobre cookies). Nos termos do artigo 22.2 da LSSI-CE, estes cookies não requerem consentimento prévio.
+• Cookies analíticos ou de medição: Concebidos para avaliar de forma agregada e anónima a utilização do site. Este portal não ativa ferramentas analíticas até que selecione "Aceitar todos" no nosso banner de cookies.
 
-Apenas são utilizados, quando aplicável, cookies ou armazenamento técnico estritamente necessários ao funcionamento do site (por exemplo, para recordar o idioma selecionado), que não requerem consentimento prévio segundo a legislação aplicável.
+3. Gestão e Configuração do Consentimento
+Na primeira visita, dispõe de um banner inferior que lhe permite:
+• Aceitar todos: Ativa as funções técnicas e analíticas agregadas.
+• Apenas necessários: Mantém ativos exclusivamente os cookies técnicos imprescindibles.
+Pode alterar a sua decisão a qualquer momento limpando o histórico e armazenamento local do seu navegador.
 
-Esta política será atualizada antes de ativar qualquer cookie não essencial.`,
+4. Como desativar cookies no seu navegador
+Pode permitir, bloquear ou eliminar os cookies instalados no seu equipamento através das opções de configuração do seu navegador:
+• Google Chrome: Definições > Privacidade e segurança > Cookies.
+• Mozilla Firefox: Opções > Privacidade e segurança > Cookies.
+• Apple Safari: Preferências > Privacidade > Gerir dados de sites.
+• Microsoft Edge: Definições > Privacidade, pesquisa e serviços > Cookies.`,
       },
     },
   },
@@ -298,9 +552,9 @@ We maintain a firm commitment to a safe, professional, and respectful environmen
 Per garantire la massima efficacia e sicurezza del trattamento, è indispensabile presentarsi all'appuntamento con la zona interessata rasata 48 ore prima. In caso di mancata rasatura preventiva, il centro applicherà un supplemento per il servizio di preparazione in cabina.
 
 2. Stato della Pelle e Idoneità ai Trattamenti
-Per motivi di salute, sicurezza e igiene, ci riserviamo il diritto di non effettuare il trattamento nei seguenti casi:
-• Epilazione: Presenza di lesioni, ferite aperte, pelle irritata o recente esposizione al sole.
-• Trattamenti Viso: Ipersensibilità cutanea, dermatite attiva o condizioni incompatibili con l'applicazione sicura dei nostri protocolli.
+Per motivi di salute, sicurezza e igiene, ci riserviamo il diritto di non eseguire il trattamento nei seguenti casi:
+• Epilazione: Presenza di lesioni, ferite aperte, pelle irritata o recente esposizione solare.
+• Trattamenti Viso: Ipersensibilità cutanea, dermatite attiva o condizioni che contrastino con l'applicazione sicura dei nostri protocolli.
 Nota: La valutazione finale dell'idoneità della pelle sarà effettuata dalla specialista prima della sessione.
 
 3. Politica di Prenotazione e Depositi

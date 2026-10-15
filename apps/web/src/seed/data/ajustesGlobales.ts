@@ -16,16 +16,17 @@ export const HORARIO_SEED: HorarioSeed[] = [
 
 /** Dirección confirmada en `PROJECT_CONTEXT.md` §7.2. */
 export const DIRECCION_SEED = {
-  calle: 'Carrer de Gayarre 24',
+  calle: 'Carrer de Gayarre 24, Entresuelo 2',
   ciudad: 'Barcelona',
   codigoPostal: '08014',
   pais: 'España',
 }
 
-/** Teléfono y WhatsApp oficiales del centro Gapssa confirmados. */
+/** Contacto oficial del centro Gapssa confirmado. */
 export const CONTACTO_SEED = {
   telefono: '+34 680 373 663',
   whatsapp: '+34 680 373 663',
+  correoPublico: 'gapssabynana@gmail.com',
 }
 
 export const SEO_POR_DEFECTO_SEED: Record<Locale, { titulo: string; descripcion: string }> = {

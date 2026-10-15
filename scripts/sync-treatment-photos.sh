@@ -90,15 +90,15 @@ ORDER BY g.orden;
 " || true
 
 echo ""
-echo "==> 8. Verificando Términos y Condiciones en Payload..."
+echo "==> 8. Verificando Páginas Legales (Aviso, Privacidad, Cookies, Condiciones)..."
 docker compose --env-file .env.production -f compose.prod.yml exec -T apps-db psql -U gapssa_apps -d gapssa_cms -c "
-SELECT tipo, version, estado, seo_no_index FROM paginas_legales WHERE tipo = 'condiciones-reserva';
+SELECT tipo, version, estado, seo_no_index FROM paginas_legales ORDER BY tipo;
 " || true
 
 echo ""
-echo "==> 9. Verificando Teléfono y WhatsApp en Ajustes Globales..."
+echo "==> 9. Verificando Dirección y Contacto Oficial en Ajustes Globales..."
 docker compose --env-file .env.production -f compose.prod.yml exec -T apps-db psql -U gapssa_apps -d gapssa_cms -c "
-SELECT contacto_telefono, contacto_whatsapp FROM ajustes_globales;
+SELECT direccion_calle, contacto_telefono, contacto_whatsapp, contacto_correo_publico FROM ajustes_globales;
 " || true
 
 echo ""

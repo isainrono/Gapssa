@@ -63,12 +63,12 @@ async function seedAjustesGlobales(payload: PayloadClient, mediaIds: Record<stri
     overrideAccess: true,
     locale: 'es',
     data: {
-      direccion: actual.direccion?.calle ? actual.direccion : DIRECCION_SEED,
+      direccion: DIRECCION_SEED,
       horario: HORARIO_SEED,
       contacto: {
         telefono: CONTACTO_SEED.telefono,
         whatsapp: CONTACTO_SEED.whatsapp,
-        correoPublico: actual.contacto?.correoPublico || undefined,
+        correoPublico: CONTACTO_SEED.correoPublico,
       },
       logo: actual.logo ? (typeof actual.logo === 'number' ? actual.logo : actual.logo.id) : mediaIds['logo'],
       seoPorDefecto: { titulo: SEO_POR_DEFECTO_SEED.es.titulo, descripcion: SEO_POR_DEFECTO_SEED.es.descripcion, ogImage: mediaIds['logo'] },
@@ -611,40 +611,37 @@ async function seedPaginasLegales(payload: PayloadClient): Promise<string> {
     })
     const existingDoc = existing.docs[0]
     if (existingDoc) {
-      if (pagina.tipo === 'condiciones-reserva') {
+      await payload.update({
+        collection: 'paginas-legales',
+        id: existingDoc.id,
+        overrideAccess: true,
+        locale: 'es',
+        data: {
+          titulo: pagina.porLocale.es.titulo,
+          contenido: pagina.porLocale.es.contenido,
+          version: '1.0',
+          fecha: new Date().toISOString(),
+          estado: 'validado',
+          seoNoIndex: false,
+          _status: 'published',
+        },
+      })
+      for (const locale of OTHER_LOCALES) {
         await payload.update({
           collection: 'paginas-legales',
           id: existingDoc.id,
           overrideAccess: true,
-          locale: 'es',
+          locale,
           data: {
-            titulo: pagina.porLocale.es.titulo,
-            contenido: pagina.porLocale.es.contenido,
-            version: '1.0',
-            fecha: new Date().toISOString(),
-            estado: 'validado',
-            seoNoIndex: false,
-            _status: 'published',
+            titulo: pagina.porLocale[locale].titulo,
+            contenido: pagina.porLocale[locale].contenido,
           },
         })
-        for (const locale of OTHER_LOCALES) {
-          await payload.update({
-            collection: 'paginas-legales',
-            id: existingDoc.id,
-            overrideAccess: true,
-            locale,
-            data: {
-              titulo: pagina.porLocale[locale].titulo,
-              contenido: pagina.porLocale[locale].contenido,
-            },
-          })
-        }
-        actualizadas += 1
       }
+      actualizadas += 1
       continue
     }
 
-    const isCondiciones = pagina.tipo === 'condiciones-reserva'
     const created = await payload.create({
       collection: 'paginas-legales',
       overrideAccess: true,
@@ -654,10 +651,10 @@ async function seedPaginasLegales(payload: PayloadClient): Promise<string> {
         tipo: pagina.tipo,
         titulo: pagina.porLocale.es.titulo,
         contenido: pagina.porLocale.es.contenido,
-        version: isCondiciones ? '1.0' : '0.1',
+        version: '1.0',
         fecha: new Date().toISOString(),
-        estado: isCondiciones ? 'validado' : 'provisional',
-        seoNoIndex: isCondiciones ? false : true,
+        estado: 'validado',
+        seoNoIndex: false,
         _status: 'published',
       },
     })
@@ -674,7 +671,7 @@ async function seedPaginasLegales(payload: PayloadClient): Promise<string> {
     }
   }
 
-  return `${creadas} creadas, ${actualizadas} actualizadas, ${PAGINAS_LEGALES_SEED.length - creadas - actualizadas} ya existían`
+  return `${creadas} creadas, ${actualizadas} actualizadas`
 }
 
 run().catch((error: unknown) => {
