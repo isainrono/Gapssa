@@ -518,16 +518,48 @@ async function seedTestimonios(payload: PayloadClient): Promise<string> {
 
 async function seedGaleria(payload: PayloadClient, mediaIds: Record<string, number>): Promise<string> {
   let creados = 0
+  let actualizados = 0
 
   for (const item of GALERIA_SEED) {
     const existing = await payload.find({
       collection: 'galeria',
       locale: 'es',
-      where: { categoria: { equals: item.categoriaPorLocale.es } },
+      where: { orden: { equals: item.orden } },
       limit: 1,
       overrideAccess: true,
     })
-    if (!shouldCreateDocument(existing.docs[0])) {
+    const doc = existing.docs[0]
+    const mediaId = mediaIds[item.mediaKey]
+
+    if (!shouldCreateDocument(doc)) {
+      if (mediaId) {
+        await payload.update({
+          collection: 'galeria',
+          id: doc!.id,
+          overrideAccess: true,
+          locale: 'es',
+          data: {
+            imagen: mediaId,
+            alt: item.altPorLocale.es,
+            categoria: item.categoriaPorLocale.es,
+            orden: item.orden,
+          },
+        })
+        for (const locale of OTHER_LOCALES) {
+          await payload.update({
+            collection: 'galeria',
+            id: doc!.id,
+            overrideAccess: true,
+            locale,
+            data: { alt: item.altPorLocale[locale], categoria: item.categoriaPorLocale[locale] },
+          })
+        }
+        actualizados += 1
+      }
+      continue
+    }
+
+    if (!mediaId) {
       continue
     }
 
@@ -537,7 +569,7 @@ async function seedGaleria(payload: PayloadClient, mediaIds: Record<string, numb
       locale: 'es',
       draft: false,
       data: {
-        imagen: mediaIds[item.mediaKey] as number,
+        imagen: mediaId,
         alt: item.altPorLocale.es,
         categoria: item.categoriaPorLocale.es,
         orden: item.orden,
@@ -558,7 +590,7 @@ async function seedGaleria(payload: PayloadClient, mediaIds: Record<string, numb
     }
   }
 
-  return `${creados} creadas, ${GALERIA_SEED.length - creados} ya existían`
+  return `${creados} creadas, ${actualizados} actualizadas`
 }
 
 async function seedPaginasLegales(payload: PayloadClient): Promise<string> {

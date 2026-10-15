@@ -30,8 +30,8 @@ export const TARIFAS_OFICIALES_POR_SLUG: Record<string, TarifaTratamiento> = {
   'dermapen': { precio: '95 €', duracion: '60 min', precioNumero: 95, duracionMinutos: 60 },
   'radiofrecuencia-facial': { precio: '55 €', duracion: '45 min', precioNumero: 55, duracionMinutos: 45 },
   'peeling-prx': { precio: '100 €', duracion: '45 min', precioNumero: 100, duracionMinutos: 45 },
-  'skinpen': { precio: '350 €', duracion: '1 h 20 min', precioNumero: 350, duracionMinutos: 80 },
-  'rejuvenecimiento-skin-pen': { precio: '350 €', duracion: '1 h 20 min', precioNumero: 350, duracionMinutos: 80 },
+  'skinpen': { precio: '250 €', duracion: '1 h 20 min', precioNumero: 250, duracionMinutos: 80 },
+  'rejuvenecimiento-skin-pen': { precio: '250 €', duracion: '1 h 20 min', precioNumero: 250, duracionMinutos: 80 },
   'laser-carbono': { precio: '110 €', duracion: '60 min', precioNumero: 110, duracionMinutos: 60 },
 
   // Pestañas y cejas

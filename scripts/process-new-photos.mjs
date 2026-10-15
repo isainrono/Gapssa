@@ -8,11 +8,12 @@ const IMAGES_DIR = path.resolve('apps/web/public/images')
 // Mapeo exhaustivo de archivos en fotos/ hacia su destino en apps/web/public/images/
 const MAPPING = [
   // Faciales
+  { src: 'limpiezaFacialProfunda.jpg', dest: 'faciales/limpieza-facial-profunda.jpeg' },
   { src: 'MesoterapiaFacial.jpg', dest: 'faciales/mesoterapia-estetica.jpeg' },
   { src: 'Micronedeedling.jpg', dest: 'faciales/microneedling.jpeg' },
   { src: 'RadiofrecuenciaFacial.jpg', dest: 'faciales/radiofrecuencia-facial.jpeg' },
   { src: 'Peeling PRX.jpg', dest: 'faciales/peeling-prx.jpeg' },
-  { src: 'Screenshot_20260915_100153_Google.jpg', dest: 'faciales/skinpen.jpeg' },
+  { src: 'Skinpen.jpeg', dest: 'faciales/skinpen.jpeg' },
   { src: 'TratamientosFaciales.jpg', dest: 'faciales/tratamientos-faciales.jpeg' },
 
   // Pestañas y cejas
@@ -25,8 +26,12 @@ const MAPPING = [
   { src: 'PechoCera.jpg', dest: 'depilacion/depilacion-pecho.jpeg' },
   { src: 'GluteosCera.jpg', dest: 'depilacion/depilacion-gluteos.jpeg' },
   { src: 'InglesBrasilenasCera.jpg', dest: 'depilacion/depilacion-ingles-brasilenas.jpeg' },
-  { src: 'DepilacionInglesNormales.jpg', dest: 'depilacion/depilacion-ingles-normales.jpeg' },
+  { src: 'InglesNormales.jpeg', dest: 'depilacion/depilacion-ingles-normales.jpeg' },
   { src: 'InglesIntegralCera.jpg', dest: 'depilacion/depilacion-ingles-integrales.jpeg' },
+
+  // Centro / Instalaciones
+  { src: 'centro.jpeg', dest: 'marca/centro.jpeg' },
+  { src: 'centro.jpeg', dest: 'stock/hero-centro.jpg' },
 
   // Depilación láser
   { src: 'InglesLaser.jpg', dest: 'depilacion-laser/laser-ingles-integrales.jpeg' },
