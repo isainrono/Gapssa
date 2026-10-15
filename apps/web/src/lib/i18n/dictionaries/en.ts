@@ -39,6 +39,7 @@ export const en: Dictionary = {
     testimonioAnterior: 'Previous testimonial',
     testimonioSiguiente: 'Next testimonial',
     irATestimonio: 'Go to testimonial',
+    contactarWhatsApp: 'Contact via WhatsApp',
   },
   home: {
     quienSoyEyebrow: 'Meet Diana',
@@ -243,6 +244,13 @@ export const en: Dictionary = {
     titulo: 'Page not found',
     texto: 'The page you are looking for does not exist or has moved.',
     volverInicio: 'Back to home',
+  },
+  cookiesBanner: {
+    titulo: 'Cookie settings',
+    mensaje: 'We use technical cookies necessary for the website to function properly and to remember your browsing preferences. You can consult our policy for more information.',
+    aceptar: 'Accept all',
+    rechazar: 'Necessary only',
+    politica: 'Cookie policy',
   },
   footer: {
     navegacionTitulo: 'Navigation',

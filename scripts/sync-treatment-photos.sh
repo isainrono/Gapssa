@@ -90,6 +90,12 @@ ORDER BY g.orden;
 " || true
 
 echo ""
+echo "==> 8. Verificando Términos y Condiciones en Payload..."
+docker compose --env-file .env.production -f compose.prod.yml exec -T apps-db psql -U gapssa_apps -d gapssa_cms -c "
+SELECT tipo, version, estado, seo_no_index FROM paginas_legales WHERE tipo = 'condiciones-reserva';
+" || true
+
+echo ""
 echo "=========================================================="
-echo "    ¡FOTOS Y TARIFAS ACTUALIZADAS CON ÉXITO!              "
+echo "    ¡ACTUALIZACIÓN COMPLETADA CON ÉXITO!                  "
 echo "=========================================================="

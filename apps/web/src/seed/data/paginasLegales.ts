@@ -215,64 +215,160 @@ Esta política será atualizada antes de ativar qualquer cookie não essencial.`
     tipo: 'condiciones-reserva',
     porLocale: {
       es: {
-        titulo: 'Condiciones de reserva',
-        contenido: `Este es un texto provisional y genérico, pendiente de revisión legal definitiva por parte de Gapssa.
+        titulo: 'Términos, Condiciones y Políticas del Servicio',
+        contenido: `1. Preparación para Servicios de Depilación Láser
+Para garantizar la máxima eficacia y seguridad del tratamiento, es imprescindible acudir a la cita con la zona correspondiente rasurada con 48 horas de antelación. En caso de presentarse sin el rasurado previo requerido, el centro aplicará un suplemento adicional por el servicio de preparación en cabina.
 
-El sistema de reservas online todavía no está activo. Esta página se publica de forma preparatoria y no debe interpretarse como las condiciones definitivas del servicio de reservas.
+2. Estado de la Piel y Aptitud para Tratamientos
+Por motivos de salud, seguridad e higiene, nos reservamos el derecho de no realizar el tratamiento en los siguientes casos:
+• Depilación: Presencia de lesiones, heridas abiertas, piel irritada, alterada o con exposición solar reciente.
+• Tratamientos Faciales: Cuadros de hipersensibilidad cutánea, dermatitis activa o afecciones que contravengan la aplicación segura de nuestros protocolos.
+Nota: La valoración final de la aptitud de la piel la realizará la especialista previa a la sesión.
 
-Cuando el sistema de reservas entre en funcionamiento, esta página se sustituirá por condiciones completas que incluirán, entre otros aspectos, el proceso de solicitud y aprobación, los plazos de cancelación y las políticas aplicables, conforme a lo definido por Gapssa.
+3. Política de Reservas y Depósitos
+Para confirmar y asegurar la reserva de tu cita, se requerirá el abono previo de un depósito / señal. Dicho importe será descontado del valor total del servicio el día de tu visita.
 
-Mientras tanto, cualquier solicitud de cita se gestiona por los canales de contacto habituales indicados en la página de contacto.`,
+4. Cancelaciones, Modificaciones y Penalizaciones
+Comprendemos que pueden surgir imprevistos; no obstante, exigimos un aviso previo con un mínimo de 24 horas de antelación para cancelar o reprogramar cualquier cita.
+• Las cancelaciones o modificaciones notificadas con menos de 24 horas de antelación incurrirán en una penalización equivalente al 50% del valor total del tratamiento reservado (la cual se cobrará directamente o se descontará del depósito abonado).
+
+5. Política de Puntualidad
+Agradecemos llegar a tiempo a tu cita para garantizar la calidad del servicio de todos nuestros clientes.
+• Se otorgará un margen de tolerancia máximo de 10 minutos.
+• Superado este tiempo, el centro se reserva el derecho de reducir la duración del tratamiento o reprogramar la cita para evitar retrasos en las agendas del resto de usuarias/os, aplicándose la penalización correspondiente por cancelación fuera de plazo si la cita no pudiera llevarse a cabo.
+
+6. Código de Conducta y Respeto en Cabina
+Mantenemos un compromiso firme con un entorno de trabajo seguro, profesional y respetuoso. Cualquier falta de respeto, actitud inapropiada o conducta verbalmente agresiva hacia nuestro personal facultará inmediatamente a la especialista a suspender el servicio y solicitar el abandono de las instalaciones.`,
       },
       ca: {
-        titulo: 'Condicions de reserva',
-        contenido: `Aquest és un text provisional i genèric, pendent de revisió legal definitiva per part de Gapssa.
+        titulo: 'Termes, Condicions i Polítiques del Servei',
+        contenido: `1. Preparació per a Serveis de Depilació Làser
+Per garantir la màxima eficàcia i seguretat del tractament, és imprescindible acudir a la cita amb la zona corresponent rasurada amb 48 hores d'antelació. En cas de presentar-se sense el rasurat previ requerit, el centre aplicarà un suplement addicional pel servei de preparació en cabina.
 
-El sistema de reserves en línia encara no està actiu. Aquesta pàgina es publica de manera preparatòria i no s’ha d’interpretar com les condicions definitives del servei de reserves.
+2. Estat de la Pell i Aptitud per a Tractaments
+Per motius de salut, seguretat i higiene, ens reservem el dret de no realitzar el tractament en els següents casos:
+• Depilació: Presència de lesions, ferides obertes, pell irritada, alterada o amb exposició solar recent.
+• Tractaments Facials: Quadres d'hipersensibilitat cutània, dermatitis activa o afeccions que contravinguin l'aplicació segura dels nostres protocols.
+Nota: La valoració final de l'aptitud de la pell la realitzarà l'especialista prèvia a la sessió.
 
-Quan el sistema de reserves entri en funcionament, aquesta pàgina se substituirà per condicions completes que inclouran, entre altres aspectes, el procés de sol·licitud i aprovació, els terminis de cancel·lació i les polítiques aplicables, d’acord amb el que defineixi Gapssa.
+3. Política de Reserves i Dipòsits
+Per confirmar i assegurar la reserva de la teva cita, es requerirà l'abonament previ d'un dipòsit / paga i senyal. Aquest import serà descomptat del valor total del servei el dia de la teva visita.
 
-Mentrestant, qualsevol sol·licitud de cita es gestiona pels canals de contacte habituals indicats a la pàgina de contacte.`,
+4. Cancel·lacions, Modificacions i Penalitzacions
+Comprenem que poden sorgir imprevistos; no obstant això, exigim un avís previ amb un mínim de 24 hores d'antelació per cancel·lar o reprogramar qualsevol cita.
+• Les cancel·lacions o modificacions notificades amb menys de 24 hores d'antelació incorreran en una penalització equivalent al 50% del valor total del tractament reservat (la qual es cobrarà directament o es descomptarà del dipòsit abonat).
+
+5. Política de Puntualitat
+Agraïm arribar a temps a la teva cita per garantir la qualitat del servei de tots els nostres clients.
+• S'atorgarà un marge de tolerància màxim de 10 minuts.
+• Superat aquest temps, el centre es reserva el dret de reduir la durada del tractament o reprogramar la cita per evitar retards a les agendes de la resta d'usuaris/es, aplicant-se la penalització corresponent per cancel·lació fora de termini si la cita no pogués dur-se a terme.
+
+6. Codi de Conducta i Respecte en Cabina
+Mantenim un compromís ferm amb un entorn de treball segur, professional i respectuós. Qualsevol falta de respecte, actitud inapropiada o conducta verbalment agressiva envers el nostre personal facultarà immediatament l'especialista a suspendre el servei i sol·licitar l'abandonament de les instal·lacions.`,
       },
       en: {
-        titulo: 'Booking terms',
-        contenido: `This is a provisional, generic text pending final legal review by Gapssa.
+        titulo: 'Terms, Conditions and Service Policies',
+        contenido: `1. Preparation for Laser Hair Removal Services
+To ensure maximum treatment efficacy and safety, it is essential to arrive at the appointment with the relevant area shaved 48 hours in advance. If attending without the required prior shaving, an additional fee will be applied for in-cabin preparation service.
 
-The online booking system is not active yet. This page is published in preparation and should not be read as the final terms of the booking service.
+2. Skin Condition and Fitness for Treatments
+For health, safety, and hygiene reasons, we reserve the right not to perform the treatment in the following circumstances:
+• Hair Removal: Presence of lesions, open wounds, irritated or compromised skin, or recent sun exposure.
+• Facial Treatments: Severe skin hypersensitivity, active dermatitis, or conditions conflicting with the safe application of our protocols.
+Note: The final evaluation of skin suitability will be conducted by the specialist prior to the session.
 
-Once the booking system is operational, this page will be replaced with complete terms covering, among other aspects, the request and approval process, cancellation windows and applicable policies, as defined by Gapssa.
+3. Booking and Deposit Policy
+To confirm and secure your appointment booking, an advance deposit is required. This amount will be deducted from the total service price on the day of your visit.
 
-In the meantime, any appointment request is handled through the usual contact channels listed on the contact page.`,
+4. Cancellations, Rescheduling and Penalties
+We understand that unforeseen events may occur; however, we require a minimum of 24 hours advance notice to cancel or reschedule any appointment.
+• Cancellations or modifications notified with less than 24 hours notice will incur a penalty equivalent to 50% of the total reserved treatment value (charged directly or deducted from the paid deposit).
+
+5. Punctuality Policy
+We appreciate arriving on time for your appointment to ensure high-quality service for all our clients.
+• A maximum grace period of 10 minutes will be granted.
+• Beyond this time, the centre reserves the right to shorten the treatment duration or reschedule the appointment to avoid delays for other clients, with the applicable late cancellation penalty if the appointment cannot take place.
+
+6. Code of Conduct and Respect in Cabin
+We maintain a firm commitment to a safe, professional, and respectful environment. Any disrespect, inappropriate attitude, or verbally aggressive behaviour towards our staff will immediately entitle the specialist to suspend the service and request departure from the premises.`,
       },
       it: {
-        titulo: 'Condizioni di prenotazione',
-        contenido: `Questo è un testo provvisorio e generico, in attesa di revisione legale definitiva da parte di Gapssa.
+        titulo: 'Termini, Condizioni e Politiche di Servizio',
+        contenido: `1. Preparazione per i Servizi di Epilazione Laser
+Per garantire la massima efficacia e sicurezza del trattamento, è indispensabile presentarsi all'appuntamento con la zona interessata rasata 48 ore prima. In caso di mancata rasatura preventiva, il centro applicherà un supplemento per il servizio di preparazione in cabina.
 
-Il sistema di prenotazione online non è ancora attivo. Questa pagina viene pubblicata in via preparatoria e non deve essere interpretata come le condizioni definitive del servizio di prenotazione.
+2. Stato della Pelle e Idoneità ai Trattamenti
+Per motivi di salute, sicurezza e igiene, ci riserviamo il diritto di non effettuare il trattamento nei seguenti casi:
+• Epilazione: Presenza di lesioni, ferite aperte, pelle irritata o recente esposizione al sole.
+• Trattamenti Viso: Ipersensibilità cutanea, dermatite attiva o condizioni incompatibili con l'applicazione sicura dei nostri protocolli.
+Nota: La valutazione finale dell'idoneità della pelle sarà effettuata dalla specialista prima della sessione.
 
-Quando il sistema di prenotazione sarà operativo, questa pagina sarà sostituita da condizioni complete che includeranno, tra gli altri aspetti, il processo di richiesta e approvazione, i termini di cancellazione e le politiche applicabili, come definito da Gapssa.
+3. Politica di Prenotazione e Depositi
+Per confermare e garantire la prenotazione dell'appuntamento, è richiesto il versamento anticipato di un acconto/caparra. Tale importo verrà scalato dal valore totale del servizio il giorno della visita.
 
-Nel frattempo, qualsiasi richiesta di appuntamento viene gestita tramite i consueti canali di contatto indicati nella pagina dei contatti.`,
+4. Cancellazioni, Modifiche e Penali
+Comprendiamo che possano verificarsi imprevisti; tuttavia, richiediamo un preavviso minimo di 24 ore per cancellare o riprogrammare qualsiasi appuntamento.
+• Le cancellazioni o modifiche comunicate con meno di 24 ore di anticipo comporteranno una penale pari al 50% del valore totale del trattamento prenotato (addebitata direttamente o trattenuta dall'acconto).
+
+5. Politica di Puntualità
+Chiediamo cortesemente di arrivare puntuali all'appuntamento per garantire la qualità del servizio a tutti i nostri clienti.
+• Sarà concesso un margine di tolleranza massimo di 10 minuti.
+• Oltre questo termine, il centro si riserva il diritto di ridurre la durata del trattamento o di riprogrammare l'appuntamento per evitare ritardi, applicando la penale per cancellazione tardiva qualora l'appuntamento non possa essere svolto.
+
+6. Codice di Condotta e Rispetto in Cabina
+Manteniamo un fermo impegno per un ambiente di lavoro sicuro, professionale e rispettoso. Qualsiasi mancanza di rispetto o comportamento inappropriato verso il nostro personale autorizzerà immediatamente la specialista a sospendere il servizio e richiedere l'uscita dalla struttura.`,
       },
       fr: {
-        titulo: 'Conditions de réservation',
-        contenido: `Ceci est un texte provisoire et générique, en attente de révision juridique définitive par Gapssa.
+        titulo: 'Conditions Générales et Politiques de Service',
+        contenido: `1. Préparation pour les Soins d’Épilation Laser
+Afin de garantir l’efficacité et la sécurité optimales du soin, il est indispensable de se présenter au rendez-vous avec la zone concernée rasée 48 heures à l’avance. En cas de non-rasage préalable, un supplément sera appliqué pour la préparation en cabine.
 
-Le système de réservation en ligne n’est pas encore actif. Cette page est publiée à titre préparatoire et ne doit pas être interprétée comme les conditions définitives du service de réservation.
+2. État de la Peau et Aptitude aux Soins
+Pour des raisons de santé, de sécurité et d’hygiène, nous nous réservons le droit de ne pas effectuer le soin dans les cas suivants :
+• Épilation : Présence de lésions, plaies ouvertes, peau irritée ou exposition solaire récente.
+• Soins du Visage : Hypersensibilité cutanée, dermatite active ou affections incompatibles avec l’application sécurisée de nos protocoles.
+Remarque : L’évaluation finale de l’aptitude de la peau est réalisée par la spécialiste avant la séance.
 
-Une fois le système de réservation opérationnel, cette page sera remplacée par des conditions complètes couvrant, entre autres, le processus de demande et d’approbation, les délais d’annulation et les politiques applicables, telles que définies par Gapssa.
+3. Politique de Réservation et d’Acompte
+Pour confirmer et garantir la réservation de votre rendez-vous, le versement préalable d’un acompte sera exigé. Ce montant sera déduit du montant total de la prestation le jour de votre visite.
 
-En attendant, toute demande de rendez-vous est traitée via les canaux de contact habituels indiqués sur la page de contact.`,
+4. Annulations, Modifications et Pénalités
+Nous comprenons que des imprévus puissent survenir ; néanmoins, nous exigeons un préavis d’au moins 24 heures pour annuler ou reporter un rendez-vous.
+• Toute annulation ou modification notifiée moins de 24 heures à l’avance entraînera une pénalité équivalant à 50 % de la valeur totale du soin réservé (facturée directement ou déduite de l’acompte).
+
+5. Politique de Ponctualité
+Nous vous remercions d’arriver à l’heure afin de garantir la qualité de service pour l’ensemble de nos clientes et clients.
+• Un délai de tolérance maximal de 10 minutes sera accordé.
+• Au-delà de ce délai, le centre se réserve le droit de réduire la durée du soin ou de reporter le rendez-vous, avec application de la pénalité pour annulation tardive si le soin ne peut avoir lieu.
+
+6. Code de Conduite et Respect en Cabine
+Nous accordons une importance primordiale à un environnement de travail sécurisé, professionnel et respectueux. Tout manque de respect, attitude inappropriée ou comportement agressif envers notre personnel autorisera la spécialiste à interrompre immédiatement la prestation et à demander de quitter les lieux.`,
       },
       pt: {
-        titulo: 'Condições de reserva',
-        contenido: `Este é um texto provisório e genérico, pendente de revisão legal definitiva por parte da Gapssa.
+        titulo: 'Termos, Condições e Políticas de Serviço',
+        contenido: `1. Preparação para Serviços de Depilação a Laser
+Para garantir a máxima eficácia e segurança do tratamento, é imprescindível comparecer à consulta com a área correspondente rapada com 48 horas de antecedência. Em caso de comparência sem a depilação prévia necessária, será aplicado um suplemento adicional pelo serviço de preparação em cabine.
 
-O sistema de marcações online ainda não está ativo. Esta página é publicada de forma preparatória e não deve ser interpretada como as condições definitivas do serviço de marcações.
+2. Estado da Pele e Aptidão para Tratamentos
+Por motivos de saúde, segurança e higiene, reservamo-nos o direito de não realizar o tratamento nos seguintes casos:
+• Depilação: Presença de lesões, feridas abertas, pele irritada ou com exposição solar recente.
+• Tratamentos Faciais: Hipersensibilidade cutânea, dermatite ativa ou condições contrárias à aplicação segura dos nossos protocolos.
+Nota: A avaliação final da aptidão da pele será realizada pela especialista antes da sessão.
 
-Quando o sistema de marcações entrar em funcionamento, esta página será substituída por condições completas que incluirão, entre outros aspetos, o processo de pedido e aprovação, os prazos de cancelamento e as políticas aplicáveis, conforme definido pela Gapssa.
+3. Política de Reservas e Sinal
+Para confirmar e assegurar a marcação da sua consulta, será exigido o pagamento prévio de um sinal / depósito. Este valor será descontado do total do serviço no dia da sua visita.
 
-Entretanto, qualquer pedido de consulta é gerido através dos canais de contacto habituais indicados na página de contacto.`,
+4. Cancelamentos, Alterações e Penalizações
+Compreendemos que imprevistos acontecem; contudo, exigimos um aviso prévio com um mínimo de 24 horas de antecedência para cancelar ou reagendar qualquer marcação.
+• Cancelamentos ou alterações comunicados com menos de 24 horas de antecedência incorrerão numa penalização equivalente a 50% do valor total do tratamento reservado (cobrada diretamente ou descontada do sinal pago).
+
+5. Política de Pontualidade
+Agradecemos a chegada pontual à sua consulta para garantir a qualidade de atendimento a todos os nossos clientes.
+• Será concedida uma tolerância máxima de 10 minutos.
+• Ultrapassado este tempo, o centro reserva-se o direito de reduzir a duração do tratamento ou reagendar a consulta, aplicando-se a devida penalização por cancelamento fora de prazo caso a consulta não se possa realizar.
+
+6. Código de Conducta e Respeito em Cabine
+Mantemos um compromisso firme com um ambiente de trabalho seguro, profissional e respeitoso. Qualquer falta de respeito, atitude imprópria ou agressividade para com a nossa equipa facultará imediatamente à especialista a suspensão do serviço e a solicitação de saída das instalações.`,
       },
     },
   },

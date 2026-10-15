@@ -39,6 +39,7 @@ export const ca: Dictionary = {
     testimonioAnterior: 'Testimoni anterior',
     testimonioSiguiente: 'Testimoni següent',
     irATestimonio: 'Anar al testimoni',
+    contactarWhatsApp: 'Contactar per WhatsApp',
   },
   home: {
     quienSoyEyebrow: 'Coneix la Diana',
@@ -244,6 +245,13 @@ export const ca: Dictionary = {
     titulo: 'Pàgina no trobada',
     texto: 'La pàgina que busques no existeix o ha canviat d’adreça.',
     volverInicio: 'Tornar a l’inici',
+  },
+  cookiesBanner: {
+    titulo: 'Configuració de galetes',
+    mensaje: 'Utilitzem galetes tècniques necessàries per al funcionament del lloc i per recordar les teves preferències de navegació. Pots consultar la nostra política per a més informació.',
+    aceptar: 'Acceptar totes',
+    rechazar: 'Només necessàries',
+    politica: 'Política de galetes',
   },
   footer: {
     navegacionTitulo: 'Navegació',

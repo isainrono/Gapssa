@@ -5,6 +5,9 @@ import { notFound } from 'next/navigation'
 import { getDictionary } from '@/lib/i18n/dictionary'
 import { isLocale, type Locale } from '@/lib/i18n/locales'
 
+import { contactoConfigurado, getAjustesGlobales } from '@/lib/content/ajustesGlobales'
+import { CookieConsentBanner } from '@/components/client/CookieConsentBanner'
+import { WhatsAppFloatingButton } from '@/components/client/WhatsAppFloatingButton'
 import { AnalyticsScript } from '@/components/server/AnalyticsScript'
 import { Footer } from '@/components/server/site/Footer'
 import { Header } from '@/components/server/site/Header'
@@ -78,6 +81,8 @@ export default async function LocaleLayout({ children, params }: Args) {
   }
 
   const dict = getDictionary(locale)
+  const ajustes = await getAjustesGlobales(locale)
+  const contacto = contactoConfigurado(ajustes)
 
   return (
     <html lang={locale satisfies Locale} className={`${cormorantGaramond.variable} ${jost.variable}`}>
@@ -88,6 +93,12 @@ export default async function LocaleLayout({ children, params }: Args) {
         <Header locale={locale} />
         <main id="contenido-principal">{children}</main>
         <Footer locale={locale} />
+        <WhatsAppFloatingButton
+          whatsappNumber={contacto.whatsapp ?? process.env.NEXT_PUBLIC_WHATSAPP_NUMBER}
+          locale={locale}
+          label={dict.common.contactarWhatsApp}
+        />
+        <CookieConsentBanner locale={locale} dict={dict.cookiesBanner} />
         <AnalyticsScript />
       </body>
     </html>

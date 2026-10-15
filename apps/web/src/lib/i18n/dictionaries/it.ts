@@ -39,6 +39,7 @@ export const it: Dictionary = {
     testimonioAnterior: 'Testimonianza precedente',
     testimonioSiguiente: 'Testimonianza successiva',
     irATestimonio: 'Vai alla testimonianza',
+    contactarWhatsApp: 'Contatta su WhatsApp',
   },
   home: {
     quienSoyEyebrow: 'Conosci Diana',
@@ -243,6 +244,13 @@ export const it: Dictionary = {
     titulo: 'Pagina non trovata',
     texto: 'La pagina che cerchi non esiste o è stata spostata.',
     volverInicio: 'Torna alla home',
+  },
+  cookiesBanner: {
+    titulo: 'Impostazioni dei cookie',
+    mensaje: 'Utilizziamo cookie tecnici necessari per il corretto funzionamento del sito e per ricordare le tue preferenze di navigazione. Puoi consultare la nostra informativa per maggiori dettagli.',
+    aceptar: 'Accetta tutti',
+    rechazar: 'Solo necessari',
+    politica: 'Informativa sui cookie',
   },
   footer: {
     navegacionTitulo: 'Navigazione',

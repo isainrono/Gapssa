@@ -44,6 +44,7 @@ export const es = {
     testimonioAnterior: 'Testimonio anterior',
     testimonioSiguiente: 'Testimonio siguiente',
     irATestimonio: 'Ir al testimonio',
+    contactarWhatsApp: 'Contactar por WhatsApp',
   },
   home: {
     quienSoyEyebrow: 'Conoce a Diana',
@@ -248,6 +249,13 @@ export const es = {
     titulo: 'Página no encontrada',
     texto: 'La página que buscas no existe o ha cambiado de dirección.',
     volverInicio: 'Volver al inicio',
+  },
+  cookiesBanner: {
+    titulo: 'Configuración de cookies',
+    mensaje: 'Utilizamos cookies técnicas necesarias para el correcto funcionamiento del sitio web y para recordar tus preferencias de navegación. Puedes consultar nuestra política para más información.',
+    aceptar: 'Aceptar todas',
+    rechazar: 'Solo necesarias',
+    politica: 'Política de cookies',
   },
   footer: {
     navegacionTitulo: 'Navegación',

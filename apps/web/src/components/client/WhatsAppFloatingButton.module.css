@@ -1,0 +1,101 @@
+.button {
+  position: fixed;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  right: calc(24px + env(safe-area-inset-right, 0px));
+  z-index: 995;
+  width: 58px;
+  height: 58px;
+  border-radius: 9999px;
+  background-color: #25d366;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(37, 211, 102, 0.35), 0 2px 6px rgba(0, 0, 0, 0.12);
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.button:hover {
+  background-color: #20ba5a;
+  transform: translateY(-2px) scale(1.04);
+  box-shadow: 0 6px 20px rgba(37, 211, 102, 0.45), 0 3px 8px rgba(0, 0, 0, 0.15);
+}
+
+.button:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.button:focus-visible {
+  outline: 3px solid #1c1814;
+  outline-offset: 3px;
+}
+
+.icon {
+  width: 32px;
+  height: 32px;
+  fill: currentColor;
+}
+
+.tooltip {
+  position: absolute;
+  right: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%) translateX(6px);
+  background: rgba(28, 24, 20, 0.92);
+  color: #ffffff;
+  font-family: var(--font-sans, inherit);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  padding: 6px 12px;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.button:hover .tooltip,
+.button:focus-visible .tooltip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+@media (max-width: 640px) {
+  .button {
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    right: calc(18px + env(safe-area-inset-right, 0px));
+    width: 52px;
+    height: 52px;
+  }
+
+  .icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .tooltip {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  .tooltip {
+    transition: none;
+    transform: none;
+  }
+
+  .button:hover,
+  .button:active {
+    transform: none;
+  }
+
+  .button:hover .tooltip,
+  .button:focus-visible .tooltip {
+    transform: translateY(-50%);
+  }
+}

@@ -595,6 +595,7 @@ async function seedGaleria(payload: PayloadClient, mediaIds: Record<string, numb
 
 async function seedPaginasLegales(payload: PayloadClient): Promise<string> {
   let creadas = 0
+  let actualizadas = 0
 
   for (const pagina of PAGINAS_LEGALES_SEED) {
     const existing = await payload.find({
@@ -603,10 +604,42 @@ async function seedPaginasLegales(payload: PayloadClient): Promise<string> {
       limit: 1,
       overrideAccess: true,
     })
-    if (!shouldCreateDocument(existing.docs[0])) {
+    const existingDoc = existing.docs[0]
+    if (existingDoc) {
+      if (pagina.tipo === 'condiciones-reserva') {
+        await payload.update({
+          collection: 'paginas-legales',
+          id: existingDoc.id,
+          overrideAccess: true,
+          locale: 'es',
+          data: {
+            titulo: pagina.porLocale.es.titulo,
+            contenido: pagina.porLocale.es.contenido,
+            version: '1.0',
+            fecha: new Date().toISOString(),
+            estado: 'validado',
+            seoNoIndex: false,
+            _status: 'published',
+          },
+        })
+        for (const locale of OTHER_LOCALES) {
+          await payload.update({
+            collection: 'paginas-legales',
+            id: existingDoc.id,
+            overrideAccess: true,
+            locale,
+            data: {
+              titulo: pagina.porLocale[locale].titulo,
+              contenido: pagina.porLocale[locale].contenido,
+            },
+          })
+        }
+        actualizadas += 1
+      }
       continue
     }
 
+    const isCondiciones = pagina.tipo === 'condiciones-reserva'
     const created = await payload.create({
       collection: 'paginas-legales',
       overrideAccess: true,
@@ -616,10 +649,10 @@ async function seedPaginasLegales(payload: PayloadClient): Promise<string> {
         tipo: pagina.tipo,
         titulo: pagina.porLocale.es.titulo,
         contenido: pagina.porLocale.es.contenido,
-        version: '0.1',
+        version: isCondiciones ? '1.0' : '0.1',
         fecha: new Date().toISOString(),
-        estado: 'provisional',
-        seoNoIndex: true,
+        estado: isCondiciones ? 'validado' : 'provisional',
+        seoNoIndex: isCondiciones ? false : true,
         _status: 'published',
       },
     })
@@ -636,7 +669,7 @@ async function seedPaginasLegales(payload: PayloadClient): Promise<string> {
     }
   }
 
-  return `${creadas} creadas, ${PAGINAS_LEGALES_SEED.length - creadas} ya existían`
+  return `${creadas} creadas, ${actualizadas} actualizadas, ${PAGINAS_LEGALES_SEED.length - creadas - actualizadas} ya existían`
 }
 
 run().catch((error: unknown) => {
