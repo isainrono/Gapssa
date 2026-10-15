@@ -72,8 +72,7 @@ SELECT
     f.slug,
     m.filename AS portada_filename
 FROM familias_tratamiento f
-LEFT JOIN familias_tratamiento_rels fr ON fr.parent_id = f.id AND fr.path = 'imagen'
-LEFT JOIN media m ON m.id = fr.media_id
+LEFT JOIN media m ON m.id = f.imagen_id
 ORDER BY f.orden;
 " || true
 
@@ -82,9 +81,10 @@ echo "==> 7. Verificando fotos de la Galería en Payload..."
 docker compose --env-file .env.production -f compose.prod.yml exec -T apps-db psql -U gapssa_apps -d gapssa_cms -c "
 SELECT 
     g.orden,
-    g.categoria,
+    gl.categoria,
     m.filename AS imagen_filename
 FROM galeria g
+LEFT JOIN galeria_locales gl ON gl._parent_id = g.id AND gl._locale = 'es'
 LEFT JOIN media m ON m.id = g.imagen_id
 ORDER BY g.orden;
 " || true
