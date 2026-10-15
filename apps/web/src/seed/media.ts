@@ -46,6 +46,18 @@ export const MEDIA_FILES: MediaFileSeed[] = [
     },
   },
   {
+    key: 'fondo',
+    relativePath: 'marca/fondo.webp',
+    altPorLocale: {
+      es: 'GAPSSA by Nana — Belleza y estética integral en Barcelona',
+      ca: 'GAPSSA by Nana — Bellesa i estètica integral a Barcelona',
+      en: 'GAPSSA by Nana — Integral beauty and aesthetics in Barcelona',
+      it: 'GAPSSA by Nana — Bellezza ed estetica integrale a Barcellona',
+      fr: 'GAPSSA by Nana — Beauté et esthétique intégrale à Barcelone',
+      pt: 'GAPSSA by Nana — Beleza e estética integral em Barcelona',
+    },
+  },
+  {
     key: 'diana',
     relativePath: 'equipo/diana.jpg',
     altPorLocale: {
