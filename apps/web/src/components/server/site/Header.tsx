@@ -36,7 +36,7 @@ export async function Header({ locale }: Props) {
         <Image
           src="/images/marca/gapssa-logo-oficial.webp"
           alt={`Logotipo de ${ajustes.nombreComercial}`}
-          width={35}
+          width={73}
           height={44}
           className={styles.logoImage}
           priority
