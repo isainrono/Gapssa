@@ -145,11 +145,14 @@ function findBestTreatmentMatch(param: string, list: Treatment[]): Treatment | n
 
   const rawParam = param.trim().toLowerCase()
   const normParam = normalize(param)
+  const compactParam = normParam.replace(/\s+/g, '')
   const paramWords = normParam.split(/\s+/).filter((w) => w.length > 2)
 
+  // 1. Coincidencia exacta de ID
   const exactId = list.find((t) => t.id.toLowerCase() === rawParam)
   if (exactId) return exactId
 
+  // 2. Coincidencia directa por inclusión en ID
   const directInclude = list.find(
     (t) =>
       t.id.toLowerCase().includes(rawParam) ||
@@ -157,6 +160,23 @@ function findBestTreatmentMatch(param: string, list: Treatment[]): Treatment | n
   )
   if (directInclude) return directInclude
 
+  // 3. Coincidencia compacta en ID (ej. 'skinpen' coincide con 'rejuvenecimiento-skin-pen-60')
+  if (compactParam.length >= 3) {
+    const compactIdMatch = list.find((t) => {
+      const cId = normalize(t.id).replace(/\s+/g, '')
+      return cId.includes(compactParam) || (cId.length >= 4 && compactParam.includes(cId.replace(/\d+$/, '')))
+    })
+    if (compactIdMatch) return compactIdMatch
+
+    // 4. Coincidencia compacta en Nombre (ej. 'skinpen' coincide con 'Rejuvenecimiento facial Skin Pen 80 min')
+    const compactNameMatch = list.find((t) => {
+      const cName = normalize(t.name).replace(/\s+/g, '')
+      return cName.includes(compactParam)
+    })
+    if (compactNameMatch) return compactNameMatch
+  }
+
+  // 5. Puntuación por palabras y fragmentos
   let bestMatch: Treatment | null = null
   let maxScore = 0
 
@@ -164,11 +184,17 @@ function findBestTreatmentMatch(param: string, list: Treatment[]): Treatment | n
     const normId = normalize(t.id)
     const normName = normalize(t.name)
     const tText = `${normId} ${normName}`
+    const tCompact = tText.replace(/\s+/g, '')
 
     let score = 0
+    if (compactParam.length >= 4 && tCompact.includes(compactParam)) {
+      score += 10
+    }
     for (const word of paramWords) {
       if (tText.includes(word)) {
-        score += 1
+        score += 3
+      } else if (word.length >= 4 && tCompact.includes(word)) {
+        score += 2
       }
     }
 

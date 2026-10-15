@@ -136,7 +136,7 @@ const RAW_TREATMENTS: TreatmentFixture[] = [
   { id: 'dermapen-60', name: 'Dermapen 60 min', familia: 'Tratamientos faciales', durationMinutes: 60, precioOrientativo: 95, estadoPrecio: 'Fijo' },
   { id: 'radiofrecuencia-facial-45', name: 'Radiofrecuencia facial 45 min', familia: 'Tratamientos faciales', durationMinutes: 45, precioOrientativo: 55, estadoPrecio: 'Fijo' },
   { id: 'peeling-prx-45', name: 'Peeling PRX 45 min', familia: 'Tratamientos faciales', durationMinutes: 45, precioOrientativo: 100, estadoPrecio: 'Fijo' },
-  { id: 'rejuvenecimiento-skin-pen-60', name: 'Rejuvenecimiento facial Skin Pen 60 min', familia: 'Tratamientos faciales', durationMinutes: 60, precioOrientativo: 350, estadoPrecio: 'Fijo' },
+  { id: 'rejuvenecimiento-skin-pen-60', name: 'Rejuvenecimiento facial Skin Pen 80 min', familia: 'Tratamientos faciales', durationMinutes: 80, precioOrientativo: 250, estadoPrecio: 'Fijo' },
   { id: 'laser-carbono-60', name: 'Láser carbono activo (Hollywood Peel) 60 min', familia: 'Tratamientos faciales', durationMinutes: 60, precioOrientativo: 110, estadoPrecio: 'Fijo' },
 
   // Uñas
