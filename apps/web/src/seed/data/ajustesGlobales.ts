@@ -22,6 +22,12 @@ export const DIRECCION_SEED = {
   pais: 'España',
 }
 
+/** Teléfono y WhatsApp oficiales del centro Gapssa confirmados. */
+export const CONTACTO_SEED = {
+  telefono: '+34 680 373 663',
+  whatsapp: '+34 680 373 663',
+}
+
 export const SEO_POR_DEFECTO_SEED: Record<Locale, { titulo: string; descripcion: string }> = {
   es: { titulo: 'GAPSSA by Nana — Centro de estética en Barcelona', descripcion: 'Centro de estética y belleza integral en Barcelona. Tratamientos personalizados con dedicación y profesionalidad.' },
   ca: { titulo: 'GAPSSA by Nana — Centre d’estètica a Barcelona', descripcion: 'Centre d’estètica i bellesa integral a Barcelona. Tractaments personalitzats amb dedicació i professionalitat.' },

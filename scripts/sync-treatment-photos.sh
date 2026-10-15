@@ -96,6 +96,12 @@ SELECT tipo, version, estado, seo_no_index FROM paginas_legales WHERE tipo = 'co
 " || true
 
 echo ""
+echo "==> 9. Verificando Teléfono y WhatsApp en Ajustes Globales..."
+docker compose --env-file .env.production -f compose.prod.yml exec -T apps-db psql -U gapssa_apps -d gapssa_cms -c "
+SELECT contacto_telefono, contacto_whatsapp FROM ajustes_globales;
+" || true
+
+echo ""
 echo "=========================================================="
 echo "    ¡ACTUALIZACIÓN COMPLETADA CON ÉXITO!                  "
 echo "=========================================================="

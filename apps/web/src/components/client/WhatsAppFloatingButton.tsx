@@ -4,6 +4,8 @@ import type { Locale } from '@/lib/i18n/locales'
 
 import styles from './WhatsAppFloatingButton.module.css'
 
+const DEFAULT_WHATSAPP_NUMBER = '+34680373663'
+
 type Props = {
   whatsappNumber?: string
   locale: Locale
@@ -11,7 +13,8 @@ type Props = {
 }
 
 export function WhatsAppFloatingButton({ whatsappNumber, locale, label }: Props) {
-  const cleanNumber = whatsappNumber ? whatsappNumber.replace(/\D/g, '') : ''
+  const numberToUse = whatsappNumber || process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || DEFAULT_WHATSAPP_NUMBER
+  const cleanNumber = numberToUse ? numberToUse.replace(/\D/g, '') : ''
   const href = cleanNumber ? `https://wa.me/${cleanNumber}` : `/${locale}/contacto`
   const isExternal = Boolean(cleanNumber)
 

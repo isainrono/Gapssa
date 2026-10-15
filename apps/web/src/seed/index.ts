@@ -3,7 +3,7 @@ import { getPayload } from 'payload'
 
 import { LOCALES, type Locale } from '@/lib/i18n/locales'
 
-import { DIRECCION_SEED, HORARIO_SEED, SEO_POR_DEFECTO_SEED } from './data/ajustesGlobales'
+import { CONTACTO_SEED, DIRECCION_SEED, HORARIO_SEED, SEO_POR_DEFECTO_SEED } from './data/ajustesGlobales'
 import { BIO_SEED, DIFERENCIADORES_SEED, PROCESO_SEED } from './data/contenidoSobreGapssa'
 import { CONTENIDO_INICIO_SEED } from './data/contenidoInicio'
 import { FAMILIAS_SEED } from './data/familias'
@@ -65,6 +65,11 @@ async function seedAjustesGlobales(payload: PayloadClient, mediaIds: Record<stri
     data: {
       direccion: actual.direccion?.calle ? actual.direccion : DIRECCION_SEED,
       horario: HORARIO_SEED,
+      contacto: {
+        telefono: CONTACTO_SEED.telefono,
+        whatsapp: CONTACTO_SEED.whatsapp,
+        correoPublico: actual.contacto?.correoPublico || undefined,
+      },
       logo: actual.logo ? (typeof actual.logo === 'number' ? actual.logo : actual.logo.id) : mediaIds['logo'],
       seoPorDefecto: { titulo: SEO_POR_DEFECTO_SEED.es.titulo, descripcion: SEO_POR_DEFECTO_SEED.es.descripcion, ogImage: mediaIds['logo'] },
     },
