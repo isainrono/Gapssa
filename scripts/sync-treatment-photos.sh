@@ -53,10 +53,18 @@ try {
 PHP_EOF
 
 echo ""
+echo "==> 4.55. Asegurando columnas de recordatorios en la base de datos MariaDB (meeting)..."
+docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm-db mariadb -u espocrm -pgapssa-espocrm-db-pass espocrm -e "
+ALTER TABLE meeting ADD COLUMN IF NOT EXISTS c_recordatorio24h_enviado TINYINT(1) NOT NULL DEFAULT 0;
+ALTER TABLE meeting ADD COLUMN IF NOT EXISTS c_recordatorio2h_enviado TINYINT(1) NOT NULL DEFAULT 0;
+" || true
+
+echo ""
 echo "==> 4.6. Sincronizando plantillas de correo de confirmación e isotipo en EspoCRM..."
 docker compose --env-file .env.production -f compose.prod.yml cp extensions/espocrm/custom/Espo/Custom/. espocrm:/var/www/html/custom/Espo/Custom/
 docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm chown -R www-data:www-data /var/www/html/custom
 docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm php bin/command rebuild || true
+docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm rm -rf /var/www/html/data/cache/application/ || true
 
 echo ""
 echo "==> 4.7. Configurando columnas de recordatorios y tarea programada (24h y 2h) en EspoCRM..."
