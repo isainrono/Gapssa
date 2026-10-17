@@ -354,7 +354,7 @@ class AppointmentReminderSender
     private function markFlagDirectSql(string $meetingId, string $column): void
     {
         try {
-            $pdo = $this->container->has('pdo') ? $this->container->get('pdo') : null;
+            $pdo = method_exists($this->entityManager, 'getPDO') ? $this->entityManager->getPDO() : null;
             if ($pdo) {
                 $stmt = $pdo->prepare("UPDATE meeting SET {$column} = 1 WHERE id = ?");
                 $stmt->execute([$meetingId]);

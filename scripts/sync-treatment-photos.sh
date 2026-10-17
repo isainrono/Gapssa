@@ -56,7 +56,7 @@ echo ""
 echo "==> 4.6. Sincronizando plantillas de correo de confirmación e isotipo en EspoCRM..."
 docker compose --env-file .env.production -f compose.prod.yml cp extensions/espocrm/custom/Espo/Custom/. espocrm:/var/www/html/custom/Espo/Custom/
 docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm chown -R www-data:www-data /var/www/html/custom
-docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm rm -rf /var/www/html/data/cache/application/ || true
+docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm php bin/command rebuild || true
 
 echo ""
 echo "==> 4.7. Configurando columnas de recordatorios y tarea programada (24h y 2h) en EspoCRM..."
@@ -67,7 +67,7 @@ try {
     $app = new \Espo\Core\Application();
     $container = $app->getContainer();
     $em = $container->get("entityManager");
-    $pdo = $container->get("pdo");
+    $pdo = $em->getPDO();
 
     $user = $em->getRDBRepository('User')->where(['userName' => 'admin'])->findOne();
     if ($user) {
