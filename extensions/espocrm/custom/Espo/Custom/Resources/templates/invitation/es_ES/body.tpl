@@ -12,19 +12,12 @@
                 <!-- Container Card -->
                 <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; border: 1px solid #e8dfd5; overflow: hidden; box-shadow: 0 4px 12px rgba(28, 24, 20, 0.05);">
                     
-                    <!-- Header GAPSSA con Isotipo Oficial -->
+                    <!-- Header GAPSSA con Logotipo Oficial Completo en Fondo Claro -->
                     <tr>
-                        <td align="center" style="background-color: #1c1814; padding: 32px 20px; border-bottom: 3px solid #c4a257;">
-                            <!-- Emblema Isotipo Oficial GAPSSA -->
-                            <table border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto 12px auto;">
-                                <tr>
-                                    <td align="center" style="width: 64px; height: 64px; background-color: #28201a; border: 2px solid #c4a257; border-radius: 32px; text-align: center; vertical-align: middle; padding: 4px;">
-                                        <img src="https://gapssa.es/images/marca/isotipo-email.png" alt="GAPSSA by Nana" width="56" height="56" style="display: block; width: 56px; height: 56px; border: 0; outline: none; text-decoration: none;" />
-                                    </td>
-                                </tr>
-                            </table>
-                            <h1 style="margin: 0; font-family: Georgia, serif; font-size: 26px; font-weight: 400; color: #c4a257; letter-spacing: 4px; text-transform: uppercase;">GAPSSA</h1>
-                            <p style="margin: 4px 0 0 0; font-size: 12px; color: #b0a498; letter-spacing: 2px; text-transform: uppercase;">by Nana &bull; Estética y Bienestar</p>
+                        <td align="center" style="background-color: #faf8f4; padding: 36px 20px 28px 20px; border-bottom: 2px solid #c4a257;">
+                            <a href="https://gapssa.es" target="_blank" style="text-decoration: none; display: inline-block;">
+                                <img src="https://gapssa.es/images/marca/logo-email.png" alt="GAPSSA by Nana" width="220" height="159" style="display: block; width: 220px; height: 159px; max-width: 100%; height: auto; border: 0; outline: none; text-decoration: none; margin: 0 auto;" />
+                            </a>
                         </td>
                     </tr>
 
