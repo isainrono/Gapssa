@@ -8,8 +8,8 @@ echo "    SINCRONIZACIÓN DE FOTOS DE TRATAMIENTOS (GAPSSA)      "
 echo "=========================================================="
 echo ""
 
-echo "==> 1. Recompilando contenedor Web con los nuevos activos optimizados (sin caché)..."
-docker compose --env-file .env.production -f compose.prod.yml build --no-cache web
+echo "==> 1. Recompilando contenedor Web con los nuevos activos optimizados..."
+docker compose --env-file .env.production -f compose.prod.yml build web
 
 echo ""
 echo "==> 2. Levantando contenedor Web actualizado..."
@@ -57,6 +57,64 @@ echo "==> 4.6. Sincronizando plantillas de correo de confirmación e isotipo en 
 docker compose --env-file .env.production -f compose.prod.yml cp extensions/espocrm/custom/Espo/Custom/. espocrm:/var/www/html/custom/Espo/Custom/
 docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm chown -R www-data:www-data /var/www/html/custom
 docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm rm -rf /var/www/html/data/cache/application/ || true
+
+echo ""
+echo "==> 4.7. Configurando columnas de recordatorios y tarea programada (24h y 2h) en EspoCRM..."
+docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm php -- << 'PHP_EOF' || true
+<?php
+try {
+    require_once "/var/www/html/bootstrap.php";
+    $app = new \Espo\Core\Application();
+    $container = $app->getContainer();
+    $em = $container->get("entityManager");
+    $pdo = $container->get("pdo");
+
+    $user = $em->getRDBRepository('User')->where(['userName' => 'admin'])->findOne();
+    if ($user) {
+        $container->set('user', $user);
+    }
+
+    // 1. Columnas en la tabla meeting
+    $pdo->exec("ALTER TABLE meeting ADD COLUMN IF NOT EXISTS c_recordatorio24h_enviado TINYINT(1) NOT NULL DEFAULT 0");
+    $pdo->exec("ALTER TABLE meeting ADD COLUMN IF NOT EXISTS c_recordatorio2h_enviado TINYINT(1) NOT NULL DEFAULT 0");
+    echo "✔ Columnas c_recordatorio24h_enviado y c_recordatorio2h_enviado verificadas en MariaDB.\n";
+
+    // 2. Reconstruir metadatos de EspoCRM
+    if ($container->has('dataManager')) {
+        $container->get('dataManager')->rebuild();
+        echo "✔ Metadatos de EspoCRM reconstruidos.\n";
+    }
+
+    // 3. Crear o activar el ScheduledJob
+    $job = $em->getRDBRepository('ScheduledJob')->where(['job' => 'SendAppointmentReminders'])->findOne();
+    if (!$job) {
+        $job = $em->getNewEntity('ScheduledJob');
+        $job->set([
+            'name' => 'GAPSSA — Enviar Recordatorios de Citas (24h y 2h)',
+            'job' => 'SendAppointmentReminders',
+            'status' => 'Active',
+            'scheduling' => '*/10 * * * *',
+        ]);
+        $em->saveEntity($job);
+        echo "✔ Tarea programada 'SendAppointmentReminders' creada (cada 10 min).\n";
+    } else {
+        $job->set('status', 'Active');
+        $job->set('scheduling', '*/10 * * * *');
+        $em->saveEntity($job);
+        echo "✔ Tarea programada 'SendAppointmentReminders' activa (cada 10 min).\n";
+    }
+
+    // 4. Ejecución inicial de prueba
+    try {
+        $jobRunner = new \Espo\Custom\Jobs\SendAppointmentReminders($container);
+        $jobRunner->run();
+    } catch (\Throwable $ex) {
+        echo "Aviso prueba recordatorios: " . $ex->getMessage() . "\n";
+    }
+} catch (\Throwable $e) {
+    echo "Aviso configuración recordatorios: " . $e->getMessage() . "\n";
+}
+PHP_EOF
 
 echo ""
 echo "==> 5. Verificando imágenes asignadas en la base de datos de Payload (Postgres)..."

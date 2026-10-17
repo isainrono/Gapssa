@@ -70,6 +70,18 @@
             "style": [],
             "maxLength": 32,
             "isCustom": true
+        },
+        "cRecordatorio24hEnviado": {
+            "type": "bool",
+            "required": false,
+            "default": false,
+            "isCustom": true
+        },
+        "cRecordatorio2hEnviado": {
+            "type": "bool",
+            "required": false,
+            "default": false,
+            "isCustom": true
         }
     },
     "links": {
