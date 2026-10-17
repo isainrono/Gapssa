@@ -8,8 +8,8 @@ echo "    SINCRONIZACIÓN DE FOTOS DE TRATAMIENTOS (GAPSSA)      "
 echo "=========================================================="
 echo ""
 
-echo "==> 1. Recompilando contenedor Web con los nuevos activos optimizados..."
-docker compose --env-file .env.production -f compose.prod.yml build web
+echo "==> 1. Recompilando contenedor Web con los nuevos activos optimizados (sin caché)..."
+docker compose --env-file .env.production -f compose.prod.yml build --no-cache web
 
 echo ""
 echo "==> 2. Levantando contenedor Web actualizado..."
