@@ -53,6 +53,12 @@ try {
 PHP_EOF
 
 echo ""
+echo "==> 4.6. Sincronizando plantillas de correo de confirmación e isotipo en EspoCRM..."
+docker compose --env-file .env.production -f compose.prod.yml cp extensions/espocrm/custom/Espo/Custom/. espocrm:/var/www/html/custom/Espo/Custom/
+docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm chown -R www-data:www-data /var/www/html/custom
+docker compose --env-file .env.production -f compose.prod.yml exec -T espocrm rm -rf /var/www/html/data/cache/application/ || true
+
+echo ""
 echo "==> 5. Verificando imágenes asignadas en la base de datos de Payload (Postgres)..."
 docker compose --env-file .env.production -f compose.prod.yml exec -T apps-db psql -U gapssa_apps -d gapssa_cms -c "
 SELECT 

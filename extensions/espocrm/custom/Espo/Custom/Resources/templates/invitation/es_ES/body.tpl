@@ -12,19 +12,19 @@
                 <!-- Container Card -->
                 <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; border: 1px solid #e8dfd5; overflow: hidden; box-shadow: 0 4px 12px rgba(28, 24, 20, 0.05);">
                     
-                    <!-- Header GAPSSA con Emblema Dorado -->
+                    <!-- Header GAPSSA con Isotipo Oficial -->
                     <tr>
                         <td align="center" style="background-color: #1c1814; padding: 32px 20px; border-bottom: 3px solid #c4a257;">
-                            <!-- Emblema Monograma GAPSSA -->
-                            <table border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto 14px auto;">
+                            <!-- Emblema Isotipo Oficial GAPSSA -->
+                            <table border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto 12px auto;">
                                 <tr>
-                                    <td align="center" style="width: 56px; height: 56px; background-color: #28201a; border: 2px solid #c4a257; border-radius: 28px; text-align: center; vertical-align: middle;">
-                                        <span style="font-family: Georgia, 'Times New Roman', serif; font-size: 28px; font-weight: bold; color: #c4a257; line-height: 52px; display: block;">G</span>
+                                    <td align="center" style="width: 64px; height: 64px; background-color: #28201a; border: 2px solid #c4a257; border-radius: 32px; text-align: center; vertical-align: middle; padding: 4px;">
+                                        <img src="https://gapssa.es/images/marca/isotipo-email.png" alt="GAPSSA by Nana" width="56" height="56" style="display: block; width: 56px; height: 56px; border: 0; outline: none; text-decoration: none;" />
                                     </td>
                                 </tr>
                             </table>
-                            <h1 style="margin: 0; font-family: Georgia, serif; font-size: 28px; font-weight: 400; color: #c4a257; letter-spacing: 4px; text-transform: uppercase;">GAPSSA</h1>
-                            <p style="margin: 6px 0 0 0; font-size: 12px; color: #b0a498; letter-spacing: 2px; text-transform: uppercase;">Centro de Salud &amp; Bienestar</p>
+                            <h1 style="margin: 0; font-family: Georgia, serif; font-size: 26px; font-weight: 400; color: #c4a257; letter-spacing: 4px; text-transform: uppercase;">GAPSSA</h1>
+                            <p style="margin: 4px 0 0 0; font-size: 12px; color: #b0a498; letter-spacing: 2px; text-transform: uppercase;">by Nana &bull; Estética y Bienestar</p>
                         </td>
                     </tr>
 
@@ -38,7 +38,7 @@
                             </p>
 
                             <!-- Details Card -->
-                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #faf7f2; border: 1px solid #e8dfd5; border-radius: 8px; margin-bottom: 28px;">
+                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #faf7f2; border: 1px solid #e8dfd5; border-radius: 8px; margin-bottom: 24px;">
                                 <tr>
                                     <td style="padding: 20px;">
                                         <table border="0" cellpadding="0" cellspacing="0" width="100%">
@@ -62,6 +62,27 @@
                                                 <td style="padding: 6px 0; font-size: 14px; color: #5c5048;">{{{description}}}</td>
                                             </tr>
                                             {{/if}}
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- WhatsApp Assistance Card -->
+                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f0fbf4; border: 1px solid #bcead0; border-radius: 8px; margin-bottom: 24px;">
+                                <tr>
+                                    <td style="padding: 18px 20px;">
+                                        <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                                            <tr>
+                                                <td style="font-size: 14px; line-height: 1.5; color: #1f5132;">
+                                                    <strong style="font-size: 15px; color: #155724; display: block; margin-bottom: 6px;">¿Necesita modificar o consultar su cita?</strong>
+                                                    Para cualquier cambio, reprogramación o consulta, puede escribirnos o llamarnos directamente a nuestro WhatsApp oficial:
+                                                    <div style="margin-top: 12px;">
+                                                        <a href="https://wa.me/34680373663" style="display: inline-block; background-color: #25d366; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; padding: 10px 20px; border-radius: 6px; letter-spacing: 0.3px;">
+                                                            💬 Contactar por WhatsApp (+34 680 373 663)
+                                                        </a>
+                                                    </div>
+                                                </td>
+                                            </tr>
                                         </table>
                                     </td>
                                 </tr>
@@ -98,10 +119,11 @@
 
                     <!-- Footer -->
                     <tr>
-                        <td style="background-color: #faf7f2; padding: 24px 32px; border-top: 1px solid #e8dfd5; text-align: center; font-size: 12px; color: #7a6e64; line-height: 1.5;">
-                            <p style="margin: 0 0 8px 0; font-weight: 600; color: #1c1814;">GAPSSA &bull; Centro de Salud y Bienestar</p>
-                            <p style="margin: 0 0 8px 0;">Email: <a href="mailto:info@gapssa.es" style="color: #c4a257; text-decoration: none;">info@gapssa.es</a> | Web: <a href="https://gapssa.es" style="color: #c4a257; text-decoration: none;">www.gapssa.es</a></p>
-                            <p style="margin: 0; font-size: 11px; color: #9a8e84;">Si desea realizar alguna modificación o consulta sobre su cita, póngase en contacto con nosotros.</p>
+                        <td style="background-color: #faf7f2; padding: 24px 32px; border-top: 1px solid #e8dfd5; text-align: center; font-size: 12px; color: #7a6e64; line-height: 1.6;">
+                            <p style="margin: 0 0 6px 0; font-weight: 600; color: #1c1814; font-size: 13px;">GAPSSA by Nana &bull; Centro de Estética Integral</p>
+                            <p style="margin: 0 0 6px 0; color: #5c5048;">Carrer de Gayarre 24, Entresuelo 2, 08014 Barcelona, España</p>
+                            <p style="margin: 0 0 8px 0;">WhatsApp: <a href="https://wa.me/34680373663" style="color: #20ba5a; font-weight: 600; text-decoration: none;">+34 680 373 663</a> | Email: <a href="mailto:gapssabynana@gmail.com" style="color: #c4a257; text-decoration: none;">gapssabynana@gmail.com</a> | Web: <a href="https://gapssa.es" style="color: #c4a257; text-decoration: none;">www.gapssa.es</a></p>
+                            <p style="margin: 0; font-size: 11px; color: #9a8e84;">Si necesita cancelar o reprogramar su cita, le agradecemos notificarnos con al menos 24 horas de antelación.</p>
                         </td>
                     </tr>
                 </table>
