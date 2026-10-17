@@ -1,6 +1,7 @@
 {
     "SendAppointmentReminders": {
         "jobClassName": "Espo\\Custom\\Jobs\\SendAppointmentReminders",
+        "isDefault": true,
         "scheduling": "*/10 * * * *"
     }
 }
